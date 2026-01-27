@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  awsAccountId  String?
+  awsRegion     String   @default("us-east-1")
+  
+  users         User[]
+  instances     Instance[]
+  templates     Template[]
+  auditEvents   AuditEvent[]
+  
+  @@index([slug])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String
+  name         String
+  role         UserRole @default(VIEWER)
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  manifests    ManifestVersion[]
+  auditEvents  AuditEvent[]
+  
+  @@unique([email, workspaceId])
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+model Instance {
+  id                 String          @id @default(cuid())
+  workspaceId        String
+  workspace          Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name               String
+  environment        Environment     @default(dev)
+  tags               Json            @default("{}")
+  status             InstanceStatus  @default(CREATING)
+  desiredManifestId  String?
+  lastReconcileAt    DateTime?
+  lastError          String?
+  
+  // AWS resources
+  ecsClusterArn      String?
+  ecsServiceArn      String?
+  taskDefinitionArn  String?
+  cloudwatchLogGroup String?
+  
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  
+  manifests          ManifestVersion[]
+  deploymentEvents   DeploymentEvent[]
+  
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@index([status])
+}
+
+enum Environment {
+  dev
+  staging
+  prod
+}
+
+enum InstanceStatus {
+  CREATING
+  RUNNING
+  DEGRADED
+  STOPPED
+  DELETING
+  ERROR
+}
+
+model ManifestVersion {
+  id          String    @id @default(cuid())
+  instanceId  String
+  instance    Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  version     Int
+  content     Json
+  createdBy   String
+  user        User      @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime  @default(now())
+  
+  @@unique([instanceId, version])
+  @@index([instanceId])
+}
+
+model AuditEvent {
+  id           String    @id @default(cuid())
+  actor        String
+  user         User      @relation(fields: [actor], references: [id])
+  action       String
+  resourceType String
+  resourceId   String
+  diffSummary  String?
+  metadata     Json      @default("{}")
+  timestamp    DateTime  @default(now())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  
+  @@index([workspaceId])
+  @@index([resourceType, resourceId])
+  @@index([timestamp])
+}
+
+model Template {
+  id               String    @id @default(cuid())
+  name             String
+  description      String
+  category         String
+  manifestTemplate Json
+  isBuiltin        Boolean   @default(false)
+  workspaceId      String?
+  workspace        Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  
+  @@index([workspaceId])
+  @@index([category])
+}
+
+model DeploymentEvent {
+  id          String              @id @default(cuid())
+  instanceId  String
+  instance    Instance            @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  eventType   DeploymentEventType
+  message     String
+  metadata    Json                @default("{}")
+  createdAt   DateTime            @default(now())
+  
+  @@index([instanceId])
+  @@index([createdAt])
+}
+
+enum DeploymentEventType {
+  RECONCILE_START
+  RECONCILE_SUCCESS
+  RECONCILE_ERROR
+  ECS_DEPLOYMENT
+  ECS_ROLLBACK
+}
