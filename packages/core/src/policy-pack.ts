@@ -222,6 +222,9 @@ export const BUILTIN_POLICY_PACKS: PolicyPack[] = [
         description: "Prevent use of 'latest' image tag for supply chain security",
         type: "field_format",
         severity: "ERROR",
+        targetResourceTypes: ["instance"],
+        enabled: true,
+        allowOverride: false,
         config: {
           type: "field_format",
           field: "spec.runtime.image",
@@ -236,6 +239,9 @@ export const BUILTIN_POLICY_PACKS: PolicyPack[] = [
         description: "All secrets must be stored in AWS Secrets Manager",
         type: "require_secret_manager",
         severity: "ERROR",
+        targetResourceTypes: ["instance"],
+        enabled: true,
+        allowOverride: false,
         config: {
           type: "require_secret_manager",
           enabled: true,
@@ -247,6 +253,9 @@ export const BUILTIN_POLICY_PACKS: PolicyPack[] = [
         description: "Prevent exposing admin panels publicly",
         type: "forbid_public_admin",
         severity: "ERROR",
+        targetResourceTypes: ["instance"],
+        enabled: true,
+        allowOverride: false,
         config: {
           type: "forbid_public_admin",
           enabled: true,
@@ -275,7 +284,10 @@ export const BUILTIN_POLICY_PACKS: PolicyPack[] = [
         description: "Production instances must have at least 2 replicas",
         type: "field_range",
         severity: "ERROR",
+        targetResourceTypes: ["instance"],
         targetEnvironments: ["prod"],
+        enabled: true,
+        allowOverride: false,
         config: {
           type: "field_range",
           field: "spec.runtime.replicas",
@@ -288,7 +300,10 @@ export const BUILTIN_POLICY_PACKS: PolicyPack[] = [
         description: "Production instances must have tracing enabled",
         type: "require_observability",
         severity: "WARNING",
+        targetResourceTypes: ["instance"],
         targetEnvironments: ["prod"],
+        enabled: true,
+        allowOverride: true,
         config: {
           type: "require_observability",
           enabled: true,

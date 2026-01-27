@@ -18,73 +18,74 @@ import {
   UpdateBotHealthDto,
   ListBotInstancesQueryDto 
 } from "./bot-instances.dto";
+import { BotInstance } from "@molthub/database";
 
 @Controller("bot-instances")
 export class BotInstancesController {
   constructor(private readonly botInstancesService: BotInstancesService) {}
 
   @Post()
-  create(@Body() dto: CreateBotInstanceDto) {
+  create(@Body() dto: CreateBotInstanceDto): Promise<BotInstance> {
     return this.botInstancesService.create(dto);
   }
 
   @Get()
-  findAll(@Query() query: ListBotInstancesQueryDto) {
+  findAll(@Query() query: ListBotInstancesQueryDto): Promise<BotInstance[]> {
     return this.botInstancesService.findAll(query);
   }
 
   @Get("dashboard")
-  getDashboardData(@Query('workspaceId') workspaceId: string) {
+  getDashboardData(@Query('workspaceId') workspaceId: string): Promise<any> {
     return this.botInstancesService.getDashboardData(workspaceId);
   }
 
   @Get(":id")
-  findOne(@Param("id") id: string) {
+  findOne(@Param("id") id: string): Promise<any> {
     return this.botInstancesService.findOne(id);
   }
 
   @Patch(":id")
-  update(@Param("id") id: string, @Body() dto: UpdateBotInstanceDto) {
+  update(@Param("id") id: string, @Body() dto: UpdateBotInstanceDto): Promise<BotInstance> {
     return this.botInstancesService.update(id, dto);
   }
 
   @Patch(":id/status")
-  updateStatus(@Param("id") id: string, @Body() dto: UpdateBotStatusDto) {
+  updateStatus(@Param("id") id: string, @Body() dto: UpdateBotStatusDto): Promise<BotInstance> {
     return this.botInstancesService.updateStatus(id, dto.status);
   }
 
   @Patch(":id/health")
-  updateHealth(@Param("id") id: string, @Body() dto: UpdateBotHealthDto) {
+  updateHealth(@Param("id") id: string, @Body() dto: UpdateBotHealthDto): Promise<BotInstance> {
     return this.botInstancesService.updateHealth(id, dto.health);
   }
 
   @Post(":id/restart")
   @HttpCode(HttpStatus.NO_CONTENT)
-  restart(@Param("id") id: string) {
-    return this.botInstancesService.restart(id);
+  async restart(@Param("id") id: string): Promise<void> {
+    await this.botInstancesService.restart(id);
   }
 
   @Post(":id/pause")
   @HttpCode(HttpStatus.NO_CONTENT)
-  pause(@Param("id") id: string) {
-    return this.botInstancesService.pause(id);
+  async pause(@Param("id") id: string): Promise<void> {
+    await this.botInstancesService.pause(id);
   }
 
   @Post(":id/resume")
   @HttpCode(HttpStatus.NO_CONTENT)
-  resume(@Param("id") id: string) {
-    return this.botInstancesService.resume(id);
+  async resume(@Param("id") id: string): Promise<void> {
+    await this.botInstancesService.resume(id);
   }
 
   @Post(":id/stop")
   @HttpCode(HttpStatus.NO_CONTENT)
-  stop(@Param("id") id: string) {
-    return this.botInstancesService.stop(id);
+  async stop(@Param("id") id: string): Promise<void> {
+    await this.botInstancesService.stop(id);
   }
 
   @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param("id") id: string) {
-    return this.botInstancesService.remove(id);
+  async remove(@Param("id") id: string): Promise<void> {
+    await this.botInstancesService.remove(id);
   }
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { InstanceManifestSchema, Environment, RuntimeConfigSchema, SecretRefSchema, ChannelConfigSchema, SkillsPolicySchema, NetworkConfigSchema, ObservabilityConfigSchema, PolicyConfigSchema } from "./manifest";
+import { Environment, RuntimeConfigSchema, SecretRefSchema, ChannelConfigSchema, SkillsPolicySchema, NetworkConfigSchema, ObservabilityConfigSchema, PolicyConfigSchema } from "./manifest";
 
 // Template: Bot archetypes for quick instance creation
 export const TemplateCategory = z.enum([

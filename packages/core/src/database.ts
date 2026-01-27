@@ -60,7 +60,8 @@ export interface AuditEvent {
   timestamp: Date;
 }
 
-export interface Template {
+// Template interface - Note: Use BotTemplate type from template.ts for full type
+export interface BotTemplate {
   id: string;
   name: string;
   description: string;

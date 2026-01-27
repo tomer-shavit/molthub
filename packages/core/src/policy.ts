@@ -1,6 +1,7 @@
 import { InstanceManifest, validateManifest } from "./manifest";
 
-export interface PolicyViolation {
+// Note: Use PolicyViolation from policy-pack.ts for the enhanced version
+export interface LegacyPolicyViolation {
   code: string;
   message: string;
   severity: "ERROR" | "WARNING";
@@ -9,12 +10,12 @@ export interface PolicyViolation {
 
 export interface PolicyResult {
   valid: boolean;
-  violations: PolicyViolation[];
+  violations: LegacyPolicyViolation[];
 }
 
 export class PolicyEngine {
   validate(manifest: unknown): PolicyResult {
-    const violations: PolicyViolation[] = [];
+    const violations: LegacyPolicyViolation[] = [];
 
     // First validate schema
     try {
