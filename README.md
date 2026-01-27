@@ -36,9 +36,9 @@ Self-hosted control plane for Moltbot instances. Deploy and manage multiple Molt
 ### Prerequisites
 
 - Node.js 18+
-- pnpm
-- AWS CLI configured
-- Docker (for local development)
+- pnpm (`npm install -g pnpm`)
+- Docker & Docker Compose
+- AWS CLI configured (for deployment)
 
 ### 1. Clone and Install
 
@@ -46,6 +46,41 @@ Self-hosted control plane for Moltbot instances. Deploy and manage multiple Molt
 git clone https://github.com/tomer-shavit/molthub.git
 cd molthub
 pnpm install
+```
+
+### 2. Start Database (Required)
+
+The Web UI requires the API, and the API requires PostgreSQL:
+
+```bash
+# Start PostgreSQL in Docker
+pnpm dev:setup
+```
+
+Or manually:
+```bash
+docker-compose up -d postgres
+pnpm db:generate
+pnpm db:push
+```
+
+### 3. Start Development Servers
+
+**Terminal 1 - Start API:**
+```bash
+pnpm --filter @molthub/api dev
+# API will be available at http://localhost:4000
+```
+
+**Terminal 2 - Start Web UI:**
+```bash
+pnpm --filter @molthub/web dev
+# UI will be available at http://localhost:3000
+```
+
+Or run both with:
+```bash
+pnpm dev
 ```
 
 ### 2. Set up Database
