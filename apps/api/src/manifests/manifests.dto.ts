@@ -23,7 +23,7 @@ export class ManifestResponseDto {
   version: number;
 
   @ApiProperty()
-  content: Record<string, unknown>;
+  content: any;
 
   @ApiProperty()
   createdBy: string;
