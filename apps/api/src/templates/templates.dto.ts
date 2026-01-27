@@ -33,7 +33,7 @@ export class TemplateResponseDto {
   category: string;
 
   @ApiProperty()
-  manifestTemplate: Record<string, unknown>;
+  manifestTemplate: any;
 
   @ApiProperty()
   isBuiltin: boolean;

@@ -9,7 +9,7 @@ export class HealthController {
 
   @Get()
   @ApiOperation({ summary: "Health check endpoint" })
-  async check() {
+  async check(): Promise<any> {
     return this.healthService.check();
   }
 }

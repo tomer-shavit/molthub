@@ -57,7 +57,7 @@ export class InstanceResponseDto {
   environment: Environment;
 
   @ApiProperty()
-  tags: Record<string, string>;
+  tags: any;
 
   @ApiProperty({ enum: InstanceStatus })
   status: InstanceStatus;
