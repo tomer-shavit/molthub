@@ -7,6 +7,7 @@ import { TemplatesModule } from "./templates/templates.module";
 import { AuditModule } from "./audit/audit.module";
 import { ReconcilerModule } from "./reconciler/reconciler.module";
 import { MetricsModule } from "./metrics/metrics.module";
+import { HealthModule } from "./health/health.module";
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { MetricsModule } from "./metrics/metrics.module";
       isGlobal: true,
     }),
     ScheduleModule.forRoot(),
+    HealthModule,
     InstancesModule,
     ManifestsModule,
     TemplatesModule,
