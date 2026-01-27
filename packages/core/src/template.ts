@@ -178,13 +178,13 @@ export interface ConfigLayer {
   type: "template" | "profile" | "overlay" | "instance";
   id: string;
   priority: number;
-  config: Partial<InstanceManifestSchema>;
+  config: any;
 }
 
 export function resolveConfig(
   layers: ConfigLayer[],
   mergeStrategies: Record<string, "override" | "merge" | "prepend" | "append">
-): InstanceManifestSchema {
+): any {
   // Sort by priority (lower first)
   const sorted = [...layers].sort((a, b) => a.priority - b.priority);
   
@@ -195,7 +195,7 @@ export function resolveConfig(
     result = deepMerge(result, layer.config, mergeStrategies);
   }
   
-  return result as InstanceManifestSchema;
+  return result;
 }
 
 function deepMerge(
@@ -208,7 +208,20 @@ function deepMerge(
     return target;
   }
   
-  if (typeof source !== "object" || Array.isArray(source)) {
+  // Handle arrays - check strategy first
+  if (Array.isArray(source)) {
+    const strategy = strategies[path] || "override";
+    if (strategy === "append" && Array.isArray(target)) {
+      return [...target, ...source];
+    } else if (strategy === "prepend" && Array.isArray(target)) {
+      return [...source, ...target];
+    } else if (strategy === "merge" && Array.isArray(target)) {
+      return [...target, ...source];
+    }
+    return source;
+  }
+  
+  if (typeof source !== "object") {
     return source;
   }
   
@@ -218,15 +231,22 @@ function deepMerge(
     const currentPath = path ? `${path}.${key}` : key;
     const strategy = strategies[currentPath] || "override";
     
-    if (strategy === "merge" && 
+    if (Array.isArray(source[key])) {
+      // Handle arrays at this level
+      if (strategy === "append" && Array.isArray(result[key])) {
+        result[key] = [...result[key], ...source[key]];
+      } else if (strategy === "prepend" && Array.isArray(result[key])) {
+        result[key] = [...source[key], ...result[key]];
+      } else if (strategy === "merge" && Array.isArray(result[key])) {
+        result[key] = [...result[key], ...source[key]];
+      } else {
+        result[key] = source[key];
+      }
+    } else if (strategy === "merge" && 
         typeof result[key] === "object" && 
         typeof source[key] === "object" &&
         !Array.isArray(source[key])) {
       result[key] = deepMerge(result[key] || {}, source[key], strategies, currentPath);
-    } else if (strategy === "append" && Array.isArray(result[key]) && Array.isArray(source[key])) {
-      result[key] = [...result[key], ...source[key]];
-    } else if (strategy === "prepend" && Array.isArray(result[key]) && Array.isArray(source[key])) {
-      result[key] = [...source[key], ...result[key]];
     } else {
       result[key] = deepMerge(result[key], source[key], strategies, currentPath);
     }

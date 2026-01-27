@@ -71,7 +71,7 @@ export const BotInstanceSchema = z.object({
   // Runtime info
   lastReconcileAt: z.date().optional(),
   lastHealthCheckAt: z.date().optional(),
-  lastError: z.string().optional(),
+  lastError: z.string().optional().nullable(),
   errorCount: z.number().int().min(0).default(0),
   
   // AWS resources (populated by reconciler)
