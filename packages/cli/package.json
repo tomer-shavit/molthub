@@ -1,0 +1,24 @@
+{
+  "name": "@molthub/cli",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "molthub": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@molthub/core": "workspace:*",
+    "commander": "^11.1.0",
+    "inquirer": "^9.2.12",
+    "chalk": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^9.0.7",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}
