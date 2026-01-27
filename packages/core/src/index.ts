@@ -1,6 +1,10 @@
 export * from "./manifest";
 export * from "./database";
 export * from "./policy";
+export * from "./fleet";
+export * from "./template";
+export * from "./policy-pack";
+export * from "./connector";
 
 export const MOLTHUB_VERSION = "0.1.0";
 export const API_VERSION = "molthub/v1";
