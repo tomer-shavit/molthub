@@ -3,6 +3,8 @@ import { ConfigModule } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
 import { configValidationSchema } from "./config/validation";
 import { InstancesModule } from "./instances/instances.module";
+import { BotInstancesModule } from "./bot-instances/bot-instances.module";
+import { FleetModule } from "./fleets/fleets.module";
 import { ManifestsModule } from "./manifests/manifests.module";
 import { TemplatesModule } from "./templates/templates.module";
 import { AuditModule } from "./audit/audit.module";
@@ -23,6 +25,8 @@ import { HealthModule } from "./health/health.module";
     ScheduleModule.forRoot(),
     HealthModule,
     InstancesModule,
+    BotInstancesModule,
+    FleetModule,
     ManifestsModule,
     TemplatesModule,
     AuditModule,
