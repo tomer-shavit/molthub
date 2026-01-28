@@ -3,7 +3,8 @@ import {
   IsOptional, 
   IsObject, 
   IsBoolean,
-  IsEnum 
+  IsEnum,
+  IsArray
 } from "class-validator";
 import { ConnectorStatus } from "@molthub/database";
 

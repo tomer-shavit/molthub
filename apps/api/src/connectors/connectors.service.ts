@@ -91,11 +91,14 @@ export class ConnectorsService {
   }
 
   async remove(id: string): Promise<void> {
-    const connector = await this.findOne(id);
+    // Check for active bindings
+    const bindingCount = await prisma.botConnectorBinding.count({
+      where: { connectorId: id },
+    });
     
-    if (connector.botBindings.length > 0) {
+    if (bindingCount > 0) {
       throw new BadRequestException(
-        `Cannot delete connector with ${connector.botBindings.length} active bindings. Remove bindings first.`
+        `Cannot delete connector with ${bindingCount} active bindings. Remove bindings first.`
       );
     }
 
