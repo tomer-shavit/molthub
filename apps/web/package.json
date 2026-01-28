@@ -9,14 +9,24 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@molthub/core": "workspace:*",
     "next": "14.1.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@molthub/core": "workspace:*"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@tailwindcss/forms": "^0.5.11",
+    "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.0",
+    "autoprefixer": "^10.4.23",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.563.0",
+    "postcss": "^8.5.6",
+    "recharts": "^3.7.0",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5.3.3"
   }
 }
