@@ -39,8 +39,8 @@ export const SkillsPolicySchema = z.object({
 export type SkillsPolicy = z.infer<typeof SkillsPolicySchema>;
 
 export const NetworkConfigSchema = z.object({
-  inbound: z.enum(["NONE", "WEBHOOK"]).default("NONE"),
-  egressPreset: z.enum(["RESTRICTED", "DEFAULT"]).default("RESTRICTED"),
+  inbound: z.enum(["NONE", "WEBHOOK", "PUBLIC"]).default("NONE"),
+  egressPreset: z.enum(["NONE", "RESTRICTED", "DEFAULT"]).default("RESTRICTED"),
 });
 
 export type NetworkConfig = z.infer<typeof NetworkConfigSchema>;
