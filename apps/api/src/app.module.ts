@@ -18,6 +18,7 @@ import { ReconcilerModule } from "./reconciler/reconciler.module";
 import { MetricsModule } from "./metrics/metrics.module";
 import { HealthModule } from "./health/health.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
+import { SkillPacksModule } from "./skill-packs/skill-packs.module";
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { DashboardModule } from "./dashboard/dashboard.module";
     ReconcilerModule,
     MetricsModule,
     DashboardModule,
+    SkillPacksModule,
   ],
 })
 export class AppModule {}

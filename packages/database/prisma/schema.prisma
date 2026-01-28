@@ -26,6 +26,7 @@ model Workspace {
   policyPacks           PolicyPack[]
   integrationConnectors IntegrationConnector[]
   auditEvents           AuditEvent[]
+  skillPacks            SkillPack[]
 
   @@index([slug])
 }
@@ -155,6 +156,7 @@ model BotInstance {
   connectorBindings BotConnectorBinding[]
   changeSets        ChangeSet[]
   traces            Trace[]
+  skillPacks        BotInstanceSkillPack[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -583,4 +585,59 @@ enum DeploymentEventType {
   ECS_DEPLOYMENT
   ECS_ROLLBACK
   DRIFT_DETECTED
+}
+
+// SkillPack: Reusable bundle of skills and MCPs for multiple bots
+model SkillPack {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  
+  // Skills configuration (e.g., [{"name": "github", "version": "1.0.0"}])
+  skills Json @default("[]")
+  
+  // MCP servers configuration
+  // e.g., [{"name": "github", "command": "npx -y @modelcontextprotocol/server-github"}]
+  mcps Json @default("[]")
+  
+  // Environment variables shared across all bots using this pack
+  envVars Json @default("{}")
+  
+  // Whether this is a built-in pack (provided by Molthub)
+  isBuiltin Boolean @default(false)
+  
+  // Version for tracking changes
+  version Int @default(1)
+  
+  // Relations
+  botInstances BotInstanceSkillPack[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String
+  
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@index([isBuiltin])
+}
+
+// Junction table for BotInstance <-> SkillPack many-to-many relation
+model BotInstanceSkillPack {
+  id            String      @id @default(cuid())
+  botInstanceId String
+  botInstance   BotInstance @relation(fields: [botInstanceId], references: [id], onDelete: Cascade)
+  skillPackId   String
+  skillPack     SkillPack   @relation(fields: [skillPackId], references: [id], onDelete: Cascade)
+  
+  // Instance-specific overrides (merged with pack defaults)
+  envOverrides Json @default("{}")
+  
+  // When this pack was attached to the bot
+  attachedAt DateTime @default(now())
+  
+  @@unique([botInstanceId, skillPackId])
+  @@index([botInstanceId])
+  @@index([skillPackId])
 }
