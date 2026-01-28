@@ -1,0 +1,25 @@
+{
+  "name": "@molthub/cloud-providers",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ecs": "^3.490.0",
+    "@aws-sdk/client-secrets-manager": "^3.490.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.490.0",
+    "@aws-sdk/client-ec2": "^3.490.0",
+    "@aws-sdk/client-iam": "^3.490.0",
+    "@aws-sdk/client-resource-groups-tagging-api": "^3.490.0",
+    "@molthub/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}

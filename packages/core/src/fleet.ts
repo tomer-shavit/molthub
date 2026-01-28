@@ -7,25 +7,49 @@ export type FleetStatus = z.infer<typeof FleetStatus>;
 
 export const FleetSchema = z.object({
   id: z.string(),
-  name: z.string().regex(/^[a-z0-9-]+$/, "Must be lowercase alphanumeric with hyphens").min(1).max(63),
+  name: z.string()
+    .regex(/^[a-z0-9-]+$/, "Must be lowercase alphanumeric with hyphens")
+    .regex(/^[a-z]/, "Must start with a letter")
+    .regex(/[a-z0-9]$/, "Must end with alphanumeric")
+    .regex(/^(?!.*--)/, "Cannot contain consecutive hyphens")
+    .min(1).max(63),
   workspaceId: z.string(),
   environment: Environment,
-  description: z.string().optional(),
+  description: z.string().max(1000, "Description must be 1000 characters or less").optional(),
   status: FleetStatus.default("ACTIVE"),
-  tags: z.record(z.string()).default({}),
+  tags: z.record(
+    z.string().max(256, "Tag value must be 256 characters or less"),
+    z.string().max(128, "Tag key must be 128 characters or less").regex(/^[a-zA-Z0-9\-_\.]+$/, "Tag keys can only contain alphanumeric characters, hyphens, underscores, and periods")
+  )
+    .default({})
+    .refine(
+      (tags) => Object.keys(tags).length <= 50,
+      { message: "Too many tags (max 50)" }
+    ),
   
   // Infrastructure references
-  ecsClusterArn: z.string().optional(),
-  vpcId: z.string().optional(),
-  privateSubnetIds: z.array(z.string()).default([]),
-  securityGroupId: z.string().optional(),
+  ecsClusterArn: z.string()
+    .regex(/^arn:aws:ecs:[a-z0-9-]+:\d+:cluster\/.+$/, "Invalid ECS cluster ARN format")
+    .optional(),
+  vpcId: z.string()
+    .regex(/^vpc-[a-f0-9]+$/, "Invalid VPC ID format")
+    .optional(),
+  privateSubnetIds: z.array(z.string().regex(/^subnet-[a-f0-9]+$/, "Invalid subnet ID format")).default([]),
+  securityGroupId: z.string()
+    .regex(/^sg-[a-f0-9]+$/, "Invalid security group ID format")
+    .optional(),
   
   // Default configurations applied to all instances in fleet
   defaultProfileId: z.string().optional(),
-  enforcedPolicyPackIds: z.array(z.string()).default([]),
+  enforcedPolicyPackIds: z.array(z.string())
+    .default([])
+    .refine(
+      (ids) => new Set(ids).size === ids.length,
+      { message: "Duplicate policy pack IDs are not allowed" }
+    ),
   
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
 });
 
 export type Fleet = z.infer<typeof FleetSchema>;
@@ -49,29 +73,46 @@ export type BotHealth = z.infer<typeof BotHealth>;
 
 export const BotInstanceSchema = z.object({
   id: z.string(),
-  name: z.string().regex(/^[a-z0-9-]+$/, "Must be lowercase alphanumeric with hyphens").min(1).max(63),
+  name: z.string()
+    .regex(/^[a-z0-9-]+$/, "Must be lowercase alphanumeric with hyphens")
+    .regex(/^[a-z]/, "Must start with a letter")
+    .regex(/[a-z0-9]$/, "Must end with alphanumeric")
+    .regex(/^(?!.*--)/, "Cannot contain consecutive hyphens")
+    .min(1).max(63),
   workspaceId: z.string(),
   fleetId: z.string(), // Associated with a fleet
   
   // Configuration layers
   templateId: z.string().optional(), // Base template used
   profileId: z.string().optional(), // Applied profile
-  overlayIds: z.array(z.string()).default([]), // Applied overlays in order
+  overlayIds: z.array(z.string())
+    .default([])
+    .refine(
+      (ids) => new Set(ids).size === ids.length,
+      { message: "Duplicate overlay IDs are not allowed" }
+    ), // Applied overlays in order
   
   // Current state
   status: BotStatus.default("CREATING"),
   health: BotHealth.default("UNKNOWN"),
   desiredManifest: InstanceManifestSchema,
-  appliedManifestVersion: z.string().optional(), // Last successfully applied
+  appliedManifestVersion: z.string().optional().nullable(), // Last successfully applied
   
   // Operational metadata
   tags: z.record(z.string()).default({}),
   metadata: z.record(z.unknown()).default({}),
   
   // Runtime info
-  lastReconcileAt: z.date().optional(),
-  lastHealthCheckAt: z.date().optional(),
-  lastError: z.string().optional().nullable(),
+  lastReconcileAt: z.union([z.date(), z.null()]).optional().transform((val) => val === undefined ? undefined : val === null ? null : new Date(val)),
+  lastHealthCheckAt: z.union([z.date(), z.null()]).optional().transform((val) => val === undefined ? undefined : val === null ? null : new Date(val)),
+  lastError: z.union([
+    z.string(),
+    z.object({
+      message: z.string(),
+      stack: z.string().optional(),
+      timestamp: z.coerce.date().optional(),
+    }),
+  ]).optional().nullable(),
   errorCount: z.number().int().min(0).default(0),
   
   // AWS resources (populated by reconciler)
@@ -84,8 +125,8 @@ export const BotInstanceSchema = z.object({
   uptimeSeconds: z.number().int().min(0).default(0),
   restartCount: z.number().int().min(0).default(0),
   
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
   createdBy: z.string(),
 });
 

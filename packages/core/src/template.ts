@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Environment, RuntimeConfigSchema, SecretRefSchema, ChannelConfigSchema, SkillsPolicySchema, NetworkConfigSchema, ObservabilityConfigSchema, PolicyConfigSchema } from "./manifest";
+import { Environment, RuntimeConfigSchema, SecretRefSchema, ChannelConfigSchema, SkillsPolicySchema, PartialSkillsPolicySchema, NetworkConfigSchema, ObservabilityConfigSchema, PolicyConfigSchema } from "./manifest";
 
 // Template: Bot archetypes for quick instance creation
 export const TemplateCategory = z.enum([
@@ -141,7 +141,7 @@ export const OverlaySchema = z.object({
     runtime: RuntimeConfigSchema.partial().optional(),
     secrets: z.array(SecretRefSchema).optional(),
     channels: z.array(ChannelConfigSchema).optional(),
-    skills: SkillsPolicySchema.partial().optional(),
+    skills: PartialSkillsPolicySchema.optional(),
     network: NetworkConfigSchema.partial().optional(),
     observability: ObservabilityConfigSchema.partial().optional(),
     policies: PolicyConfigSchema.partial().optional(),

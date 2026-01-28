@@ -76,7 +76,7 @@ export const ConnectionConfigSchema = z.discriminatedUnion("type", [
     signingSecret: CredentialRefSchema.optional(),
     appToken: CredentialRefSchema.optional(), // For socket mode
     socketMode: z.boolean().default(false),
-    webhookUrl: CredentialRefSchema.optional(),
+    webhookUrl: z.union([z.string().url(), CredentialRefSchema]).optional(),
   }),
   
   // Discord
@@ -118,6 +118,7 @@ export const ConnectionConfigSchema = z.discriminatedUnion("type", [
     type: z.enum(["postgres", "mysql", "mongodb", "redis"]),
     connectionString: CredentialRefSchema,
     ssl: z.boolean().default(true),
+    sslMode: z.enum(["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]).optional(),
     maxConnections: z.number().int().default(10),
   }),
   
@@ -143,8 +144,13 @@ export type ConnectionConfig = z.infer<typeof ConnectionConfigSchema>;
 // Integration Connector definition
 export const IntegrationConnectorSchema = z.object({
   id: z.string(),
-  name: z.string().min(1).max(100),
-  description: z.string(),
+  name: z.string()
+    .min(1, "Name cannot be empty")
+    .max(128, "Name must be 128 characters or less")
+    .refine(val => val.trim().length > 0, "Name cannot be only whitespace"),
+  description: z.string()
+    .max(2000, "Description must be 2000 characters or less")
+    .optional(),
   
   // Scope
   workspaceId: z.string(),
@@ -156,39 +162,68 @@ export const IntegrationConnectorSchema = z.object({
   // Status
   status: ConnectorStatus.default("PENDING"),
   statusMessage: z.string().optional(),
-  lastTestedAt: z.date().optional(),
+  lastTestedAt: z.union([z.date(), z.null()]).optional(),
   lastTestResult: z.enum(["SUCCESS", "FAILURE"]).optional(),
   lastError: z.string().optional(),
   
-  // Sharing
-  isShared: z.boolean().default(true), // Can be used by multiple instances
-  allowedInstanceIds: z.array(z.string()).optional(), // If not shared, specific instances
+  // Sharing - if not shared, must have allowedInstanceIds
+  isShared: z.boolean().default(true),
+  allowedInstanceIds: z.array(z.string()).default([]),
   
   // Rotation
   rotationSchedule: z.object({
     enabled: z.boolean().default(false),
-    frequency: z.enum(["daily", "weekly", "monthly", "quarterly"]).optional(),
-    lastRotatedAt: z.date().optional(),
-    nextRotationAt: z.date().optional(),
+    frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]).optional(),
+    lastRotatedAt: z.union([z.date(), z.null()]).optional(),
+    nextRotationAt: z.union([z.date(), z.null()]).optional(),
   }).optional(),
   
   // Usage tracking
-  usageCount: z.number().int().min(0).default(0),
-  lastUsedAt: z.date().optional(),
+  usageCount: z.number().int().min(0, "Usage count cannot be negative").default(0),
+  lastUsedAt: z.union([z.date(), z.null()]).optional(),
   
-  tags: z.record(z.string()).default({}),
+  tags: z.record(z.string())
+    .default({})
+    .refine(
+      (tags) => Object.keys(tags).length <= 50,
+      { message: "Too many tags (max 50)" }
+    ),
   
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
   createdBy: z.string(),
-});
+}).refine(
+  (data) => {
+    // If not shared, must have allowedInstanceIds
+    if (!data.isShared && data.allowedInstanceIds.length === 0) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: "Non-shared connectors must specify allowedInstanceIds",
+    path: ["allowedInstanceIds"],
+  }
+).refine(
+  (data) => {
+    // Shared connectors should not have allowedInstanceIds
+    if (data.isShared && data.allowedInstanceIds.length > 0) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: "Shared connectors should not have allowedInstanceIds",
+    path: ["allowedInstanceIds"],
+  }
+);
 
 export type IntegrationConnector = z.infer<typeof IntegrationConnectorSchema>;
 
 // Connector reference used in manifests (instead of embedding full credentials)
 export const ConnectorRefSchema = z.object({
-  connectorId: z.string(),
-  workspaceId: z.string(),
+  connectorId: z.string().min(1, "connectorId cannot be empty"),
+  workspaceId: z.string().min(1, "workspaceId cannot be empty"),
   type: ConnectorType,
   
   // Optional: override specific config values
@@ -227,7 +262,7 @@ export const BotConnectorBindingSchema = z.object({
   overrides: z.record(z.unknown()).optional(),
   
   // Health
-  healthStatus: z.enum(["HEALTHY", "UNHEALTHY", "UNKNOWN"]).default("UNKNOWN"),
+  healthStatus: z.enum(["HEALTHY", "UNHEALTHY", "UNKNOWN", "DEGRADED"]).default("UNKNOWN"),
   lastHealthCheck: z.date().optional(),
   
   createdAt: z.date(),
@@ -274,12 +309,13 @@ export const ConnectionTestResultSchema = z.object({
   connectorId: z.string(),
   testedAt: z.date(),
   success: z.boolean(),
-  
+
   // Response details
-  responseTimeMs: z.number().int(),
+  responseTimeMs: z.number().int().min(0, "Response time cannot be negative"),
   statusCode: z.number().int().optional(),
   errorMessage: z.string().optional(),
-  
+  errorCode: z.string().optional(),
+
   // Validation results
   checks: z.array(z.object({
     name: z.string(),

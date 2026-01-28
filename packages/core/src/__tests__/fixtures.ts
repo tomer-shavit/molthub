@@ -79,8 +79,22 @@ export interface BotInstanceOptions {
   status?: 'CREATING' | 'PENDING' | 'RUNNING' | 'DEGRADED' | 'STOPPED' | 'PAUSED' | 'DELETING' | 'ERROR' | 'RECONCILING';
   health?: 'HEALTHY' | 'UNHEALTHY' | 'UNKNOWN' | 'DEGRADED';
   desiredManifest?: any;
+  appliedManifestVersion?: string | null;
   tags?: Record<string, string>;
   metadata?: Record<string, any>;
+  lastReconcileAt?: Date | null;
+  lastHealthCheckAt?: Date | null;
+  lastError?: string | null;
+  errorCount?: number;
+  restartCount?: number;
+  uptimeSeconds?: number;
+  ecsClusterArn?: string;
+  ecsServiceArn?: string;
+  taskDefinitionArn?: string;
+  cloudwatchLogGroup?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  createdBy?: string;
 }
 
 export function createValidManifest(options: { name?: string; environment?: 'dev' | 'staging' | 'prod' } = {}) {
@@ -134,16 +148,22 @@ export function createBotInstance(options: BotInstanceOptions = {}) {
     status: options.status ?? 'CREATING',
     health: options.health ?? 'UNKNOWN',
     desiredManifest: options.desiredManifest ?? createValidManifest({ name: options.name }),
-    appliedManifestVersion: null,
+    appliedManifestVersion: options.appliedManifestVersion ?? null,
     tags: options.tags ?? {},
     metadata: options.metadata ?? {},
-    errorCount: 0,
-    restartCount: 0,
-    uptimeSeconds: 0,
-    lastError: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    createdBy: 'test-user',
+    errorCount: options.errorCount ?? 0,
+    restartCount: options.restartCount ?? 0,
+    uptimeSeconds: options.uptimeSeconds ?? 0,
+    lastError: options.lastError ?? null,
+    lastReconcileAt: 'lastReconcileAt' in options ? options.lastReconcileAt : undefined,
+    lastHealthCheckAt: 'lastHealthCheckAt' in options ? options.lastHealthCheckAt : undefined,
+    ecsClusterArn: options.ecsClusterArn,
+    ecsServiceArn: options.ecsServiceArn,
+    taskDefinitionArn: options.taskDefinitionArn,
+    cloudwatchLogGroup: options.cloudwatchLogGroup,
+    createdAt: options.createdAt ?? new Date(),
+    updatedAt: options.updatedAt ?? new Date(),
+    createdBy: options.createdBy ?? 'test-user',
   };
 }
 
@@ -159,6 +179,16 @@ export interface ConnectorOptions {
   status?: 'ACTIVE' | 'INACTIVE' | 'ERROR' | 'PENDING';
   config?: any;
   isShared?: boolean;
+  description?: string;
+  allowedInstanceIds?: string[];
+  lastTestedAt?: Date | null;
+  lastTestResult?: 'SUCCESS' | 'FAILURE';
+  lastError?: string;
+  usageCount?: number;
+  lastUsedAt?: Date | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+  createdBy?: string;
 }
 
 export function createSecretRef(name: string): {
@@ -213,18 +243,22 @@ export function createConnector(options: ConnectorOptions = {}) {
   return {
     id: options.id ?? generateId('conn'),
     name: options.name ?? `Test ${type} Connector`,
-    description: `Test connector for ${type}`,
+    description: 'description' in options ? options.description : `Test connector for ${type}`,
     workspaceId: options.workspaceId ?? generateId('workspace'),
     type,
     config: options.config ?? defaultConfigs[type] ?? { type: 'custom', credentials: {}, config: {} },
     status: options.status ?? 'ACTIVE',
     isShared: options.isShared ?? true,
-    allowedInstanceIds: [],
-    usageCount: 0,
+    allowedInstanceIds: options.allowedInstanceIds ?? [],
+    usageCount: options.usageCount ?? 0,
+    lastTestedAt: 'lastTestedAt' in options ? options.lastTestedAt : undefined,
+    lastTestResult: options.lastTestResult,
+    lastError: options.lastError,
+    lastUsedAt: 'lastUsedAt' in options ? options.lastUsedAt : undefined,
     tags: {},
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    createdBy: 'test-user',
+    createdAt: options.createdAt ?? new Date(),
+    updatedAt: options.updatedAt ?? new Date(),
+    createdBy: options.createdBy ?? 'test-user',
   };
 }
 

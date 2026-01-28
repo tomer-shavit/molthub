@@ -92,7 +92,7 @@ export class PolicyEngine {
     }
 
     // Check 5: Skills must be explicit
-    if (!validated.spec.skills.allowlist || validated.spec.skills.allowlist.length === 0) {
+    if (validated.spec.skills.mode === 'ALLOWLIST' && (!validated.spec.skills.allowlist || validated.spec.skills.allowlist.length === 0)) {
       violations.push({
         code: "NO_SKILLS_ALLOWED",
         message: "At least one skill must be in the allowlist",
