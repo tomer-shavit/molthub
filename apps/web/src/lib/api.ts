@@ -116,6 +116,7 @@ export interface ChangeSet {
   rolledBackBy?: string;
   createdAt: string;
   createdBy: string;
+  auditEvents?: AuditEvent[];
 }
 
 export interface ChangeSetStatus {

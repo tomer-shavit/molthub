@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, type BotInstance } from "@/lib/api";

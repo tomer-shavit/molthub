@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Settings } from "lucide-react";

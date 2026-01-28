@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge, HealthIndicator } from "@/components/ui/status-badge";
@@ -12,11 +14,6 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { MetricCard } from "@/components/dashboard/metric-card";
-import { 
-  LineChartComponent, 
-  BarChartComponent, 
-  generateTimeSeriesData 
-} from "@/components/ui/charts";
 import { TimeDisplay, DurationDisplay } from "@/components/ui/time-display";
 import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet } from "@/lib/api";
 import { notFound } from "next/navigation";
@@ -29,9 +26,6 @@ import {
   Pause, 
   Play, 
   Trash2,
-  Terminal,
-  FileText,
-  GitBranch,
   Clock,
   AlertCircle,
   CheckCircle,
@@ -50,7 +44,7 @@ async function getBotInstance(id: string): Promise<BotInstance | null> {
 async function getBotTraces(id: string): Promise<Trace[]> {
   try {
     const to = new Date();
-    const from = new Date(to.getTime() - 24 * 60 * 60 * 1000); // Last 24 hours
+    const from = new Date(to.getTime() - 24 * 60 * 60 * 1000);
     return await api.listTraces({ botInstanceId: id, from, to, limit: 50 });
   } catch (error) {
     return [];
@@ -74,9 +68,6 @@ async function getChangeSets(id: string): Promise<ChangeSet[]> {
     return [];
   }
 }
-
-const modelCallsData = generateTimeSeriesData(24, [10, 100]);
-const toolCallsData = generateTimeSeriesData(24, [5, 50]);
 
 export default async function BotDetailPage({ params }: { params: { id: string } }) {
   const [bot, traces, metrics, changeSets] = await Promise.all([
@@ -177,28 +168,6 @@ export default async function BotDetailPage({ params }: { params: { id: string }
           icon={<RotateCcw className="w-4 h-4" />}
           className={bot.restartCount > 0 ? "border-l-4 border-l-yellow-500" : ""}
         />
-      </div>
-
-      {/* Charts */}
-      <div className="grid gap-4 md:grid-cols-2 mb-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Model Calls</CardTitle>
-            <CardDescription>LLM invocations per hour</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BarChartComponent data={modelCallsData} height={200} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Tool Calls</CardTitle>
-            <CardDescription>External tool invocations per hour</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <LineChartComponent data={toolCallsData} height={200} />
-          </CardContent>
-        </Card>
       </div>
 
       {/* Tabs */}
