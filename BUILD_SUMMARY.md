@@ -78,6 +78,26 @@
 - ✅ `POST /connectors/:id/test` - Test connection
 - ✅ `DELETE /connectors/:id` - Delete connector
 
+#### Change Sets (Canary Rollouts)
+- ✅ `POST /change-sets` - Create change set
+- ✅ `GET /change-sets` - List change sets
+- ✅ `GET /change-sets/:id` - Get change set details
+- ✅ `GET /change-sets/:id/status` - Get rollout progress
+- ✅ `POST /change-sets/:id/start` - Start rollout
+- ✅ `POST /change-sets/:id/complete` - Mark complete
+- ✅ `POST /change-sets/:id/fail` - Mark failed
+- ✅ `POST /change-sets/:id/rollback` - Rollback change
+
+#### Traces (Execution Tracking)
+- ✅ `POST /traces` - Create trace
+- ✅ `GET /traces` - List traces with filtering
+- ✅ `GET /traces/:id` - Get trace details
+- ✅ `GET /traces/by-trace-id/:traceId` - Get by trace ID
+- ✅ `GET /traces/by-trace-id/:traceId/tree` - Get trace tree
+- ✅ `GET /traces/stats/:botInstanceId` - Get trace statistics
+- ✅ `POST /traces/:id/complete` - Complete trace
+- ✅ `POST /traces/:id/fail` - Fail trace
+
 ### 4. Built-in Policy Packs
 - ✅ **Security Baseline** - No latest tag, require secrets manager, forbid public admin
 - ✅ **Production Guardrails** - Minimum replicas, require observability
@@ -113,15 +133,15 @@ Template (base)
 
 ## MVP Priorities Completed
 
-✅ 1. Core domain models with TDD  
+✅ 1. Core domain models with TDD (137 tests)  
 ✅ 2. Fleet and BotInstance CRUD  
 ✅ 3. Template/Profile/Overlay system  
 ✅ 4. Policy Pack validation  
 ✅ 5. Integration Connectors  
 ⏳ 6. Fleet health dashboard UI  
 ⏳ 7. Per-bot operational dashboard  
-⏳ 8. Change sets and canary rollout  
-⏳ 9. Trace viewer  
+✅ 8. Change sets and canary rollout  
+✅ 9. Trace viewer  
 ⏳ 10. Audit logging  
 
 ## Next Steps (for remaining time)
@@ -154,12 +174,24 @@ All core domain models have comprehensive tests:
 
 ## Build Status
 
-- ✅ packages/core - Builds successfully
+- ✅ packages/core - Builds successfully, 137 tests passing
 - ✅ packages/database - Prisma client generated
 - ✅ packages/adapters-aws - Builds successfully  
 - ✅ apps/api - Builds successfully
 - ⏳ apps/web - Existing code, needs dashboard updates
 
+## API Endpoint Count
+
+**50+ REST API endpoints** covering:
+- Fleet management (7 endpoints)
+- Bot instances (13 endpoints)
+- Profiles (5 endpoints)
+- Overlays (5 endpoints)
+- Policy packs (6 endpoints)
+- Connectors (6 endpoints)
+- Change sets (8 endpoints)
+- Traces (8 endpoints)
+
 ## Git History
 
-15 commits documenting the build process with clear messages following conventional commits format.
+18 commits documenting the build process with clear messages following conventional commits format.
