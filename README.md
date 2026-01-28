@@ -4,12 +4,48 @@ Self-hosted control plane for Moltbot instances. Deploy and manage multiple Molt
 
 ## Features
 
+### Core Platform
 - **Fleet Management**: Create, manage, and monitor multiple Moltbot instances
+- **Bot Instances**: Full lifecycle management with health tracking
 - **Manifest-Driven**: Everything defined as versioned, auditable manifests
-- **Secure by Default**: Secrets in AWS Secrets Manager, no public admin panels, least-privilege IAM
 - **Template-Based**: Start quickly with built-in templates (Slack Bot, Webhook Bot, Minimal)
+- **Configuration Layers**: Profiles for shared defaults, Overlays for per-bot overrides
+
+### Operations & Observability
+- **Fleet Health Dashboard**: Executive overview with real-time metrics
+  - Total bots, message volume, latency percentiles (p50, p95, p99)
+  - Failure rates, cost tracking
+  - Health indicators and status cards
+- **Per-Bot Operational Dashboard**: Instance detail view with:
+  - Status, health, and uptime tracking
+  - Deployment events timeline
+  - Logs viewer integration
+  - Metrics charts (throughput, model calls, tool calls)
+- **Trace Viewer**: End-to-end message trace visualization
+  - Tool call chains visualization
+  - Latency breakdown per operation
+  - Input/output inspection
 - **Full Observability**: CloudWatch logs, deployment events, health status
-- **Audit Trail**: Complete audit log of all changes
+
+### Change Management
+- **Change Sets**: Track configuration changes with full history
+- **Canary Rollouts**: Gradual rollout with percentage controls
+  - ALL, PERCENTAGE, or CANARY strategies
+  - Real-time progress tracking
+  - Automatic rollback on failure
+- **Preview Changes**: See diffs before applying
+- **One-Click Rollback**: Revert to previous configuration
+
+### Security & Compliance
+- **Secrets Management**: Secrets in AWS Secrets Manager, no plaintext storage
+- **Policy Engine**: Enforced rules for security compliance
+  - Block unsafe configurations (public admin panels, plaintext secrets)
+  - IAM least-privilege validation
+- **Audit Logging**: Complete audit trail of all changes
+  - Event timeline with filtering
+  - Actor, resource, and time-based filters
+  - Diff viewer for changes
+- **Networking**: No public inbound by default. Optional webhook mode with token validation.
 
 ## Architecture
 
@@ -17,11 +53,13 @@ Self-hosted control plane for Moltbot instances. Deploy and manage multiple Molt
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │   Web UI    │────▶│  NestJS API │────▶│  PostgreSQL │
 │  (Next.js)  │     │             │     │   (Prisma)  │
+│  + React    │     │             │     │             │
 └─────────────┘     └──────┬──────┘     └─────────────┘
                            │
                            ▼
                     ┌─────────────┐
                     │  Reconciler │
+                    │  Scheduler  │
                     └──────┬──────┘
                            │
                            ▼
@@ -83,37 +121,155 @@ Or run both with:
 pnpm dev
 ```
 
-### 2. Set up Database
-
-```bash
-# Start PostgreSQL
-docker-compose up -d postgres
-
-# Run migrations
-pnpm db:push
-```
-
-### 3. Configure Environment
+### 4. Configure Environment
 
 ```bash
 cp .env.example .env
 # Edit .env with your AWS credentials and settings
 ```
 
-### 4. Bootstrap AWS Infrastructure
+### 5. Bootstrap AWS Infrastructure
 
 ```bash
 pnpm cli bootstrap --region us-east-1
 ```
 
-### 5. Start Development
-
-```bash
-# Start API and Web UI
-pnpm dev
-```
-
 Visit http://localhost:3000
+
+## Web UI Dashboards
+
+### Fleet Health Dashboard (`/`)
+- Executive overview with key metrics
+- Fleet status cards with health indicators
+- Real-time charts for message volume, latency, error rates
+- Fleet listing with quick actions
+
+### Fleet Detail (`/fleets/:id`)
+- Fleet overview and configuration
+- Health breakdown with progress bars
+- Bot instances table
+- Throughput charts
+
+### Bot Operational Dashboard (`/bots/:id`)
+- Instance status and health
+- Uptime, success rate, latency metrics
+- Model calls and tool calls charts
+- Traces, configuration, and change sets tabs
+- Deployment events timeline
+
+### Trace Viewer (`/traces`)
+- List all traces with filtering
+- Search by trace ID, status, type
+- **Trace Detail** (`/traces/:id`):
+  - Interactive trace tree visualization
+  - Latency breakdown with progress bars
+  - Input/output inspection
+  - Metadata and tags
+
+### Change Sets (`/changesets`)
+- List all configuration changes
+- **Change Set Detail** (`/changesets/:id`):
+  - Canary rollout controls
+  - Progress indicators
+  - Diff viewer (before/after)
+  - Rollback functionality
+
+### Audit Log (`/audit`)
+- Event timeline with date grouping
+- Filter by actor, resource type, time range
+- Diff summaries
+- Direct links to affected resources
+
+## API Endpoints
+
+### Instances
+| Endpoint | Description |
+|----------|-------------|
+| `GET /instances` | List all instances |
+| `POST /instances` | Create new instance |
+| `GET /instances/:id` | Get instance details |
+| `POST /instances/:id/manifests` | Create manifest version |
+| `POST /instances/:id/reconcile` | Trigger reconciliation |
+
+### Fleets
+| Endpoint | Description |
+|----------|-------------|
+| `GET /fleets` | List all fleets |
+| `POST /fleets` | Create new fleet |
+| `GET /fleets/:id` | Get fleet details |
+| `GET /fleets/:id/health` | Get fleet health |
+| `PATCH /fleets/:id/status` | Update fleet status |
+
+### Bot Instances
+| Endpoint | Description |
+|----------|-------------|
+| `GET /bot-instances` | List all bot instances |
+| `GET /bot-instances/:id` | Get bot details |
+| `GET /traces/stats/:id` | Get bot metrics |
+
+### Change Sets
+| Endpoint | Description |
+|----------|-------------|
+| `GET /change-sets` | List change sets |
+| `POST /change-sets` | Create change set |
+| `GET /change-sets/:id` | Get change set details |
+| `GET /change-sets/:id/status` | Get rollout status |
+| `POST /change-sets/:id/start` | Start rollout |
+| `POST /change-sets/:id/rollback` | Rollback change |
+
+### Traces
+| Endpoint | Description |
+|----------|-------------|
+| `GET /traces` | List traces |
+| `POST /traces` | Create trace |
+| `GET /traces/:id` | Get trace |
+| `GET /traces/by-trace-id/:traceId` | Get trace by trace ID |
+| `GET /traces/by-trace-id/:traceId/tree` | Get trace tree |
+
+### Audit
+| Endpoint | Description |
+|----------|-------------|
+| `GET /audit` | Query audit events |
+
+## Project Structure
+
+```
+molthub/
+├── apps/
+│   ├── api/                 # NestJS API
+│   │   ├── src/
+│   │   │   ├── fleets/      # Fleet management
+│   │   │   ├── bot-instances/  # Bot lifecycle
+│   │   │   ├── change-sets/    # Change management
+│   │   │   ├── traces/         # Trace collection
+│   │   │   ├── audit/          # Audit logging
+│   │   │   └── reconciler/     # Drift detection & sync
+│   │   └── ...
+│   └── web/                 # Next.js Web UI
+│       ├── src/
+│       │   ├── app/         # App Router pages
+│       │   │   ├── page.tsx            # Fleet Health Dashboard
+│       │   │   ├── fleets/             # Fleet pages
+│       │   │   ├── bots/               # Bot pages
+│       │   │   ├── traces/             # Trace Viewer
+│       │   │   ├── changesets/         # Change Set UI
+│       │   │   └── audit/              # Audit Log UI
+│       │   ├── components/
+│       │   │   ├── ui/      # UI components (shadcn/ui style)
+│       │   │   ├── dashboard/          # Dashboard components
+│       │   │   ├── layout/             # Layout components
+│       │   │   └── ...
+│       │   └── lib/
+│       │       ├── api.ts   # API client
+│       │       └── utils.ts # Utilities
+│       └── ...
+├── packages/
+│   ├── core/                # Types, schemas, policy engine
+│   ├── database/            # Prisma schema and client
+│   ├── adapters-aws/        # AWS ECS, Secrets Manager, CloudWatch
+│   └── cli/                 # molthub CLI
+└── docker-compose.yml       # Local development stack
+```
 
 ## Configuration
 
@@ -137,34 +293,32 @@ ECS_TASK_ROLE_ARN=arn:aws:iam::123456789:role/ecsTaskRole
 # Networking
 PRIVATE_SUBNET_IDS=subnet-xxx,subnet-yyy
 SECURITY_GROUP_ID=sg-zzz
+
+# Web UI
+NEXT_PUBLIC_API_URL=http://localhost:4000
 ```
 
-## Project Structure
+## Technology Stack
 
-```
-molthub/
-├── apps/
-│   ├── api/              # NestJS API
-│   └── web/              # Next.js Web UI
-├── packages/
-│   ├── core/             # Types, schemas, policy engine
-│   ├── database/         # Prisma schema and client
-│   ├── adapters-aws/     # AWS ECS, Secrets Manager, CloudWatch
-│   └── cli/              # molthub CLI
-└── docker-compose.yml    # Local development stack
-```
+### Backend
+- **Framework**: NestJS (Node.js)
+- **Database**: PostgreSQL with Prisma ORM
+- **API**: REST with OpenAPI/Swagger docs
+- **Scheduling**: Built-in cron for reconciliation
 
-## API Endpoints
+### Frontend
+- **Framework**: Next.js 14 (App Router)
+- **Styling**: Tailwind CSS
+- **Components**: Custom UI components (shadcn/ui pattern)
+- **Charts**: Recharts
+- **Icons**: Lucide React
+- **Date Handling**: date-fns
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /instances` | List all instances |
-| `POST /instances` | Create new instance |
-| `GET /instances/:id` | Get instance details |
-| `POST /instances/:id/manifests` | Create manifest version |
-| `POST /instances/:id/reconcile` | Trigger reconciliation |
-| `GET /templates` | List templates |
-| `GET /audit` | Query audit events |
+### Infrastructure
+- **Container Orchestration**: AWS ECS Fargate
+- **Secrets**: AWS Secrets Manager
+- **Logs**: AWS CloudWatch
+- **Networking**: VPC with private subnets
 
 ## Security
 
@@ -172,6 +326,7 @@ molthub/
 - **Networking**: No public inbound by default. Optional webhook mode with token validation.
 - **IAM**: Least-privilege roles per instance task.
 - **Policies**: Block unsafe configurations (public admin panels, plaintext secrets, wildcard IAM).
+- **Audit**: Complete audit trail of all changes with actor tracking.
 
 ## License
 
