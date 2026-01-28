@@ -16,7 +16,18 @@
     "@aws-sdk/client-ec2": "^3.490.0",
     "@aws-sdk/client-iam": "^3.490.0",
     "@aws-sdk/client-resource-groups-tagging-api": "^3.490.0",
+    "@azure/arm-containerinstance": "^9.1.0",
+    "@azure/arm-resources": "^5.2.0",
+    "@azure/identity": "^4.0.0",
+    "@azure/keyvault-secrets": "^4.7.0",
+    "@azure/monitor-query": "^1.1.0",
+    "@google-cloud/logging": "^11.0.0",
+    "@google-cloud/run": "^1.2.0",
+    "@google-cloud/secret-manager": "^5.0.0",
     "@molthub/core": "workspace:*"
+  },
+  "optionalDependencies": {
+    "axios": "^1.6.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

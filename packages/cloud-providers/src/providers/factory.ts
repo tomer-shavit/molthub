@@ -50,15 +50,15 @@ export class CloudProviderFactory {
   static getAvailableProviders(): { type: CloudProviderType | "simulated"; name: string; status: "ready" | "beta" | "coming_soon" }[] {
     return [
       { type: "aws", name: "Amazon Web Services (ECS Fargate)", status: "ready" },
+      { type: "azure", name: "Microsoft Azure (Container Instances)", status: "ready" },
+      { type: "gcp", name: "Google Cloud Platform (Cloud Run)", status: "ready" },
+      { type: "digitalocean", name: "DigitalOcean (App Platform)", status: "ready" },
       { type: "selfhosted", name: "Self-Hosted (Docker)", status: "ready" },
       { type: "simulated", name: "Simulated (Testing Mode)", status: "ready" },
-      { type: "azure", name: "Microsoft Azure (Container Apps)", status: "coming_soon" },
-      { type: "gcp", name: "Google Cloud (Cloud Run)", status: "coming_soon" },
-      { type: "digitalocean", name: "DigitalOcean (App Platform)", status: "coming_soon" },
     ];
   }
 
   static isProviderReady(type: CloudProviderType | "simulated"): boolean {
-    return type === "aws" || type === "selfhosted" || type === "simulated";
+    return ["aws", "azure", "gcp", "digitalocean", "selfhosted", "simulated"].includes(type);
   }
 }
