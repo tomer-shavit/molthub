@@ -4,22 +4,36 @@ import fs from "fs-extra";
 import path from "path";
 import os from "os";
 import { execSync } from "child_process";
+import { glob } from "glob";
 
 const MOLTHUB_DIR = path.join(os.homedir(), ".molthub");
 
 interface CheckResult {
   name: string;
-  status: "pass" | "fail" | "warn";
+  status: "pass" | "fail" | "warn" | "skip";
   message: string;
   fix?: string;
 }
 
-export async function doctor() {
-  console.log(chalk.blue.bold("🔧 Molthub Doctor\n"));
-  console.log(chalk.gray("Diagnosing common issues...\n"));
+export interface DoctorOptions {
+  security?: boolean;
+}
+
+export async function doctor(options: DoctorOptions = {}) {
+  const securityOnly = options.security === true;
+
+  if (securityOnly) {
+    console.log(chalk.blue.bold("🔒 Molthub Security Doctor\n"));
+    console.log(chalk.gray("Running security-focused diagnostics...\n"));
+  } else {
+    console.log(chalk.blue.bold("🔧 Molthub Doctor\n"));
+    console.log(chalk.gray("Diagnosing common issues...\n"));
+  }
 
   const checks: CheckResult[] = [];
-  const spinner = ora("Running diagnostics...").start();
+  const spinner = ora(securityOnly ? "Running security checks..." : "Running diagnostics...").start();
+
+  if (!securityOnly) {
 
   // Check 1: Node.js version
   try {
@@ -198,6 +212,218 @@ export async function doctor() {
     });
   }
 
+  } // end if (!securityOnly)
+
+  // ── Security Checks ────────────────────────────────────────────────────
+
+  // Check 8: SSH Key Permissions
+  const sshDir = path.join(os.homedir(), ".ssh");
+  if (os.platform() !== "win32") {
+    if (await fs.pathExists(sshDir)) {
+      try {
+        const sshFiles = await fs.readdir(sshDir);
+        const badPerms: string[] = [];
+
+        for (const file of sshFiles) {
+          const filePath = path.join(sshDir, file);
+          try {
+            const stat = await fs.stat(filePath);
+            if (!stat.isFile()) continue;
+
+            const mode = (stat.mode & 0o777).toString(8);
+
+            if (file.endsWith(".pub")) {
+              // Public keys should be 644 or stricter
+              if (stat.mode & 0o022) {
+                // World or group writable
+                badPerms.push(`${file} (${mode}, expected 644 or stricter)`);
+              }
+            } else if (!file.startsWith("known_hosts") && !file.startsWith("config") && !file.startsWith("authorized_keys")) {
+              // Private keys should be 600
+              if (stat.mode & 0o077) {
+                badPerms.push(`${file} (${mode}, expected 600)`);
+              }
+            }
+          } catch {
+            // Skip files we can't stat
+          }
+        }
+
+        if (badPerms.length === 0) {
+          checks.push({
+            name: "SSH key permissions",
+            status: "pass",
+            message: "All SSH key files have correct permissions",
+          });
+        } else {
+          checks.push({
+            name: "SSH key permissions",
+            status: "warn",
+            message: `SSH key files have overly permissive modes: ${badPerms.join(", ")}`,
+            fix: "Run: chmod 600 ~/.ssh/<private-key> && chmod 644 ~/.ssh/<key>.pub",
+          });
+        }
+      } catch {
+        checks.push({
+          name: "SSH key permissions",
+          status: "warn",
+          message: "Could not read SSH directory",
+        });
+      }
+    } else {
+      checks.push({
+        name: "SSH key permissions",
+        status: "skip",
+        message: "No SSH directory found (not applicable)",
+      });
+    }
+  } else {
+    checks.push({
+      name: "SSH key permissions",
+      status: "skip",
+      message: "Not applicable on Windows",
+    });
+  }
+
+  // Check 9: Docker Socket Permissions
+  const dockerSocket = "/var/run/docker.sock";
+  if (os.platform() !== "win32") {
+    if (await fs.pathExists(dockerSocket)) {
+      try {
+        const stat = await fs.stat(dockerSocket);
+        const mode = stat.mode & 0o777;
+        // Check if world-readable (others have read permission)
+        if (mode & 0o004) {
+          checks.push({
+            name: "Docker socket permissions",
+            status: "warn",
+            message: `Docker socket is world-readable (mode: ${mode.toString(8)})`,
+            fix: "Run: sudo chmod 660 /var/run/docker.sock",
+          });
+        } else {
+          checks.push({
+            name: "Docker socket permissions",
+            status: "pass",
+            message: "Docker socket has restricted permissions",
+          });
+        }
+      } catch {
+        checks.push({
+          name: "Docker socket permissions",
+          status: "pass",
+          message: "Docker socket not accessible (restricted)",
+        });
+      }
+    } else {
+      checks.push({
+        name: "Docker socket permissions",
+        status: "skip",
+        message: "Docker socket not found",
+      });
+    }
+  } else {
+    checks.push({
+      name: "Docker socket permissions",
+      status: "skip",
+      message: "Not applicable on Windows",
+    });
+  }
+
+  // Check 10: Plaintext Secrets Detection
+  try {
+    const secretPattern = /(?:token|secret|password|api[_-]?key)\s*[:=]\s*["']?[A-Za-z0-9_-]{20,}/i;
+    const configGlobs = [
+      path.join(os.homedir(), ".molthub", "**", "*.json"),
+      path.join(os.homedir(), ".molthub", "**", "*.yaml"),
+    ];
+
+    const filesWithSecrets: string[] = [];
+
+    for (const pattern of configGlobs) {
+      const matchedFiles = await glob(pattern, { nodir: true });
+      for (const file of matchedFiles) {
+        try {
+          const content = await fs.readFile(file, "utf-8");
+          if (secretPattern.test(content)) {
+            filesWithSecrets.push(path.relative(os.homedir(), file));
+          }
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    }
+
+    if (filesWithSecrets.length === 0) {
+      checks.push({
+        name: "Plaintext secrets detection",
+        status: "pass",
+        message: "No plaintext secrets detected in config files",
+      });
+    } else {
+      checks.push({
+        name: "Plaintext secrets detection",
+        status: "warn",
+        message: `Possible plaintext secrets found in: ${filesWithSecrets.join(", ")}`,
+        fix: "Move secrets to environment variables or a secret manager",
+      });
+    }
+  } catch {
+    checks.push({
+      name: "Plaintext secrets detection",
+      status: "pass",
+      message: "No config directory to scan",
+    });
+  }
+
+  // Check 11: fail2ban Status (Linux only)
+  if (os.platform() === "linux") {
+    try {
+      const status = execSync("systemctl is-active fail2ban", {
+        encoding: "utf-8",
+        stdio: "pipe",
+      }).trim();
+
+      if (status === "active") {
+        checks.push({
+          name: "fail2ban",
+          status: "pass",
+          message: "fail2ban is installed and active",
+        });
+      } else {
+        checks.push({
+          name: "fail2ban",
+          status: "warn",
+          message: `fail2ban is installed but not active (status: ${status})`,
+          fix: "Run: sudo systemctl enable --now fail2ban",
+        });
+      }
+    } catch {
+      // Check if fail2ban is installed at all
+      try {
+        execSync("which fail2ban-server", { encoding: "utf-8", stdio: "pipe" });
+        checks.push({
+          name: "fail2ban",
+          status: "warn",
+          message: "fail2ban is installed but not running",
+          fix: "Run: sudo systemctl enable --now fail2ban",
+        });
+      } catch {
+        checks.push({
+          name: "fail2ban",
+          status: "warn",
+          message: "fail2ban is not installed — recommended for SSH protection",
+          fix: "Run: sudo apt install fail2ban && sudo systemctl enable --now fail2ban",
+        });
+      }
+    }
+  } else {
+    checks.push({
+      name: "fail2ban",
+      status: "skip",
+      message: "Not a Linux system",
+    });
+  }
+
   spinner.stop();
   console.log();
 
@@ -209,15 +435,17 @@ export async function doctor() {
   for (const check of checks) {
     const icon = check.status === "pass" ? chalk.green("✓") :
                  check.status === "fail" ? chalk.red("✗") :
+                 check.status === "skip" ? chalk.gray("—") :
                  chalk.yellow("⚠");
-    
+
     const color = check.status === "pass" ? chalk.green :
                   check.status === "fail" ? chalk.red :
+                  check.status === "skip" ? chalk.gray :
                   chalk.yellow;
-    
+
     console.log(`${icon} ${check.name}: ${color(check.message)}`);
-    
-    if (check.fix) {
+
+    if (check.fix && (securityOnly || check.status !== "pass")) {
       console.log(chalk.gray(`   Fix: ${check.fix}`));
     }
   }

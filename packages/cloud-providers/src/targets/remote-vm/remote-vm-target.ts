@@ -67,6 +67,119 @@ export class RemoteVMTarget implements DeploymentTarget {
     this.sshConfig = config;
   }
 
+  // ── Security hardening ────────────────────────────────────────────
+
+  /**
+   * Validates the SSH configuration for security best-practices.
+   * Throws if no private key is configured; warns when the SSH port is 22.
+   */
+  validateSSHConfig(): { valid: boolean; warnings: string[] } {
+    const warnings: string[] = [];
+
+    if (!this.sshConfig.privateKey) {
+      const msg = "SSH privateKey is not configured — password-only auth is insecure";
+      console.error(`[RemoteVMTarget] ERROR: ${msg}`);
+      throw new Error(msg);
+    }
+
+    const sshPort = this.sshConfig.sshPort ?? this.sshConfig.port ?? 22;
+    if (sshPort === 22) {
+      const warn = "SSH is using default port 22 — consider changing to a non-standard port";
+      console.warn(`[RemoteVMTarget] WARN: ${warn}`);
+      warnings.push(warn);
+    }
+
+    return { valid: true, warnings };
+  }
+
+  /**
+   * Builds and executes a sequence of SSH commands that harden the remote
+   * host against brute-force attacks and reduce the attack surface.
+   *
+   * Steps performed:
+   *  1. Disable password-based SSH authentication
+   *  2. Disable root login via SSH
+   *  3. Configure UFW firewall (deny all incoming, allow SSH + gateway)
+   *  4. Install & configure fail2ban
+   *  5. Enable unattended security upgrades
+   *  6. Create a dedicated `moltbot` system user
+   *  7. Restart sshd to apply changes
+   */
+  private async hardenHost(config: {
+    sshPort: number;
+    gatewayPort?: number;
+    dryRun?: boolean;
+  }): Promise<string[]> {
+    const { sshPort, gatewayPort, dryRun } = config;
+    const additionalPorts = this.sshConfig.firewallPorts ?? [];
+    const commands: string[] = [];
+
+    // 1. Disable password authentication
+    console.log("[RemoteVMTarget] Hardening: disabling SSH password authentication");
+    commands.push(
+      `sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config`
+    );
+
+    // 2. Disable root login
+    console.log("[RemoteVMTarget] Hardening: disabling SSH root login");
+    commands.push(
+      `sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config`
+    );
+
+    // 3. Configure UFW firewall
+    console.log("[RemoteVMTarget] Hardening: configuring UFW firewall");
+    commands.push("ufw default deny incoming");
+    commands.push("ufw default allow outgoing");
+    commands.push(`ufw allow ${sshPort}/tcp`);
+    if (gatewayPort !== undefined) {
+      commands.push(`ufw allow ${gatewayPort}/tcp`);
+    }
+    for (const port of additionalPorts) {
+      commands.push(`ufw allow ${port}/tcp`);
+    }
+    commands.push("ufw --force enable");
+
+    // 4. Install and configure fail2ban
+    console.log("[RemoteVMTarget] Hardening: installing fail2ban");
+    commands.push("apt-get update && apt-get install -y fail2ban");
+
+    const jail = [
+      "[sshd]",
+      "enabled = true",
+      `port = ${sshPort}`,
+      "maxretry = 5",
+      "bantime = 3600",
+      "findtime = 600",
+    ].join("\\n");
+
+    commands.push(`printf '${jail}\\n' > /etc/fail2ban/jail.local`);
+    commands.push("systemctl enable fail2ban && systemctl restart fail2ban");
+
+    // 5. Enable unattended-upgrades
+    console.log("[RemoteVMTarget] Hardening: enabling unattended-upgrades");
+    commands.push("apt-get install -y unattended-upgrades");
+    commands.push("dpkg-reconfigure -plow unattended-upgrades");
+
+    // 6. Create dedicated moltbot system user
+    console.log("[RemoteVMTarget] Hardening: creating dedicated moltbot user");
+    commands.push(
+      "useradd --system --create-home --shell /usr/sbin/nologin moltbot || true"
+    );
+
+    // 7. Restart sshd
+    console.log("[RemoteVMTarget] Hardening: restarting sshd");
+    commands.push("systemctl restart sshd");
+
+    // Execute each command on the remote host (unless dry-run)
+    if (!dryRun) {
+      for (const cmd of commands) {
+        await this.executeRemote("bash", ["-c", cmd]);
+      }
+    }
+
+    return commands;
+  }
+
   /**
    * Constructs an SSH command and records it.
    * In the future, this will execute the command over SSH.
@@ -132,6 +245,18 @@ export class RemoteVMTarget implements DeploymentTarget {
         "enable-linger",
         this.sshConfig.username,
       ]);
+
+      // Host hardening (default: enabled)
+      const shouldHarden = this.sshConfig.hardenOnInstall !== false;
+      if (shouldHarden) {
+        console.log("[RemoteVMTarget] Running host hardening steps...");
+        const sshPort = this.sshConfig.sshPort ?? this.sshConfig.port ?? 22;
+        await this.hardenHost({
+          sshPort,
+          gatewayPort: options.port,
+        });
+        console.log("[RemoteVMTarget] Host hardening complete.");
+      }
 
       return {
         success: true,

@@ -54,13 +54,18 @@ export const DockerSandboxSchema = z.object({
   network: z.string().optional(),
   memory: z.string().optional(),
   cpus: z.number().positive().optional(),
+  readOnlyRootfs: z.boolean().default(true),
+  noNewPrivileges: z.boolean().default(true),
+  dropCapabilities: z.array(z.string()).default(["ALL"]),
+  addCapabilities: z.array(z.string()).optional(),
+  user: z.string().default("1000:1000"),
 });
 export type DockerSandbox = z.infer<typeof DockerSandboxSchema>;
 
 export const SandboxConfigSchema = z.object({
-  mode: SandboxModeSchema.default("off"),
+  mode: SandboxModeSchema.default("all"),
   scope: SandboxScopeSchema.default("session"),
-  workspaceAccess: WorkspaceAccessSchema.default("rw"),
+  workspaceAccess: WorkspaceAccessSchema.default("ro"),
   docker: DockerSandboxSchema.optional(),
 });
 export type SandboxConfig = z.infer<typeof SandboxConfigSchema>;
@@ -198,6 +203,52 @@ export const ToolsExecSchema = z.object({
 });
 export type ToolsExec = z.infer<typeof ToolsExecSchema>;
 
+// =============================================================================
+// Browser Isolation Config
+// =============================================================================
+
+export const BrowserIsolationSchema = z.object({
+  /** Use a separate browser profile for the bot (not the user's default). */
+  separateProfile: z.boolean().default(true),
+  /** Custom profile directory path. Auto-generated if omitted. */
+  profilePath: z.string().optional(),
+  /** Disable all browser extensions in the bot profile. */
+  disableExtensions: z.boolean().default(true),
+  /** Disable the browser's built-in password manager access. */
+  disablePasswordManager: z.boolean().default(true),
+  /** Disable autofill for forms (prevents credential leakage). */
+  disableAutofill: z.boolean().default(true),
+  /** URLs the bot is not allowed to navigate to. */
+  blockInternalUrls: z.array(z.string()).default([
+    "chrome://settings/passwords",
+    "chrome://extensions",
+    "chrome://settings/autofill",
+    "about:logins",
+  ]),
+});
+export type BrowserIsolation = z.infer<typeof BrowserIsolationSchema>;
+
+// =============================================================================
+// Credential Guard Config
+// =============================================================================
+
+export const CredentialGuardSchema = z.object({
+  /** Block access to password manager CLIs. */
+  blockPasswordManagers: z.boolean().default(true),
+  /** Specific CLI commands to block from tool execution. */
+  blockedCommands: z.array(z.string()).default([
+    "op",               // 1Password CLI
+    "bw",               // Bitwarden CLI
+    "lpass",            // LastPass CLI
+    "keepassxc-cli",    // KeePassXC CLI
+    "security",         // macOS Keychain CLI
+    "secret-tool",      // GNOME Keyring CLI
+  ]),
+  /** Block macOS Keychain / OS credential store access. */
+  blockKeychain: z.boolean().default(true),
+});
+export type CredentialGuard = z.infer<typeof CredentialGuardSchema>;
+
 export const ToolsConfigSchema = z.object({
   profile: ToolProfileSchema.default("coding"),
   allow: z.array(ToolRefSchema).optional(),
@@ -209,6 +260,10 @@ export const ToolsConfigSchema = z.object({
     })
     .optional(),
   exec: ToolsExecSchema.optional(),
+  /** Browser isolation settings — prevents session hijacking. */
+  browser: BrowserIsolationSchema.optional(),
+  /** Credential guard — blocks password manager access. */
+  credentialGuard: CredentialGuardSchema.optional(),
 });
 export type ToolsConfig = z.infer<typeof ToolsConfigSchema>;
 
@@ -216,15 +271,46 @@ export type ToolsConfig = z.infer<typeof ToolsConfigSchema>;
 // Skills Config
 // =============================================================================
 
+export const SkillSourceSchema = z.enum(["bundled", "registry", "local", "git"]);
+export type SkillSource = z.infer<typeof SkillSourceSchema>;
+
+export const SkillIntegritySchema = z.object({
+  /** SHA-256 hash of the skill package for tamper detection. */
+  sha256: z.string().optional(),
+  /** Cryptographic signature of the skill package. */
+  signature: z.string().optional(),
+  /** Identity of the signer (e.g., publisher key fingerprint). */
+  signedBy: z.string().optional(),
+});
+export type SkillIntegrity = z.infer<typeof SkillIntegritySchema>;
+
+export const SkillPermissionsSchema = z.object({
+  /** Whether the skill can make network requests. */
+  network: z.boolean().default(false),
+  /** Filesystem access level. */
+  filesystem: z.enum(["none", "readonly", "workspace"]).default("none"),
+  /** Whether the skill can spawn subprocesses. */
+  subprocess: z.boolean().default(false),
+});
+export type SkillPermissions = z.infer<typeof SkillPermissionsSchema>;
+
 export const SkillEntrySchema = z.object({
   config: z.record(z.unknown()).optional(),
   enabled: z.boolean().default(true),
   env: z.record(z.string()).optional(),
   apiKey: z.string().optional(),
+  /** Where the skill comes from. */
+  source: SkillSourceSchema.default("bundled"),
+  /** Integrity verification data. */
+  integrity: SkillIntegritySchema.optional(),
+  /** Declared permissions required by the skill. */
+  permissions: SkillPermissionsSchema.optional(),
 });
 export type SkillEntry = z.infer<typeof SkillEntrySchema>;
 
 export const SkillsConfigSchema = z.object({
+  /** Whether to allow skills without integrity verification. Default: false in production. */
+  allowUnverified: z.boolean().default(false),
   allowBundled: z.array(z.string()).optional(),
   load: z
     .object({
@@ -282,7 +368,7 @@ export type RedactSensitive = z.infer<typeof RedactSensitiveSchema>;
 export const LoggingConfigSchema = z.object({
   level: LogLevelSchema.default("info"),
   file: z.string().optional(),
-  redactSensitive: RedactSensitiveSchema.default("off"),
+  redactSensitive: RedactSensitiveSchema.default("tools"),
 });
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
 

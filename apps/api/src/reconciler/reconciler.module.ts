@@ -5,8 +5,10 @@ import { ConfigGeneratorService } from "./config-generator.service";
 import { LifecycleManagerService } from "./lifecycle-manager.service";
 import { DriftDetectionService } from "./drift-detection.service";
 import { ReconcilerScheduler } from "./reconciler.scheduler";
+import { SecurityAuditModule } from "../security/security-audit.module";
 
 @Module({
+  imports: [SecurityAuditModule],
   controllers: [ReconcilerController],
   providers: [
     ConfigGeneratorService,

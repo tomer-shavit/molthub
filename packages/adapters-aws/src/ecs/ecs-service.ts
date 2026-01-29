@@ -72,7 +72,23 @@ export class ECSService {
         portMappings: manifest.spec.network.inbound === "WEBHOOK" ? [
           { containerPort: 3000, protocol: "tcp" }
         ] : undefined,
+        // ── Container hardening (Hack #7) ──
+        linuxParameters: {
+          initProcessEnabled: true,
+          capabilities: {
+            drop: ["ALL"],
+          },
+        },
+        readonlyRootFilesystem: true,
+        privileged: false,
+        user: "1000:1000",
+        mountPoints: [
+          { sourceVolume: "tmp-volume", containerPath: "/tmp", readOnly: false },
+        ],
       }],
+      volumes: [
+        { name: "tmp-volume", host: {} },
+      ],
     }));
 
     return result.taskDefinition?.taskDefinitionArn || "";

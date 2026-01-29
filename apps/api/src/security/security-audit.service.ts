@@ -4,6 +4,7 @@ import {
   BUILTIN_MOLTBOT_POLICY_PACKS,
   MoltbotConfig,
   MoltbotEvaluationContext,
+  MoltbotManifest,
   evaluateMoltbotPolicyPack,
 } from "@molthub/core";
 import * as crypto from "crypto";
@@ -214,6 +215,118 @@ export class MoltbotSecurityAuditService {
       failedFixes,
       newAudit,
     };
+  }
+
+  /**
+   * Evaluate a manifest BEFORE provisioning to determine if it meets
+   * security requirements. Returns blockers (must fix) and warnings (should fix).
+   */
+  async preProvisioningAudit(manifest: MoltbotManifest): Promise<{
+    allowed: boolean;
+    blockers: Array<{ ruleId: string; message: string; field?: string }>;
+    warnings: Array<{ ruleId: string; message: string; field?: string }>;
+  }> {
+    // Extract the moltbot config from the manifest
+    const config = manifest.spec.moltbotConfig;
+    const rawEnv = manifest.metadata.environment ?? "dev";
+    // Map "local" to "dev" for policy evaluation (MoltbotEvaluationContext only accepts dev/staging/prod)
+    const environment: "dev" | "staging" | "prod" = rawEnv === "local" ? "dev" : rawEnv as "dev" | "staging" | "prod";
+
+    const context: MoltbotEvaluationContext = { environment };
+
+    const blockers: Array<{ ruleId: string; message: string; field?: string }> = [];
+    const warnings: Array<{ ruleId: string; message: string; field?: string }> = [];
+
+    // Evaluate all built-in policy packs
+    for (const pack of BUILTIN_MOLTBOT_POLICY_PACKS) {
+      // Skip packs that don't apply to this environment
+      if (pack.targetEnvironments && !pack.targetEnvironments.includes(environment)) {
+        continue;
+      }
+
+      const result = evaluateMoltbotPolicyPack(
+        pack,
+        "pre-provisioning",
+        config as any,
+        context,
+      );
+
+      for (const v of result.violations) {
+        blockers.push({ ruleId: v.ruleId, message: v.message, field: v.field });
+      }
+      for (const w of result.warnings) {
+        warnings.push({ ruleId: w.ruleId, message: w.message, field: w.field });
+      }
+    }
+
+    return {
+      allowed: blockers.length === 0,
+      blockers,
+      warnings,
+    };
+  }
+
+  /**
+   * Calculate a 0-100 security score for an instance based on its configuration.
+   */
+  calculateSecurityScore(config: Record<string, unknown>): number {
+    let score = 0;
+
+    // Gateway auth configured (20 points)
+    const gateway = config.gateway as any;
+    if (gateway?.auth?.token || gateway?.auth?.password) {
+      score += 20;
+    }
+
+    // Sandbox enabled (20 points)
+    const sandbox = config.sandbox as any;
+    if (sandbox?.mode && sandbox.mode !== "off") {
+      score += 15;
+      // Bonus for Docker security options
+      if (sandbox.docker?.readOnlyRootfs && sandbox.docker?.noNewPrivileges) {
+        score += 5;
+      }
+    }
+
+    // Allowlists configured (15 points)
+    const channels = config.channels as any;
+    if (channels) {
+      const channelKeys = Object.keys(channels).filter(k => channels[k]?.enabled);
+      const hasAllowlists = channelKeys.every(k => {
+        const ch = channels[k];
+        return ch.dmPolicy !== "open" && ch.groupPolicy !== "open";
+      });
+      if (channelKeys.length === 0 || hasAllowlists) {
+        score += 15;
+      }
+    } else {
+      score += 15; // No channels = no risk
+    }
+
+    // Tool profile not "full" (10 points)
+    const tools = config.tools as any;
+    if (!tools?.profile || tools.profile !== "full") {
+      score += 10;
+    }
+
+    // Sensitive data redaction enabled (10 points)
+    const logging = config.logging as any;
+    if (logging?.redactSensitive === "tools") {
+      score += 10;
+    }
+
+    // Gateway bound to localhost (10 points)
+    if (!gateway?.host || gateway.host === "127.0.0.1" || gateway.host === "localhost") {
+      score += 10;
+    }
+
+    // Skills verification (15 points)
+    const skills = config.skills as any;
+    if (skills?.allowUnverified !== true) {
+      score += 15;
+    }
+
+    return Math.min(score, 100);
   }
 
   // ── Private helpers ─────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { createHash } from "crypto";
-import type { MoltbotManifest, MoltbotFullConfig } from "@molthub/core";
+import { createHash, randomBytes } from "crypto";
+import type { MoltbotManifest, MoltbotFullConfig, SecurityOverrides } from "@molthub/core";
 
 /**
  * ConfigGeneratorService — transforms a v2 MoltbotManifest into a
@@ -29,7 +29,7 @@ export class ConfigGeneratorService {
       // Ensure gateway section exists with sensible defaults for deployment
       gateway: {
         port: base.gateway?.port ?? 18789,
-        host: base.gateway?.host ?? "0.0.0.0",
+        host: base.gateway?.host ?? "127.0.0.1",
         ...base.gateway,
       },
       // Ensure logging section exists with environment-aware defaults
@@ -43,7 +43,11 @@ export class ConfigGeneratorService {
       `Generated config for ${manifest.metadata.name} (env=${manifest.metadata.environment})`,
     );
 
-    return config;
+    return this.enforceSecureDefaults(
+      config,
+      manifest.metadata.environment,
+      manifest.metadata.securityOverrides,
+    );
   }
 
   /**
@@ -59,6 +63,74 @@ export class ConfigGeneratorService {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  private enforceSecureDefaults(
+    config: MoltbotFullConfig,
+    environment: string,
+    securityOverrides?: SecurityOverrides,
+  ): MoltbotFullConfig {
+    const secured = { ...config };
+
+    // Auto-generate a gateway auth token if auth is missing
+    if (!secured.gateway?.auth?.token && !secured.gateway?.auth?.password) {
+      if (!securityOverrides?.allowOpenGateway) {
+        secured.gateway = {
+          ...secured.gateway,
+          port: secured.gateway?.port ?? 18789,
+          auth: {
+            ...secured.gateway?.auth,
+            token: randomBytes(32).toString("hex"),
+          },
+        };
+        this.logger.warn(
+          "No gateway auth configured — auto-generated auth token",
+        );
+      }
+    }
+
+    // Force sandbox mode to "all" in prod/staging if currently "off"
+    if (
+      (environment === "prod" || environment === "staging") &&
+      secured.sandbox?.mode === "off" &&
+      !securityOverrides?.allowSandboxOff
+    ) {
+      secured.sandbox = {
+        ...secured.sandbox,
+        mode: "all",
+      };
+      this.logger.warn(
+        `Sandbox mode was "off" in ${environment} — forced to "all"`,
+      );
+    }
+
+    // Disable elevated tools if allowFrom is empty
+    if (
+      secured.tools?.elevated?.enabled &&
+      (!secured.tools.elevated.allowFrom || secured.tools.elevated.allowFrom.length === 0)
+    ) {
+      secured.tools = {
+        ...secured.tools,
+        elevated: {
+          ...secured.tools.elevated,
+          enabled: false,
+        },
+      };
+      this.logger.warn(
+        "Elevated tools disabled — allowFrom list is empty",
+      );
+    }
+
+    // Set logging.redactSensitive to "tools" if not already set
+    if (!secured.logging?.redactSensitive) {
+      secured.logging = {
+        ...secured.logging,
+        level: secured.logging?.level ?? "info",
+        redactSensitive: "tools",
+      };
+    }
+
+    return secured;
+  }
 
   private defaultLogLevel(env: string): "debug" | "info" | "warn" | "error" {
     switch (env) {

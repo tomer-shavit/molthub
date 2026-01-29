@@ -83,17 +83,32 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
       },
       skills: {
         allowBundled: ["weather", "search"],
+        allowUnverified: false,
       },
       session: {
         scope: "per-sender",
         resetTriggers: ["/new", "/reset"],
+      },
+      gateway: {
+        port: 18789,
+        host: "127.0.0.1",
+        auth: { token: "${GATEWAY_AUTH_TOKEN}" },
       },
       logging: {
         level: "info",
         redactSensitive: "tools",
       },
     },
-    requiredInputs: [],
+    requiredInputs: [
+      {
+        key: "gatewayAuthToken",
+        label: "Gateway Auth Token",
+        envVar: "GATEWAY_AUTH_TOKEN",
+        configPath: "gateway.auth.token",
+        secret: true,
+        placeholder: "auto-generated-if-empty",
+      },
+    ],
     channels: [
       {
         type: "whatsapp",
@@ -126,7 +141,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
       channels: {
         telegram: {
           enabled: true,
-          dmPolicy: "open",
+          dmPolicy: "allowlist",
           groupPolicy: "allowlist",
           historyLimit: 100,
           mediaMaxMb: 50,
@@ -146,14 +161,24 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
           image: "node:20-slim",
           memory: "512m",
           cpus: 1,
+          readOnlyRootfs: true,
+          noNewPrivileges: true,
+          dropCapabilities: ["ALL"],
+          user: "1000:1000",
         },
       },
       skills: {
         allowBundled: ["github", "search", "code-review"],
+        allowUnverified: false,
       },
       session: {
         scope: "per-sender",
         resetTriggers: ["/new", "/reset"],
+      },
+      gateway: {
+        port: 18789,
+        host: "127.0.0.1",
+        auth: { token: "${GATEWAY_AUTH_TOKEN}" },
       },
       logging: {
         level: "info",
@@ -169,13 +194,21 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         secret: true,
         placeholder: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
       },
+      {
+        key: "gatewayAuthToken",
+        label: "Gateway Auth Token",
+        envVar: "GATEWAY_AUTH_TOKEN",
+        configPath: "gateway.auth.token",
+        secret: true,
+        placeholder: "auto-generated-if-empty",
+      },
     ],
     channels: [
       {
         type: "telegram",
         enabled: true,
         defaults: {
-          dmPolicy: "open",
+          dmPolicy: "allowlist",
           groupPolicy: "allowlist",
           linkPreview: true,
           streamMode: "off",
@@ -202,8 +235,8 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
       channels: {
         discord: {
           enabled: true,
-          dmPolicy: "open",
-          groupPolicy: "open",
+          dmPolicy: "allowlist",
+          groupPolicy: "allowlist",
           historyLimit: 100,
           mediaMaxMb: 25,
           token: "${DISCORD_TOKEN}",
@@ -221,6 +254,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
       },
       skills: {
         allowBundled: ["weather", "search", "poll", "reminder"],
+        allowUnverified: false,
       },
       session: {
         scope: "per-channel-peer",
@@ -231,6 +265,11 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         queue: {
           mode: "steer",
         },
+      },
+      gateway: {
+        port: 18789,
+        host: "127.0.0.1",
+        auth: { token: "${GATEWAY_AUTH_TOKEN}" },
       },
       logging: {
         level: "info",
@@ -246,14 +285,22 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         secret: true,
         placeholder: "your-discord-bot-token",
       },
+      {
+        key: "gatewayAuthToken",
+        label: "Gateway Auth Token",
+        envVar: "GATEWAY_AUTH_TOKEN",
+        configPath: "gateway.auth.token",
+        secret: true,
+        placeholder: "auto-generated-if-empty",
+      },
     ],
     channels: [
       {
         type: "discord",
         enabled: true,
         defaults: {
-          dmPolicy: "open",
-          groupPolicy: "open",
+          dmPolicy: "allowlist",
+          groupPolicy: "allowlist",
           allowBots: false,
           replyToMode: "first",
         },
@@ -279,8 +326,8 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
       channels: {
         slack: {
           enabled: true,
-          dmPolicy: "open",
-          groupPolicy: "open",
+          dmPolicy: "allowlist",
+          groupPolicy: "allowlist",
           historyLimit: 100,
           mediaMaxMb: 25,
           botToken: "${SLACK_BOT_TOKEN}",
@@ -295,9 +342,9 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         },
       },
       tools: {
-        profile: "full",
+        profile: "coding",
         elevated: {
-          enabled: true,
+          enabled: false,
           allowFrom: [],
         },
       },
@@ -314,6 +361,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
           "code-review",
           "deployment",
         ],
+        allowUnverified: false,
       },
       session: {
         scope: "per-sender",
@@ -324,6 +372,11 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         queue: {
           mode: "steer",
         },
+      },
+      gateway: {
+        port: 18789,
+        host: "127.0.0.1",
+        auth: { token: "${GATEWAY_AUTH_TOKEN}" },
       },
       logging: {
         level: "info",
@@ -347,14 +400,22 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         secret: true,
         placeholder: "your-slack-app-token",
       },
+      {
+        key: "gatewayAuthToken",
+        label: "Gateway Auth Token",
+        envVar: "GATEWAY_AUTH_TOKEN",
+        configPath: "gateway.auth.token",
+        secret: true,
+        placeholder: "auto-generated-if-empty",
+      },
     ],
     channels: [
       {
         type: "slack",
         enabled: true,
         defaults: {
-          dmPolicy: "open",
-          groupPolicy: "open",
+          dmPolicy: "allowlist",
+          groupPolicy: "allowlist",
           slashCommand: { enabled: true, command: "/moltbot" },
           thread: { historyScope: "thread" },
         },
@@ -389,7 +450,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         },
         telegram: {
           enabled: true,
-          dmPolicy: "open",
+          dmPolicy: "allowlist",
           groupPolicy: "allowlist",
           historyLimit: 100,
           mediaMaxMb: 50,
@@ -399,8 +460,8 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         },
         discord: {
           enabled: true,
-          dmPolicy: "open",
-          groupPolicy: "open",
+          dmPolicy: "allowlist",
+          groupPolicy: "allowlist",
           historyLimit: 100,
           mediaMaxMb: 25,
           token: "${DISCORD_TOKEN}",
@@ -418,6 +479,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
       },
       skills: {
         allowBundled: ["weather", "search", "reminder", "github"],
+        allowUnverified: false,
       },
       session: {
         scope: "per-sender",
@@ -428,6 +490,11 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         queue: {
           mode: "steer",
         },
+      },
+      gateway: {
+        port: 18789,
+        host: "127.0.0.1",
+        auth: { token: "${GATEWAY_AUTH_TOKEN}" },
       },
       logging: {
         level: "info",
@@ -451,6 +518,14 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         secret: true,
         placeholder: "your-discord-bot-token",
       },
+      {
+        key: "gatewayAuthToken",
+        label: "Gateway Auth Token",
+        envVar: "GATEWAY_AUTH_TOKEN",
+        configPath: "gateway.auth.token",
+        secret: true,
+        placeholder: "auto-generated-if-empty",
+      },
     ],
     channels: [
       {
@@ -467,7 +542,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         type: "telegram",
         enabled: true,
         defaults: {
-          dmPolicy: "open",
+          dmPolicy: "allowlist",
           groupPolicy: "allowlist",
           linkPreview: true,
           streamMode: "off",
@@ -477,8 +552,8 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         type: "discord",
         enabled: true,
         defaults: {
-          dmPolicy: "open",
-          groupPolicy: "open",
+          dmPolicy: "allowlist",
+          groupPolicy: "allowlist",
           allowBots: false,
           replyToMode: "first",
         },
@@ -522,6 +597,10 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
           image: "node:20-slim",
           memory: "1g",
           cpus: 2,
+          readOnlyRootfs: true,
+          noNewPrivileges: true,
+          dropCapabilities: ["ALL"],
+          user: "1000:1000",
         },
       },
       skills: {
@@ -532,6 +611,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
           "linter",
           "search",
         ],
+        allowUnverified: false,
       },
       agents: {
         defaults: {
@@ -547,13 +627,23 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
       gateway: {
         port: 18789,
         host: "127.0.0.1",
+        auth: { token: "${GATEWAY_AUTH_TOKEN}" },
       },
       logging: {
         level: "debug",
         redactSensitive: "tools",
       },
     },
-    requiredInputs: [],
+    requiredInputs: [
+      {
+        key: "gatewayAuthToken",
+        label: "Gateway Auth Token",
+        envVar: "GATEWAY_AUTH_TOKEN",
+        configPath: "gateway.auth.token",
+        secret: true,
+        placeholder: "auto-generated-if-empty",
+      },
+    ],
     channels: [],
     recommendedPolicies: [
       "require-secret-manager",
@@ -578,12 +668,13 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
         profile: "minimal",
       },
       sandbox: {
-        mode: "off",
+        mode: "non-main",
         scope: "session",
         workspaceAccess: "none",
       },
       skills: {
         allowBundled: [],
+        allowUnverified: false,
       },
       session: {
         scope: "per-sender",
@@ -592,13 +683,23 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
       gateway: {
         port: 18789,
         host: "127.0.0.1",
+        auth: { token: "${GATEWAY_AUTH_TOKEN}" },
       },
       logging: {
         level: "warn",
-        redactSensitive: "off",
+        redactSensitive: "tools",
       },
     },
-    requiredInputs: [],
+    requiredInputs: [
+      {
+        key: "gatewayAuthToken",
+        label: "Gateway Auth Token",
+        envVar: "GATEWAY_AUTH_TOKEN",
+        configPath: "gateway.auth.token",
+        secret: true,
+        placeholder: "auto-generated-if-empty",
+      },
+    ],
     channels: [],
     recommendedPolicies: ["require-secret-manager", "forbid-public-admin"],
   },
