@@ -39,9 +39,54 @@ export interface BotInstance {
   ecsServiceArn?: string;
   taskDefinitionArn?: string;
   cloudwatchLogGroup?: string;
+  // Moltbot-native fields
+  deploymentType?: string;
+  gatewayPort?: number;
+  profileName?: string;
+  moltbotVersion?: string;
+  configHash?: string;
   createdAt: string;
   updatedAt: string;
   createdBy: string;
+}
+
+export interface InstanceHealth {
+  overall: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+  components: Array<{
+    name: string;
+    status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+    message?: string;
+  }>;
+  lastChecked?: string;
+}
+
+export interface InstanceDrift {
+  hasDrift: boolean;
+  currentConfig: Record<string, unknown>;
+  desiredConfig: Record<string, unknown>;
+  differences: Array<{
+    path: string;
+    current: unknown;
+    desired: unknown;
+  }>;
+}
+
+export interface DiagnosticsResult {
+  status: 'pass' | 'fail' | 'warn';
+  checks: Array<{
+    name: string;
+    status: 'pass' | 'fail' | 'warn';
+    message: string;
+    details?: Record<string, unknown>;
+  }>;
+  timestamp: string;
+}
+
+export interface ChannelAuthStatus {
+  channelId: string;
+  state: 'paired' | 'pending' | 'expired' | 'error' | 'not_started';
+  qrCodeUrl?: string;
+  errorMessage?: string;
 }
 
 export interface Fleet {
@@ -594,6 +639,42 @@ class ApiClient {
 
   async getDashboardActivity(): Promise<DashboardActivity> {
     return this.fetch('/dashboard/activity');
+  }
+
+  // Moltbot Instance Management
+  async getInstanceHealth(id: string): Promise<InstanceHealth> {
+    return this.fetch(`/instances/${id}/health`);
+  }
+
+  async getInstanceDrift(id: string): Promise<InstanceDrift> {
+    return this.fetch(`/instances/${id}/drift`);
+  }
+
+  async reconcileInstance(id: string): Promise<void> {
+    await this.fetch(`/instances/${id}/reconcile`, { method: 'POST' });
+  }
+
+  async runDiagnostics(id: string): Promise<DiagnosticsResult> {
+    return this.fetch(`/instances/${id}/doctor`, { method: 'POST' });
+  }
+
+  async getInstanceConfig(id: string): Promise<{ config: Record<string, unknown>; hash: string }> {
+    return this.fetch(`/instances/${id}/config`);
+  }
+
+  async applyConfig(id: string, config: string): Promise<void> {
+    await this.fetch(`/instances/${id}/config`, {
+      method: 'PUT',
+      body: JSON.stringify({ raw: config }),
+    });
+  }
+
+  async startChannelAuth(id: string, channelId: string): Promise<ChannelAuthStatus> {
+    return this.fetch(`/instances/${id}/channels/${channelId}/auth`, { method: 'POST' });
+  }
+
+  async getChannelAuthStatus(id: string, channelId: string): Promise<ChannelAuthStatus> {
+    return this.fetch(`/instances/${id}/channels/${channelId}/auth`);
   }
 }
 

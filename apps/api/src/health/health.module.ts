@@ -1,10 +1,28 @@
 import { Module } from "@nestjs/common";
 import { HealthService } from "./health.service";
 import { HealthController } from "./health.controller";
+import { MoltbotHealthService } from "./moltbot-health.service";
+import { HealthAggregatorService } from "./health-aggregator.service";
+import { DiagnosticsService } from "./diagnostics.service";
+import { AlertingService } from "./alerting.service";
+import { LogStreamingGateway } from "./log-streaming.gateway";
 
 @Module({
   controllers: [HealthController],
-  providers: [HealthService],
-  exports: [HealthService],
+  providers: [
+    HealthService,
+    MoltbotHealthService,
+    HealthAggregatorService,
+    DiagnosticsService,
+    AlertingService,
+    LogStreamingGateway,
+  ],
+  exports: [
+    HealthService,
+    MoltbotHealthService,
+    HealthAggregatorService,
+    DiagnosticsService,
+    AlertingService,
+  ],
 })
 export class HealthModule {}

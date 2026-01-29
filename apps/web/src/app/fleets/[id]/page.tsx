@@ -20,18 +20,21 @@ import { TimeDisplay } from "@/components/ui/time-display";
 import { api, type Fleet, type FleetHealth, type BotInstance } from "@/lib/api";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { 
-  ArrowLeft, 
-  Bot, 
-  Activity, 
-  Settings, 
-  Play, 
-  Pause, 
+import { Badge } from "@/components/ui/badge";
+import {
+  ArrowLeft,
+  Bot,
+  Activity,
+  Settings,
+  Play,
+  Pause,
   RotateCcw,
   AlertTriangle,
   CheckCircle,
   Clock,
-  Layers
+  Layers,
+  Wifi,
+  Server
 } from "lucide-react";
 
 async function getFleet(id: string): Promise<Fleet | null> {
@@ -196,18 +199,36 @@ export default async function FleetDetailPage({ params }: { params: { id: string
 
         <Card>
           <CardHeader>
-            <CardTitle>Configuration</CardTitle>
-            <CardDescription>Fleet settings</CardDescription>
+            <CardTitle>Fleet Configuration</CardTitle>
+            <CardDescription>Deployment targets and connections</CardDescription>
           </CardHeader>
           <CardContent>
             <dl className="space-y-3">
               <div>
-                <dt className="text-sm text-muted-foreground">VPC ID</dt>
-                <dd className="font-mono text-sm">{fleet.vpcId || "Not configured"}</dd>
+                <dt className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <Wifi className="w-3.5 h-3.5" />
+                  Gateway Connections
+                </dt>
+                <dd className="text-sm font-medium mt-0.5">
+                  {fleet.instances
+                    ? `${fleet.instances.filter((i: BotInstance) => i.status === "RUNNING").length} / ${fleet.instances.length} connected`
+                    : "N/A"
+                  }
+                </dd>
               </div>
               <div>
-                <dt className="text-sm text-muted-foreground">ECS Cluster</dt>
-                <dd className="font-mono text-sm truncate">{fleet.ecsClusterArn || "Not configured"}</dd>
+                <dt className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <Server className="w-3.5 h-3.5" />
+                  Deployment Targets
+                </dt>
+                <dd className="mt-1 flex flex-wrap gap-1">
+                  {fleet.instances && fleet.instances.length > 0
+                    ? [...new Set(fleet.instances.map((i: BotInstance) => i.deploymentType).filter(Boolean))].map((dt) => (
+                        <Badge key={dt as string} variant="outline" className="text-xs">{dt as string}</Badge>
+                      ))
+                    : <span className="text-sm text-muted-foreground">None</span>
+                  }
+                </dd>
               </div>
               <div>
                 <dt className="text-sm text-muted-foreground">Default Profile</dt>
@@ -243,8 +264,9 @@ export default async function FleetDetailPage({ params }: { params: { id: string
                     <TableHead>Name</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Health</TableHead>
+                    <TableHead>Target</TableHead>
+                    <TableHead>Gateway</TableHead>
                     <TableHead>Uptime</TableHead>
-                    <TableHead>Restarts</TableHead>
                     <TableHead>Last Health Check</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
@@ -252,7 +274,7 @@ export default async function FleetDetailPage({ params }: { params: { id: string
                 <TableBody>
                   {!fleet.instances || fleet.instances.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         No instances in this fleet.
                         <Link href={`/bots/new?fleetId=${fleet.id}`}>
                           <Button variant="link" className="ml-2">Create instance</Button>
@@ -274,9 +296,23 @@ export default async function FleetDetailPage({ params }: { params: { id: string
                           <HealthIndicator health={instance.health} />
                         </TableCell>
                         <TableCell>
+                          {instance.deploymentType ? (
+                            <Badge variant="outline" className="text-xs">
+                              {instance.deploymentType}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">local</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full ${instance.status === "RUNNING" ? "bg-green-500" : "bg-gray-400"}`} />
+                            <span className="text-xs font-mono">{instance.gatewayPort || 18789}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
                           {Math.floor(instance.uptimeSeconds / 3600)}h {Math.floor((instance.uptimeSeconds % 3600) / 60)}m
                         </TableCell>
-                        <TableCell>{instance.restartCount}</TableCell>
                         <TableCell>
                           {instance.lastHealthCheckAt ? (
                             <TimeDisplay date={instance.lastHealthCheckAt} />

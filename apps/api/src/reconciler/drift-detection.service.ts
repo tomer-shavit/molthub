@@ -1,155 +1,284 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { prisma, Instance, InstanceStatus } from "@molthub/database";
-import { InstanceManifest } from "@molthub/core";
-import { ECSService } from "@molthub/adapters-aws";
+import {
+  prisma,
+  BotInstance,
+  BotStatus,
+  BotHealth,
+  GatewayConnectionStatus,
+} from "@molthub/database";
+import type { MoltbotManifest } from "@molthub/core";
+import { GatewayManager } from "@molthub/gateway-client";
+import type { GatewayConnectionOptions } from "@molthub/gateway-client";
+import { ConfigGeneratorService } from "./config-generator.service";
 
-export interface DriftCheckResult {
-  hasDrift: boolean;
-  differences: DriftDifference[];
-  actualState: {
-    taskDefinitionArn?: string;
-    runningCount: number;
-    desiredCount: number;
-    status: string;
-  };
-}
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-export interface DriftDifference {
+export interface DriftFinding {
   field: string;
   expected: unknown;
   actual: unknown;
   severity: "CRITICAL" | "WARNING" | "INFO";
 }
 
+export interface DriftCheckResult {
+  hasDrift: boolean;
+  findings: DriftFinding[];
+  configHashExpected?: string;
+  configHashActual?: string;
+  gatewayReachable: boolean;
+  gatewayHealthy?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
+
+/**
+ * DriftDetectionService (v2) — detects configuration drift and health
+ * issues by communicating with the Moltbot Gateway over WebSocket rather
+ * than inspecting ECS task counts.
+ *
+ * Drift sources:
+ *  - Config hash mismatch (desired vs actual via `config.get`)
+ *  - Instance unreachable (gateway WS not connectable)
+ *  - Instance unhealthy (gateway `health` reports not ok)
+ *  - Status mismatch (gateway `status.state` != expected)
+ *
+ * The legacy ECS-based drift path is retained as a fallback for instances
+ * with `deploymentType === "ECS_FARGATE"`.
+ */
 @Injectable()
 export class DriftDetectionService {
   private readonly logger = new Logger(DriftDetectionService.name);
-  private readonly ecs = new ECSService();
+  private readonly gatewayManager = new GatewayManager();
 
-  async checkDrift(instance: Instance, manifest: InstanceManifest): Promise<DriftCheckResult> {
-    const differences: DriftDifference[] = [];
+  constructor(private readonly configGenerator: ConfigGeneratorService) {}
 
-    if (!instance.ecsServiceArn) {
-      return {
-        hasDrift: true,
-        differences: [{
-          field: "ecsService",
-          expected: "running",
-          actual: "missing",
-          severity: "CRITICAL",
-        }],
-        actualState: {
-          runningCount: 0,
-          desiredCount: 0,
-          status: "MISSING",
-        },
-      };
-    }
+  // ------------------------------------------------------------------
+  // Per-instance drift check
+  // ------------------------------------------------------------------
 
-    const clusterArn = process.env.ECS_CLUSTER_ARN || "";
-    const serviceName = instance.ecsServiceArn.split("/").pop() || "";
+  async checkDrift(
+    instance: BotInstance,
+    manifest: MoltbotManifest,
+  ): Promise<DriftCheckResult> {
+    const findings: DriftFinding[] = [];
 
-    // Get actual ECS service state
-    const serviceStatus = await this.ecs.getServiceStatus(clusterArn, serviceName);
+    // Generate desired config hash
+    const desiredConfig = this.configGenerator.generateMoltbotConfig(manifest);
+    const desiredHash = this.configGenerator.generateConfigHash(desiredConfig);
 
-    // Check 1: Task count drift
-    if (serviceStatus.desiredCount !== manifest.spec.runtime.replicas) {
-      differences.push({
-        field: "replicas",
-        expected: manifest.spec.runtime.replicas,
-        actual: serviceStatus.desiredCount,
-        severity: "CRITICAL",
-      });
-    }
-
-    // Check 2: Running vs Desired
-    if (serviceStatus.runningCount < serviceStatus.desiredCount) {
-      differences.push({
-        field: "runningTasks",
-        expected: serviceStatus.desiredCount,
-        actual: serviceStatus.runningCount,
+    // Check: stored hash already mismatches
+    if (instance.configHash && instance.configHash !== desiredHash) {
+      findings.push({
+        field: "configHash",
+        expected: desiredHash,
+        actual: instance.configHash,
         severity: "WARNING",
       });
     }
 
-    // Check 3: Task definition drift
-    if (instance.taskDefinitionArn) {
-      // In a full implementation, we'd describe the task definition and compare
-      // For now, we just track if the service is using a different task def
-      // This would require storing the expected task def revision
-    }
+    // Attempt gateway connection
+    let gatewayReachable = false;
+    let gatewayHealthy: boolean | undefined;
+    let actualHash: string | undefined;
 
-    // Check 4: Service status
-    if (serviceStatus.status !== "ACTIVE") {
-      differences.push({
-        field: "serviceStatus",
-        expected: "ACTIVE",
-        actual: serviceStatus.status,
+    try {
+      const client = await this.getGatewayClient(instance);
+      gatewayReachable = true;
+
+      // Config drift via remote hash
+      try {
+        const remoteConfig = await client.configGet();
+        actualHash = remoteConfig.hash;
+
+        if (remoteConfig.hash !== desiredHash) {
+          findings.push({
+            field: "remoteConfigHash",
+            expected: desiredHash,
+            actual: remoteConfig.hash,
+            severity: "CRITICAL",
+          });
+        }
+      } catch (err) {
+        this.logger.warn(`config.get failed for ${instance.id}: ${err}`);
+        findings.push({
+          field: "configGet",
+          expected: "accessible",
+          actual: "error",
+          severity: "WARNING",
+        });
+      }
+
+      // Health drift
+      try {
+        const health = await client.health();
+        gatewayHealthy = health.ok;
+
+        if (!health.ok) {
+          findings.push({
+            field: "gatewayHealth",
+            expected: true,
+            actual: false,
+            severity: "CRITICAL",
+          });
+        }
+      } catch (err) {
+        this.logger.warn(`health check failed for ${instance.id}: ${err}`);
+        findings.push({
+          field: "healthCheck",
+          expected: "accessible",
+          actual: "error",
+          severity: "WARNING",
+        });
+      }
+
+      // Status drift
+      try {
+        const status = await client.status();
+        if (status.state !== "running") {
+          findings.push({
+            field: "gatewayState",
+            expected: "running",
+            actual: status.state,
+            severity: "CRITICAL",
+          });
+        }
+      } catch {
+        // status check is best-effort
+      }
+    } catch {
+      // Gateway unreachable
+      findings.push({
+        field: "gatewayConnection",
+        expected: "reachable",
+        actual: "unreachable",
         severity: "CRITICAL",
       });
     }
 
-    // Update instance status based on drift
-    const hasCriticalDrift = differences.some(d => d.severity === "CRITICAL");
-    const hasWarningDrift = differences.some(d => d.severity === "WARNING");
-
-    if (hasCriticalDrift && instance.status === InstanceStatus.RUNNING) {
-      await prisma.instance.update({
-        where: { id: instance.id },
-        data: { status: InstanceStatus.DEGRADED },
-      });
-    }
+    // Update instance health based on findings
+    await this.updateHealthFromFindings(instance, findings, gatewayReachable, gatewayHealthy);
 
     return {
-      hasDrift: differences.length > 0,
-      differences,
-      actualState: {
-        taskDefinitionArn: instance.taskDefinitionArn || undefined,
-        runningCount: serviceStatus.runningCount,
-        desiredCount: serviceStatus.desiredCount,
-        status: serviceStatus.status,
-      },
+      hasDrift: findings.length > 0,
+      findings,
+      configHashExpected: desiredHash,
+      configHashActual: actualHash,
+      gatewayReachable,
+      gatewayHealthy,
     };
   }
 
+  // ------------------------------------------------------------------
+  // Fleet-wide drift check
+  // ------------------------------------------------------------------
+
   async checkAllInstances(): Promise<{ instanceId: string; result: DriftCheckResult }[]> {
-    const instances = await prisma.instance.findMany({
+    const instances = await prisma.botInstance.findMany({
       where: {
-        status: { in: [InstanceStatus.RUNNING, InstanceStatus.DEGRADED] },
+        status: { in: [BotStatus.RUNNING, BotStatus.DEGRADED] },
       },
     });
 
-    const results = [];
+    const results: { instanceId: string; result: DriftCheckResult }[] = [];
 
     for (const instance of instances) {
-      if (!instance.desiredManifestId) continue;
-
-      const manifestVersion = await prisma.manifestVersion.findUnique({
-        where: { id: instance.desiredManifestId },
-      });
-
-      if (!manifestVersion) continue;
+      // Parse the desired manifest from the JSON field
+      let manifest: MoltbotManifest;
+      try {
+        manifest = instance.desiredManifest as unknown as MoltbotManifest;
+        if (!manifest?.apiVersion) {
+          this.logger.debug(`Skipping ${instance.id}: no valid v2 manifest`);
+          continue;
+        }
+      } catch {
+        continue;
+      }
 
       try {
-        const result = await this.checkDrift(instance, manifestVersion.content as InstanceManifest);
+        const result = await this.checkDrift(instance, manifest);
         results.push({ instanceId: instance.id, result });
 
-        // Log drift events
         if (result.hasDrift) {
-          await prisma.deploymentEvent.create({
-            data: {
-              instanceId: instance.id,
-              eventType: "DRIFT_DETECTED",
-              message: `Drift detected: ${result.differences.map(d => d.field).join(", ")}`,
-              metadata: { differences: result.differences } as any,
-            },
-          });
+          this.logger.warn(
+            `Drift detected for ${instance.id}: ${result.findings.map((f) => f.field).join(", ")}`,
+          );
         }
       } catch (error) {
-        this.logger.error(`Failed to check drift for ${instance.id}: ${error}`);
+        this.logger.error(`Drift check failed for ${instance.id}: ${error}`);
       }
     }
 
     return results;
+  }
+
+  // ------------------------------------------------------------------
+  // Helpers
+  // ------------------------------------------------------------------
+
+  private async getGatewayClient(instance: BotInstance) {
+    const gwConn = await prisma.gatewayConnection.findUnique({
+      where: { instanceId: instance.id },
+    });
+
+    const host = gwConn?.host ?? "localhost";
+    const port = gwConn?.port ?? instance.gatewayPort ?? 18789;
+    const token = gwConn?.authToken ?? undefined;
+
+    const options: GatewayConnectionOptions = {
+      host,
+      port,
+      auth: token ? { mode: "token", token } : { mode: "token", token: "molthub" },
+      timeoutMs: 10_000,
+    };
+
+    return this.gatewayManager.getClient(instance.id, options);
+  }
+
+  private async updateHealthFromFindings(
+    instance: BotInstance,
+    findings: DriftFinding[],
+    gatewayReachable: boolean,
+    gatewayHealthy: boolean | undefined,
+  ): Promise<void> {
+    const hasCritical = findings.some((f) => f.severity === "CRITICAL");
+
+    let newHealth: BotHealth;
+    if (!gatewayReachable) {
+      newHealth = BotHealth.UNKNOWN;
+    } else if (gatewayHealthy === false || hasCritical) {
+      newHealth = BotHealth.UNHEALTHY;
+    } else if (findings.length > 0) {
+      newHealth = BotHealth.DEGRADED;
+    } else {
+      newHealth = BotHealth.HEALTHY;
+    }
+
+    // Only update if health actually changed
+    if (instance.health !== newHealth) {
+      await prisma.botInstance.update({
+        where: { id: instance.id },
+        data: {
+          health: newHealth,
+          lastHealthCheckAt: new Date(),
+        },
+      });
+    }
+
+    // Update GatewayConnection status
+    const gwStatus = gatewayReachable
+      ? GatewayConnectionStatus.CONNECTED
+      : GatewayConnectionStatus.DISCONNECTED;
+
+    await prisma.gatewayConnection.updateMany({
+      where: { instanceId: instance.id },
+      data: {
+        status: gwStatus,
+        lastHeartbeat: gatewayReachable ? new Date() : undefined,
+      },
+    });
   }
 }

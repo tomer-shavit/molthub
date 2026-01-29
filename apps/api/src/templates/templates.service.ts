@@ -1,216 +1,202 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { prisma, Template } from "@molthub/database";
-import { CreateTemplateDto } from "./templates.dto";
+import {
+  CreateTemplateDto,
+  PreviewConfigDto,
+  GenerateConfigDto,
+  TemplateResponseDto,
+  ConfigPreviewResponseDto,
+  GenerateConfigResponseDto,
+} from "./templates.dto";
+import {
+  BUILTIN_TEMPLATES,
+  getBuiltinTemplate,
+  isBuiltinTemplateId,
+  type BuiltinTemplate,
+} from "./builtin-templates";
+import { ConfigGenerator } from "./config-generator";
 
-const BUILTIN_TEMPLATES: CreateTemplateDto[] = [
-  {
-    name: "Slack Bot",
-    description: "A Moltbot configured for Slack with allowlisted skills",
-    category: "chat",
-    manifestTemplate: {
-      apiVersion: "molthub/v1",
-      kind: "MoltbotInstance",
-      metadata: {
-        environment: "dev",
-        labels: {},
-      },
-      spec: {
-        runtime: {
-          image: "ghcr.io/clawdbot/clawdbot:v0.1.0",
-          cpu: 0.5,
-          memory: 1024,
-          replicas: 1,
-        },
-        secrets: [],
-        channels: [
-          {
-            type: "slack",
-            enabled: true,
-            secretRef: {
-              name: "slack-token",
-              provider: "aws-secrets-manager",
-              key: "SLACK_BOT_TOKEN",
-            },
-          },
-        ],
-        skills: {
-          mode: "ALLOWLIST",
-          allowlist: ["weather", "github"],
-        },
-        network: {
-          inbound: "NONE",
-          egressPreset: "RESTRICTED",
-        },
-        observability: {
-          logLevel: "info",
-          tracing: false,
-        },
-        policies: {
-          forbidPublicAdmin: true,
-          requireSecretManager: true,
-        },
-      },
-    },
-  },
-  {
-    name: "Webhook Bot",
-    description: "A Moltbot configured to receive webhooks",
-    category: "webhook",
-    manifestTemplate: {
-      apiVersion: "molthub/v1",
-      kind: "MoltbotInstance",
-      metadata: {
-        environment: "dev",
-        labels: {},
-      },
-      spec: {
-        runtime: {
-          image: "ghcr.io/clawdbot/clawdbot:v0.1.0",
-          cpu: 0.5,
-          memory: 1024,
-          replicas: 1,
-        },
-        secrets: [],
-        channels: [
-          {
-            type: "webhook",
-            enabled: true,
-            secretRef: {
-              name: "webhook-secret",
-              provider: "aws-secrets-manager",
-              key: "WEBHOOK_SECRET",
-            },
-            config: {
-              verifyToken: true,
-            },
-          },
-        ],
-        skills: {
-          mode: "ALLOWLIST",
-          allowlist: ["webhook-handler"],
-        },
-        network: {
-          inbound: "WEBHOOK",
-          egressPreset: "RESTRICTED",
-        },
-        observability: {
-          logLevel: "info",
-          tracing: false,
-        },
-        policies: {
-          forbidPublicAdmin: true,
-          requireSecretManager: true,
-        },
-      },
-    },
-  },
-  {
-    name: "Minimal Bot",
-    description: "A minimal Moltbot with no channels (API-only)",
-    category: "minimal",
-    manifestTemplate: {
-      apiVersion: "molthub/v1",
-      kind: "MoltbotInstance",
-      metadata: {
-        environment: "dev",
-        labels: {},
-      },
-      spec: {
-        runtime: {
-          image: "ghcr.io/clawdbot/clawdbot:v0.1.0",
-          cpu: 0.25,
-          memory: 512,
-          replicas: 1,
-        },
-        secrets: [],
-        channels: [],
-        skills: {
-          mode: "ALLOWLIST",
-          allowlist: [],
-        },
-        network: {
-          inbound: "NONE",
-          egressPreset: "RESTRICTED",
-        },
-        observability: {
-          logLevel: "warn",
-          tracing: false,
-        },
-        policies: {
-          forbidPublicAdmin: true,
-          requireSecretManager: true,
-        },
-      },
-    },
-  },
-];
+// =============================================================================
+// Helpers to map between DB / builtin records and response DTOs
+// =============================================================================
+
+function builtinToResponse(t: BuiltinTemplate): TemplateResponseDto {
+  return {
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    category: t.category,
+    defaultConfig: t.defaultConfig as Record<string, unknown>,
+    isBuiltin: true,
+    requiredInputs: t.requiredInputs,
+    channels: t.channels,
+    recommendedPolicies: t.recommendedPolicies,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
+
+function dbToResponse(t: Template): TemplateResponseDto {
+  // DB templates store config in `manifestTemplate` (v1 compat) or `defaultConfig`.
+  const raw = t.manifestTemplate as Record<string, unknown> | null;
+  return {
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    category: t.category,
+    defaultConfig: (raw ?? {}) as Record<string, unknown>,
+    isBuiltin: t.isBuiltin,
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
+  };
+}
+
+// =============================================================================
+// Templates Service
+// =============================================================================
 
 @Injectable()
 export class TemplatesService {
-  async findAll(): Promise<Template[]> {
-    // Get builtin templates (virtual) + database templates
+  constructor(private readonly configGenerator: ConfigGenerator) {}
+
+  // ---------------------------------------------------------------------------
+  // List all templates (builtin + DB)
+  // ---------------------------------------------------------------------------
+
+  async listTemplates(): Promise<TemplateResponseDto[]> {
     const dbTemplates = await prisma.template.findMany({
       orderBy: { createdAt: "desc" },
     });
 
-    // Create virtual templates for builtins
-    const builtinVirtualTemplates = BUILTIN_TEMPLATES.map((t, i) => ({
-      id: `builtin-${i}`,
-      name: t.name,
-      description: t.description,
-      category: t.category,
-      manifestTemplate: t.manifestTemplate as any,
-      isBuiltin: true,
-      workspaceId: null as string | null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
+    const builtins = BUILTIN_TEMPLATES.map(builtinToResponse);
+    const custom = dbTemplates.map(dbToResponse);
 
-    return [...builtinVirtualTemplates, ...dbTemplates];
+    return [...builtins, ...custom];
   }
 
-  async findOne(id: string): Promise<Template> {
-    // Check if it's a builtin template
-    if (id.startsWith("builtin-")) {
-      const index = parseInt(id.replace("builtin-", ""));
-      const template = BUILTIN_TEMPLATES[index];
-      if (!template) {
-        throw new NotFoundException(`Template ${id} not found`);
-      }
-      return {
-        id,
-        name: template.name,
-        description: template.description,
-        category: template.category,
-        manifestTemplate: template.manifestTemplate as any,
-        isBuiltin: true,
-        workspaceId: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as Template;
+  // ---------------------------------------------------------------------------
+  // Get a single template by ID
+  // ---------------------------------------------------------------------------
+
+  async getTemplate(id: string): Promise<TemplateResponseDto> {
+    // Check builtin first
+    const builtin = getBuiltinTemplate(id);
+    if (builtin) {
+      return builtinToResponse(builtin);
     }
 
-    const template = await prisma.template.findUnique({
-      where: { id },
-    });
-
+    // Fall back to DB
+    const template = await prisma.template.findUnique({ where: { id } });
     if (!template) {
       throw new NotFoundException(`Template ${id} not found`);
     }
 
-    return template;
+    return dbToResponse(template);
   }
 
-  async create(dto: CreateTemplateDto): Promise<Template> {
-    return prisma.template.create({
+  // ---------------------------------------------------------------------------
+  // Create a custom template (persisted to DB)
+  // ---------------------------------------------------------------------------
+
+  async createCustomTemplate(
+    dto: CreateTemplateDto,
+  ): Promise<TemplateResponseDto> {
+    const template = await prisma.template.create({
       data: {
         name: dto.name,
         description: dto.description,
         category: dto.category,
-        manifestTemplate: dto.manifestTemplate as any,
+        manifestTemplate: (dto.defaultConfig ??
+          dto.manifestTemplate ??
+          {}) as any,
         isBuiltin: false,
         workspaceId: "default",
       },
     });
+
+    return dbToResponse(template);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Preview config (no side effects)
+  // ---------------------------------------------------------------------------
+
+  async previewConfig(
+    templateId: string,
+    dto: PreviewConfigDto,
+  ): Promise<ConfigPreviewResponseDto> {
+    const template = await this.resolveTemplate(templateId);
+
+    const result = this.configGenerator.generateConfig(template, {
+      values: dto.values,
+      configOverrides: dto.configOverrides as any,
+    });
+
+    return {
+      config: result.config as unknown as Record<string, unknown>,
+      secretRefs: result.secretRefs,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Generate config + manifest
+  // ---------------------------------------------------------------------------
+
+  async generateFromTemplate(
+    templateId: string,
+    dto: GenerateConfigDto,
+  ): Promise<GenerateConfigResponseDto> {
+    const template = await this.resolveTemplate(templateId);
+
+    const result = this.configGenerator.generateConfig(template, {
+      values: dto.values,
+      configOverrides: dto.configOverrides as any,
+      instanceName: dto.instanceName,
+      workspace: dto.workspace,
+      environment: dto.environment,
+      deploymentTarget: dto.deploymentTarget,
+      labels: dto.labels,
+    });
+
+    return {
+      config: result.config as unknown as Record<string, unknown>,
+      manifest: result.manifest as unknown as Record<string, unknown>,
+      secretRefs: result.secretRefs,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal: resolve template ID -> BuiltinTemplate-like shape for generator
+  // ---------------------------------------------------------------------------
+
+  private async resolveTemplate(
+    templateId: string,
+  ): Promise<BuiltinTemplate> {
+    // Try builtin
+    const builtin = getBuiltinTemplate(templateId);
+    if (builtin) {
+      return builtin;
+    }
+
+    // Try DB
+    const dbTemplate = await prisma.template.findUnique({
+      where: { id: templateId },
+    });
+    if (!dbTemplate) {
+      throw new NotFoundException(`Template ${templateId} not found`);
+    }
+
+    // Adapt DB template to the BuiltinTemplate shape so the generator
+    // can handle it uniformly.
+    return {
+      id: dbTemplate.id,
+      name: dbTemplate.name,
+      description: dbTemplate.description,
+      category: (dbTemplate.category as any) ?? "minimal",
+      defaultConfig: (dbTemplate.manifestTemplate as Record<string, unknown>) ?? {},
+      requiredInputs: [],
+      channels: [],
+      recommendedPolicies: [],
+    };
   }
 }

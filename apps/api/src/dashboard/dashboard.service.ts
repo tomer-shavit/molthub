@@ -1,5 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { prisma, BotHealth, InstanceStatus } from "@molthub/database";
+import { HealthAggregatorService } from "../health/health-aggregator.service";
+import { AlertingService } from "../health/alerting.service";
 
 export interface DashboardMetrics {
   totalBots: number;
@@ -7,6 +9,7 @@ export interface DashboardMetrics {
   healthyBots: number;
   degradedBots: number;
   unhealthyBots: number;
+  unreachableBots: number;
   messageVolume: number;
   latencyP50: number;
   latencyP95: number;
@@ -15,10 +18,11 @@ export interface DashboardMetrics {
   costPerHour: number;
   activeChangeSets: number;
   failedDeployments: number;
+  activeAlerts: number;
 }
 
 export interface OverallHealth {
-  status: "HEALTHY" | "DEGRADED" | "UNHEALTHY";
+  status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN";
   fleetHealth: Array<{
     fleetId: string;
     fleetName: string;
@@ -26,10 +30,11 @@ export interface OverallHealth {
     healthyCount: number;
     degradedCount: number;
     unhealthyCount: number;
+    unreachableCount: number;
   }>;
   recentAlerts: Array<{
     id: string;
-    severity: "CRITICAL" | "WARNING" | "INFO";
+    severity: "CRITICAL" | "WARNING" | "INFO" | string;
     message: string;
     timestamp: Date;
     resourceId?: string;
@@ -61,6 +66,11 @@ export interface RecentActivity {
 
 @Injectable()
 export class DashboardService {
+  constructor(
+    private readonly healthAggregator: HealthAggregatorService,
+    private readonly alerting: AlertingService,
+  ) {}
+
   async getDashboardMetrics(): Promise<DashboardMetrics> {
     // Get bot counts by health
     const botsByHealth = await prisma.botInstance.groupBy({
@@ -123,12 +133,23 @@ export class DashboardService {
     const totalBots = Object.values(healthCounts).reduce((a, b) => a + b, 0);
     const costPerHour = totalBots * 0.05; // $0.05 per bot per hour
 
+    // Count unreachable bots from gateway connection status
+    const unreachableBots = await prisma.gatewayConnection.count({
+      where: {
+        status: { in: ["ERROR", "DISCONNECTED"] },
+      },
+    });
+
+    // Active alerts count from the alerting service
+    const activeAlerts = this.alerting.getActiveAlertCount();
+
     return {
       totalBots,
       totalFleets,
       healthyBots: healthCounts[BotHealth.HEALTHY] || 0,
       degradedBots: healthCounts[BotHealth.DEGRADED] || 0,
       unhealthyBots: healthCounts[BotHealth.UNHEALTHY] || 0,
+      unreachableBots,
       messageVolume,
       latencyP50: p50 || 0,
       latencyP95: p95 || 0,
@@ -137,49 +158,36 @@ export class DashboardService {
       costPerHour: Math.round(costPerHour * 100) / 100,
       activeChangeSets,
       failedDeployments,
+      activeAlerts,
     };
   }
 
   async getOverallHealth(): Promise<OverallHealth> {
-    const fleets = await prisma.fleet.findMany({
-      include: {
-        instances: {
-          select: {
-            health: true,
-          },
-        },
-      },
-    });
+    // Use the health aggregator for real fleet health data
+    const workspaceHealth = await this.healthAggregator.getWorkspaceHealth();
 
-    const fleetHealth = fleets.map((fleet) => {
-      const healthCounts = fleet.instances.reduce((acc, instance) => {
-        acc[instance.health] = (acc[instance.health] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+    const fleetHealth = workspaceHealth.fleets.map((fleet) => ({
+      fleetId: fleet.fleetId,
+      fleetName: fleet.fleetName,
+      totalInstances: fleet.total,
+      healthyCount: fleet.healthy,
+      degradedCount: fleet.degraded,
+      unhealthyCount: fleet.unhealthy,
+      unreachableCount: fleet.unreachable,
+    }));
 
-      return {
-        fleetId: fleet.id,
-        fleetName: fleet.name,
-        totalInstances: fleet.instances.length,
-        healthyCount: healthCounts[BotHealth.HEALTHY] || 0,
-        degradedCount: healthCounts[BotHealth.DEGRADED] || 0,
-        unhealthyCount: healthCounts[BotHealth.UNHEALTHY] || 0,
-      };
-    });
+    // Get recent alerts from the alerting service
+    const activeAlerts = this.alerting.getActiveAlerts();
+    const recentAlerts = activeAlerts.slice(0, 10).map((alert) => ({
+      id: alert.id,
+      severity: alert.severity.toUpperCase(),
+      message: alert.message,
+      timestamp: alert.lastTriggeredAt,
+      resourceId: alert.instanceId,
+      resourceType: "INSTANCE",
+    }));
 
-    // Determine overall status
-    const totalUnhealthy = fleetHealth.reduce((sum, f) => sum + f.unhealthyCount, 0);
-    const totalDegraded = fleetHealth.reduce((sum, f) => sum + f.degradedCount, 0);
-    const totalInstances = fleetHealth.reduce((sum, f) => sum + f.totalInstances, 0);
-
-    let status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" = "HEALTHY";
-    if (totalUnhealthy > 0) {
-      status = "UNHEALTHY";
-    } else if (totalDegraded > 0 || (totalInstances > 0 && totalUnhealthy / totalInstances > 0.1)) {
-      status = "DEGRADED";
-    }
-
-    // Get recent alerts from deployment events and errors
+    // Also include recent deployment errors for backward compat
     const recentErrors = await prisma.deploymentEvent.findMany({
       where: {
         eventType: "RECONCILE_ERROR",
@@ -189,7 +197,7 @@ export class DashboardService {
       take: 10,
     });
 
-    const recentAlerts = recentErrors.map((error) => ({
+    const deploymentAlerts = recentErrors.map((error) => ({
       id: error.id,
       severity: "WARNING" as const,
       message: error.message,
@@ -199,9 +207,9 @@ export class DashboardService {
     }));
 
     return {
-      status,
+      status: workspaceHealth.overallStatus,
       fleetHealth,
-      recentAlerts,
+      recentAlerts: [...recentAlerts, ...deploymentAlerts].slice(0, 20),
     };
   }
 
