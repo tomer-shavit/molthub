@@ -43,3 +43,13 @@ prisma/migrations/*/migration_lock.toml
 # Temporary
 tmp/
 temp/
+# Bot personality files (belong in /home/ubuntu/zoro/, not here)
+SOUL.md
+IDENTITY.md
+USER.md
+AGENTS.md
+MEMORY.md
+HEARTBEAT.md
+TOOLS.md
+memory/
+obsidian/
