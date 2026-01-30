@@ -6,7 +6,7 @@ alwaysApply: true
 
 # OpenClaw Documentation Reference
 
-Source: https://docs.molt.bot/
+Source: https://docs.openclaw.ai/
 
 This document captures the key technical details from OpenClaw's official documentation that Molthub needs to integrate with.
 
@@ -346,10 +346,10 @@ Three-layer access control: **identity verification** → **operational scope** 
 
 ```bash
 # Fastest (Linux/macOS)
-curl -fsSL https://molt.bot/install.sh | bash
+curl -fsSL https://openclaw.ai/install.sh | bash
 
 # Windows
-iwr -useb https://molt.bot/install.ps1 | iex
+iwr -useb https://openclaw.ai/install.ps1 | iex
 
 # npm/pnpm
 npm install -g openclaw@latest
@@ -368,7 +368,7 @@ Configures: model auth, gateway settings, channels, DM pairing, workspace, skill
 
 ```bash
 # Re-run installer (detects existing, upgrades in place)
-curl -fsSL https://molt.bot/install.sh | bash
+curl -fsSL https://openclaw.ai/install.sh | bash
 
 # Channel switching
 openclaw update --channel beta|dev|stable
@@ -464,108 +464,108 @@ Plugins run in-process (trusted code boundary). Pin exact versions.
 
 ## 10. Documentation Site Map
 
-Base URL: `https://docs.molt.bot`
+Base URL: `https://docs.openclaw.ai`
 
 ### Start Here
 
 | Path | Description |
 |------|-------------|
-| [/start/getting-started](https://docs.molt.bot/start/getting-started) | Zero-to-first-chat quickstart: install CLI, run onboarding wizard, pair a channel |
-| [/start/wizard](https://docs.molt.bot/start/wizard) | Interactive & non-interactive onboarding wizard for Gateway, channels, skills, and daemon setup |
-| [/start/pairing](https://docs.molt.bot/start/pairing) | DM sender approval via short codes and device node authorization for the gateway network |
-| [/start/hubs](https://docs.molt.bot/start/hubs) | Documentation index — links to every section organized by category |
-| [/start/clawd](https://docs.molt.bot/start/clawd) | Setting up a personal always-on WhatsApp assistant with two-phone architecture |
+| [/start/getting-started](https://docs.openclaw.ai/start/getting-started) | Zero-to-first-chat quickstart: install CLI, run onboarding wizard, pair a channel |
+| [/start/wizard](https://docs.openclaw.ai/start/wizard) | Interactive & non-interactive onboarding wizard for Gateway, channels, skills, and daemon setup |
+| [/start/pairing](https://docs.openclaw.ai/start/pairing) | DM sender approval via short codes and device node authorization for the gateway network |
+| [/start/hubs](https://docs.openclaw.ai/start/hubs) | Documentation index — links to every section organized by category |
+| [/start/clawd](https://docs.openclaw.ai/start/clawd) | Setting up a personal always-on WhatsApp assistant with two-phone architecture |
 
 ### Gateway
 
 | Path | Description |
 |------|-------------|
-| [/gateway](https://docs.molt.bot/gateway) | Gateway runbook — always-on process owning messaging connections and the control/event plane |
-| [/gateway/configuration](https://docs.molt.bot/gateway/configuration) | Full configuration reference: agents, channels, models, sessions, sandbox, tools, plugins (JSON5 schema) |
-| [/gateway/configuration-examples](https://docs.molt.bot/gateway/configuration-examples) | Copy-paste config examples: minimal setup, OAuth failover, restricted bots, multi-platform deployments |
-| [/gateway/multiple-gateways](https://docs.molt.bot/gateway/multiple-gateways) | Running multiple isolated Gateway instances on one host with profiles, port spacing, and rescue-bot patterns |
-| [/gateway/tailscale](https://docs.molt.bot/gateway/tailscale) | Auto-configuring Tailscale Serve/Funnel for secure remote Gateway access with identity-based auth |
-| [/gateway/remote](https://docs.molt.bot/gateway/remote) | Remote access via SSH tunnels, VPNs, and tailnets; always-on vs. laptop-based architectures |
-| [/gateway/discovery](https://docs.molt.bot/gateway/discovery) | LAN discovery (Bonjour/mDNS), Tailscale cross-network, and SSH fallback transport resolution |
-| [/gateway/security](https://docs.molt.bot/gateway/security) | Security guide: access control, DM pairing, tool sandboxing, credential management, prompt injection, incident response |
-| [/gateway/troubleshooting](https://docs.molt.bot/gateway/troubleshooting) | Diagnostic commands, auth failures, connection issues, provider errors, platform-specific fixes |
+| [/gateway](https://docs.openclaw.ai/gateway) | Gateway runbook — always-on process owning messaging connections and the control/event plane |
+| [/gateway/configuration](https://docs.openclaw.ai/gateway/configuration) | Full configuration reference: agents, channels, models, sessions, sandbox, tools, plugins (JSON5 schema) |
+| [/gateway/configuration-examples](https://docs.openclaw.ai/gateway/configuration-examples) | Copy-paste config examples: minimal setup, OAuth failover, restricted bots, multi-platform deployments |
+| [/gateway/multiple-gateways](https://docs.openclaw.ai/gateway/multiple-gateways) | Running multiple isolated Gateway instances on one host with profiles, port spacing, and rescue-bot patterns |
+| [/gateway/tailscale](https://docs.openclaw.ai/gateway/tailscale) | Auto-configuring Tailscale Serve/Funnel for secure remote Gateway access with identity-based auth |
+| [/gateway/remote](https://docs.openclaw.ai/gateway/remote) | Remote access via SSH tunnels, VPNs, and tailnets; always-on vs. laptop-based architectures |
+| [/gateway/discovery](https://docs.openclaw.ai/gateway/discovery) | LAN discovery (Bonjour/mDNS), Tailscale cross-network, and SSH fallback transport resolution |
+| [/gateway/security](https://docs.openclaw.ai/gateway/security) | Security guide: access control, DM pairing, tool sandboxing, credential management, prompt injection, incident response |
+| [/gateway/troubleshooting](https://docs.openclaw.ai/gateway/troubleshooting) | Diagnostic commands, auth failures, connection issues, provider errors, platform-specific fixes |
 
 ### Concepts
 
 | Path | Description |
 |------|-------------|
-| [/concepts/multi-agent](https://docs.molt.bot/concepts/multi-agent) | Multi-agent routing: multiple isolated agents per Gateway with per-channel/account bindings and sandbox rules |
-| [/concepts/streaming](https://docs.molt.bot/concepts/streaming) | Block streaming and Telegram draft streaming: chunking algorithms, channel-specific progressive delivery |
-| [/concepts/session](https://docs.molt.bot/concepts/session) | Session management: scoping (per-sender, per-channel-peer), reset policies (daily, idle), inspection tools |
-| [/concepts/groups](https://docs.molt.bot/concepts/groups) | Group chat handling: group policies, mention gating, allowlists, per-group tool restrictions |
-| [/concepts/group-messages](https://docs.molt.bot/concepts/group-messages) | WhatsApp group activation: mention/always modes, per-group sessions, context injection, sender surfacing |
+| [/concepts/multi-agent](https://docs.openclaw.ai/concepts/multi-agent) | Multi-agent routing: multiple isolated agents per Gateway with per-channel/account bindings and sandbox rules |
+| [/concepts/streaming](https://docs.openclaw.ai/concepts/streaming) | Block streaming and Telegram draft streaming: chunking algorithms, channel-specific progressive delivery |
+| [/concepts/session](https://docs.openclaw.ai/concepts/session) | Session management: scoping (per-sender, per-channel-peer), reset policies (daily, idle), inspection tools |
+| [/concepts/groups](https://docs.openclaw.ai/concepts/groups) | Group chat handling: group policies, mention gating, allowlists, per-group tool restrictions |
+| [/concepts/group-messages](https://docs.openclaw.ai/concepts/group-messages) | WhatsApp group activation: mention/always modes, per-group sessions, context injection, sender surfacing |
 
 ### Channels
 
 | Path | Description |
 |------|-------------|
-| [/channels/telegram](https://docs.molt.bot/channels/telegram) | Telegram setup: bot token, DM/group policies, inline buttons, sticker handling, draft streaming |
-| [/channels/discord](https://docs.molt.bot/channels/discord) | Discord setup: bot creation, intents, permissions, allowlists, mention-gating, guild configuration |
-| [/channels/mattermost](https://docs.molt.bot/channels/mattermost) | Mattermost plugin: installation, chat modes, access control, multi-account support |
-| [/channels/imessage](https://docs.molt.bot/channels/imessage) | iMessage integration: macOS setup, SSH remote access, attachment handling, DM/group policies |
+| [/channels/telegram](https://docs.openclaw.ai/channels/telegram) | Telegram setup: bot token, DM/group policies, inline buttons, sticker handling, draft streaming |
+| [/channels/discord](https://docs.openclaw.ai/channels/discord) | Discord setup: bot creation, intents, permissions, allowlists, mention-gating, guild configuration |
+| [/channels/mattermost](https://docs.openclaw.ai/channels/mattermost) | Mattermost plugin: installation, chat modes, access control, multi-account support |
+| [/channels/imessage](https://docs.openclaw.ai/channels/imessage) | iMessage integration: macOS setup, SSH remote access, attachment handling, DM/group policies |
 
 ### Tools
 
 | Path | Description |
 |------|-------------|
-| [/tools/slash-commands](https://docs.molt.bot/tools/slash-commands) | Slash commands and directives across platforms: model selection, debugging, admin functions |
-| [/tools/skills](https://docs.molt.bot/tools/skills) | Skills system: YAML-defined tool packages, loading precedence, gating, ClawdHub registry |
-| [/tools/skills-config](https://docs.molt.bot/tools/skills-config) | Skills configuration: enable/disable, extra directories, install preferences, per-skill API keys and env vars |
+| [/tools/slash-commands](https://docs.openclaw.ai/tools/slash-commands) | Slash commands and directives across platforms: model selection, debugging, admin functions |
+| [/tools/skills](https://docs.openclaw.ai/tools/skills) | Skills system: YAML-defined tool packages, loading precedence, gating, ClawdHub registry |
+| [/tools/skills-config](https://docs.openclaw.ai/tools/skills-config) | Skills configuration: enable/disable, extra directories, install preferences, per-skill API keys and env vars |
 
 ### Platforms
 
 | Path | Description |
 |------|-------------|
-| [/platforms/macos](https://docs.molt.bot/platforms/macos) | macOS Companion menu bar app: local gateway broker, TCC permissions, notifications, screen recording |
-| [/platforms/ios](https://docs.molt.bot/platforms/ios) | iOS Node app (preview): WebSocket Gateway connection, Canvas, camera, voice, A2UI rendering |
-| [/platforms/android](https://docs.molt.bot/platforms/android) | Android Node app: connection architecture, discovery, pairing, chat/canvas/camera commands |
-| [/platforms/windows](https://docs.molt.bot/platforms/windows) | Windows via WSL2: installation, gateway service setup, LAN network configuration |
-| [/platforms/linux](https://docs.molt.bot/platforms/linux) | Linux/VPS: quick-start, CLI service installation, systemd user unit setup |
+| [/platforms/macos](https://docs.openclaw.ai/platforms/macos) | macOS Companion menu bar app: local gateway broker, TCC permissions, notifications, screen recording |
+| [/platforms/ios](https://docs.openclaw.ai/platforms/ios) | iOS Node app (preview): WebSocket Gateway connection, Canvas, camera, voice, A2UI rendering |
+| [/platforms/android](https://docs.openclaw.ai/platforms/android) | Android Node app: connection architecture, discovery, pairing, chat/canvas/camera commands |
+| [/platforms/windows](https://docs.openclaw.ai/platforms/windows) | Windows via WSL2: installation, gateway service setup, LAN network configuration |
+| [/platforms/linux](https://docs.openclaw.ai/platforms/linux) | Linux/VPS: quick-start, CLI service installation, systemd user unit setup |
 
 ### Web & Nodes
 
 | Path | Description |
 |------|-------------|
-| [/web](https://docs.molt.bot/web) | Gateway web interface: Control UI access via loopback, Tailnet, or Funnel with auth options |
-| [/web/webchat](https://docs.molt.bot/web/webchat) | WebChat: native browser chat via Gateway WebSocket, same sessions/routing as other channels |
-| [/web/control-ui](https://docs.molt.bot/web/control-ui) | Control UI dashboard: chat management, channel admin, local/Tailnet/HTTP deployment, dev guidance |
-| [/nodes](https://docs.molt.bot/nodes) | Nodes: companion devices exposing canvas, camera, and system commands over WebSocket |
-| [/nodes/images](https://docs.molt.bot/nodes/images) | Media images: WhatsApp media handling, file types, size limits, send/receive processing pipelines |
-| [/nodes/audio](https://docs.molt.bot/nodes/audio) | Audio transcription: voice note processing, provider support (OpenAI, Deepgram, local CLIs), 20MB cap |
+| [/web](https://docs.openclaw.ai/web) | Gateway web interface: Control UI access via loopback, Tailnet, or Funnel with auth options |
+| [/web/webchat](https://docs.openclaw.ai/web/webchat) | WebChat: native browser chat via Gateway WebSocket, same sessions/routing as other channels |
+| [/web/control-ui](https://docs.openclaw.ai/web/control-ui) | Control UI dashboard: chat management, channel admin, local/Tailnet/HTTP deployment, dev guidance |
+| [/nodes](https://docs.openclaw.ai/nodes) | Nodes: companion devices exposing canvas, camera, and system commands over WebSocket |
+| [/nodes/images](https://docs.openclaw.ai/nodes/images) | Media images: WhatsApp media handling, file types, size limits, send/receive processing pipelines |
+| [/nodes/audio](https://docs.openclaw.ai/nodes/audio) | Audio transcription: voice note processing, provider support (OpenAI, Deepgram, local CLIs), 20MB cap |
 
 ### Automation
 
 | Path | Description |
 |------|-------------|
-| [/automation/cron-jobs](https://docs.molt.bot/automation/cron-jobs) | Cron scheduler: at/every/cron schedules, isolated or main-session execution, channel delivery, CLI management |
-| [/automation/webhook](https://docs.molt.bot/automation/webhook) | HTTP webhooks: `/hooks/wake` for notifications, `/hooks/agent` for isolated agent tasks, auth requirements |
-| [/automation/gmail-pubsub](https://docs.molt.bot/automation/gmail-pubsub) | Gmail Pub/Sub: Google Cloud watch notifications integration, wizard-based automated wiring |
+| [/automation/cron-jobs](https://docs.openclaw.ai/automation/cron-jobs) | Cron scheduler: at/every/cron schedules, isolated or main-session execution, channel delivery, CLI management |
+| [/automation/webhook](https://docs.openclaw.ai/automation/webhook) | HTTP webhooks: `/hooks/wake` for notifications, `/hooks/agent` for isolated agent tasks, auth requirements |
+| [/automation/gmail-pubsub](https://docs.openclaw.ai/automation/gmail-pubsub) | Gmail Pub/Sub: Google Cloud watch notifications integration, wizard-based automated wiring |
 
 ### Installation & Updates
 
 | Path | Description |
 |------|-------------|
-| [/install/updating](https://docs.molt.bot/install/updating) | Update guide: upgrade paths (global, source, web installer), channel switching, rollback procedures |
-| [/install/nix](https://docs.molt.bot/install/nix) | Nix installation: Home Manager module for macOS, launchd service, plugin system, packaging details |
+| [/install/updating](https://docs.openclaw.ai/install/updating) | Update guide: upgrade paths (global, source, web installer), channel switching, rollback procedures |
+| [/install/nix](https://docs.openclaw.ai/install/nix) | Nix installation: Home Manager module for macOS, launchd service, plugin system, packaging details |
 
 ### Reference
 
 | Path | Description |
 |------|-------------|
-| [/reference/rpc](https://docs.molt.bot/reference/rpc) | RPC adapters: HTTP daemon (signal-cli) and stdio child process (imsg) JSON-RPC integration patterns |
-| [/reference/templates/AGENTS](https://docs.molt.bot/reference/templates/AGENTS) | Workspace templates: agent operational guidelines, memory systems, safety protocols, communication patterns |
-| [/help](https://docs.molt.bot/help) | Help hub: quick links for installation issues, gateway errors, FAQs, and conceptual guides |
+| [/reference/rpc](https://docs.openclaw.ai/reference/rpc) | RPC adapters: HTTP daemon (signal-cli) and stdio child process (imsg) JSON-RPC integration patterns |
+| [/reference/templates/AGENTS](https://docs.openclaw.ai/reference/templates/AGENTS) | Workspace templates: agent operational guidelines, memory systems, safety protocols, communication patterns |
+| [/help](https://docs.openclaw.ai/help) | Help hub: quick links for installation issues, gateway errors, FAQs, and conceptual guides |
 
 ### External Resources
 
 | Link | Description |
 |------|-------------|
-| [llms.txt](https://docs.molt.bot/llms.txt) | Complete documentation index in machine-readable format |
+| [llms.txt](https://docs.openclaw.ai/llms.txt) | Complete documentation index in machine-readable format |
 | [GitHub](https://github.com/openclaw/openclaw) | Source repository |
 | [Releases](https://github.com/openclaw/openclaw/releases) | Release notes and downloads |
 | [Clawd](https://clawd.me) | Clawd assistant companion site |
