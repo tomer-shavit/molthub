@@ -242,6 +242,9 @@ export interface KubernetesTargetConfig {
   replicas?: number;
 }
 
+import type { EcsFargateConfig } from "../targets/ecs-fargate/ecs-fargate-config";
+export type { EcsFargateConfig } from "../targets/ecs-fargate/ecs-fargate-config";
+
 /**
  * Union type for all deployment target configurations
  */
@@ -249,7 +252,8 @@ export type DeploymentTargetConfig =
   | { type: "local" }
   | { type: "remote-vm"; ssh: RemoteVMConfig }
   | { type: "docker"; docker: DockerTargetConfig }
-  | { type: "kubernetes"; k8s: KubernetesTargetConfig };
+  | { type: "kubernetes"; k8s: KubernetesTargetConfig }
+  | { type: "ecs-fargate"; ecs: EcsFargateConfig };
 
 // ── Utility types ──
 

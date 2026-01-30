@@ -676,6 +676,56 @@ class ApiClient {
   async getChannelAuthStatus(id: string, channelId: string): Promise<ChannelAuthStatus> {
     return this.fetch(`/instances/${id}/channels/${channelId}/auth`);
   }
+
+  // Onboarding
+  async getOnboardingStatus(): Promise<{ hasInstances: boolean }> {
+    return this.fetch('/onboarding/status');
+  }
+
+  async getOnboardingTemplates(): Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    channels: Array<{ type: string; enabled: boolean; defaults: Record<string, unknown> }>;
+    requiredInputs: Array<{ key: string; label: string; secret: boolean; placeholder?: string }>;
+  }>> {
+    return this.fetch('/onboarding/templates');
+  }
+
+  async previewOnboarding(data: {
+    templateId: string;
+    channels?: Array<{ type: string; config?: Record<string, unknown> }>;
+    configOverrides?: Record<string, unknown>;
+  }): Promise<{ config: Record<string, unknown> }> {
+    return this.fetch('/onboarding/preview', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deployOnboarding(data: {
+    templateId: string;
+    botName: string;
+    deploymentTarget: { type: string; [key: string]: any };
+    channels?: Array<{ type: string; config?: Record<string, unknown> }>;
+    environment?: string;
+  }): Promise<{ instanceId: string; fleetId: string; status: string }> {
+    return this.fetch('/onboarding/deploy', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getDeployStatus(instanceId: string): Promise<{
+    instanceId: string;
+    status: string;
+    health: string;
+    error?: string;
+    steps: Array<{ name: string; status: string }>;
+  }> {
+    return this.fetch(`/onboarding/deploy/${instanceId}/status`);
+  }
 }
 
 export const api = new ApiClient();

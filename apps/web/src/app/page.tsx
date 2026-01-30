@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/charts";
 import { ClientAreaChart, ClientLineChart, ClientBarChart } from "@/components/ui/client-chart";
 import { TimeDisplay } from "@/components/ui/time-display";
+import { redirect } from "next/navigation";
 import { api, type Fleet, type FleetHealth, type DashboardMetrics, type DashboardHealth } from "@/lib/api";
 import { 
   Bot, 
@@ -59,7 +60,30 @@ async function getDashboardData() {
 }
 
 export default async function DashboardPage() {
+  // Redirect to onboarding wizard if no bots exist
+  try {
+    const onboardingStatus = await api.getOnboardingStatus();
+    if (!onboardingStatus.hasInstances) {
+      redirect("/setup");
+    }
+  } catch {
+    // If onboarding check fails, continue to dashboard
+  }
+
   const { metrics, health, fleets } = await getDashboardData();
+
+  // Show single-bot dashboard when only 1 bot exists
+  if (metrics && metrics.totalBots === 1) {
+    const { SingleBotDashboard } = await import("@/components/dashboard/single-bot-dashboard");
+    const bots = await api.listBotInstances().catch(() => []);
+    if (bots.length === 1) {
+      return (
+        <DashboardLayout>
+          <SingleBotDashboard bot={bots[0]} />
+        </DashboardLayout>
+      );
+    }
+  }
 
   const overallStatus = health?.status || "HEALTHY";
   const healthyPercentage = metrics && metrics.totalBots > 0

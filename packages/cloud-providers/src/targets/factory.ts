@@ -7,6 +7,7 @@ import { LocalMachineTarget } from "./local/local-target";
 import { RemoteVMTarget } from "./remote-vm/remote-vm-target";
 import { DockerContainerTarget } from "./docker/docker-target";
 import { KubernetesTarget } from "./kubernetes/kubernetes-target";
+import { EcsFargateTarget } from "./ecs-fargate/ecs-fargate-target";
 
 /**
  * Factory for creating DeploymentTarget instances based on configuration.
@@ -44,6 +45,12 @@ export class DeploymentTargetFactory {
           throw new Error("Kubernetes target requires 'k8s' configuration");
         }
         return new KubernetesTarget(config.k8s);
+
+      case "ecs-fargate":
+        if (!config.ecs) {
+          throw new Error("ECS Fargate target requires 'ecs' configuration");
+        }
+        return new EcsFargateTarget(config.ecs);
 
       default: {
         const exhaustive: never = config;
@@ -104,7 +111,7 @@ export class DeploymentTargetFactory {
         type: DeploymentTargetType.ECS_FARGATE,
         name: "AWS ECS Fargate",
         description: "Deploy on AWS ECS Fargate (serverless containers)",
-        status: "coming_soon",
+        status: "ready",
       },
       {
         type: DeploymentTargetType.CLOUD_RUN,
@@ -130,6 +137,7 @@ export class DeploymentTargetFactory {
       DeploymentTargetType.REMOTE_VM,
       DeploymentTargetType.DOCKER,
       DeploymentTargetType.KUBERNETES,
+      DeploymentTargetType.ECS_FARGATE,
     ].includes(type);
   }
 }

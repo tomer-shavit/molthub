@@ -25,6 +25,7 @@ import { ChannelsModule } from "./channels/channels.module";
 import { AuthModule } from "./auth/auth.module";
 import { SecurityAuditModule } from "./security/security-audit.module";
 import { SecurityModule } from "./security/security.module";
+import { OnboardingModule } from "./onboarding/onboarding.module";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 
 @Module({
@@ -63,6 +64,7 @@ import { JwtAuthGuard } from "./auth/jwt-auth.guard";
     ChannelsModule,
     SecurityAuditModule,
     SecurityModule,
+    OnboardingModule,
   ],
   providers: [
     {
