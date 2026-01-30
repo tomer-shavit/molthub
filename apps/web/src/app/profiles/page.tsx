@@ -1,24 +1,44 @@
 export const dynamic = 'force-dynamic';
 
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
-import { Card, CardContent } from "@/components/ui/card";
-import { Settings } from "lucide-react";
+import { api } from "@/lib/api";
+import { ProfileList } from "@/components/profiles/profile-list";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import Link from "next/link";
 
-export default function ProfilesPage() {
+async function getData() {
+  try {
+    const [profiles, fleets] = await Promise.all([
+      api.listProfiles(),
+      api.listFleets(),
+    ]);
+    return { profiles, fleets };
+  } catch {
+    return { profiles: [], fleets: [] };
+  }
+}
+
+export default async function ProfilesPage() {
+  const { profiles, fleets } = await getData();
+
   return (
     <DashboardLayout>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Profiles</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage configuration profiles
-        </p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Profiles</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage configuration profiles for your bot instances
+          </p>
+        </div>
+        <Link href="/profiles/new">
+          <Button>
+            <Plus className="w-4 h-4 mr-2" />
+            New Profile
+          </Button>
+        </Link>
       </div>
-      <Card>
-        <CardContent className="pt-6 text-center py-12">
-          <Settings className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-muted-foreground">Profiles management coming soon.</p>
-        </CardContent>
-      </Card>
+      <ProfileList profiles={profiles} fleets={fleets} />
     </DashboardLayout>
   );
 }

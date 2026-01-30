@@ -1,24 +1,31 @@
 export const dynamic = 'force-dynamic';
 
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
-import { Card, CardContent } from "@/components/ui/card";
-import { FileText } from "lucide-react";
+import { api } from "@/lib/api";
+import { TemplateGrid } from "@/components/templates/template-grid";
 
-export default function TemplatesPage() {
+async function getTemplates() {
+  try {
+    return await api.listTemplates();
+  } catch {
+    return [];
+  }
+}
+
+export default async function TemplatesPage() {
+  const templates = await getTemplates();
+
   return (
     <DashboardLayout>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Templates</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage bot configuration templates
-        </p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Templates</h1>
+          <p className="text-muted-foreground mt-1">
+            Browse and manage bot configuration templates
+          </p>
+        </div>
       </div>
-      <Card>
-        <CardContent className="pt-6 text-center py-12">
-          <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-muted-foreground">Templates management coming soon.</p>
-        </CardContent>
-      </Card>
+      <TemplateGrid templates={templates} />
     </DashboardLayout>
   );
 }

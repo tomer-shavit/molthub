@@ -17,6 +17,7 @@ interface DeployWizardProps {
   isFirstTime: boolean;
   templates: TemplateOption[];
   fleets: Fleet[];
+  initialTemplateId?: string;
 }
 
 const STEPS = [
@@ -26,11 +27,11 @@ const STEPS = [
   { name: "Deploying", icon: Rocket },
 ];
 
-export function DeployWizard({ isFirstTime, templates, fleets }: DeployWizardProps) {
+export function DeployWizard({ isFirstTime, templates, fleets, initialTemplateId }: DeployWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
 
   // Form state
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(initialTemplateId ?? null);
   const [botName, setBotName] = useState("");
   const [channelConfigs, setChannelConfigs] = useState<ChannelConfig[]>([]);
   const [selectedFleetId, setSelectedFleetId] = useState(fleets[0]?.id || "");

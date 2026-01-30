@@ -5,7 +5,11 @@ import { DeployWizard } from "@/components/deploy-wizard/deploy-wizard";
 import { api, Fleet } from "@/lib/api";
 import { TemplateOption } from "@/components/onboarding/template-picker";
 
-export default async function AddBotPage() {
+interface AddBotPageProps {
+  searchParams: { templateId?: string };
+}
+
+export default async function AddBotPage({ searchParams }: AddBotPageProps) {
   // Fetch templates and fleets
   let templates: TemplateOption[] = [];
   let fleets: Fleet[] = [];
@@ -33,6 +37,7 @@ export default async function AddBotPage() {
         isFirstTime={false}
         templates={templates}
         fleets={fleets}
+        initialTemplateId={searchParams.templateId}
       />
     </WizardLayout>
   );

@@ -119,15 +119,74 @@ export interface FleetHealth {
   status: string;
 }
 
+export interface TemplateRequiredInput {
+  key: string;
+  label: string;
+  envVar: string;
+  configPath: string;
+  secret: boolean;
+  placeholder?: string;
+}
+
+export interface TemplateChannelPreset {
+  type: string;
+  enabled: boolean;
+  defaults: Record<string, unknown>;
+}
+
 export interface Template {
   id: string;
   name: string;
   description: string;
   category: string;
+  defaultConfig: Record<string, unknown>;
   manifestTemplate: Record<string, unknown>;
   isBuiltin: boolean;
+  requiredInputs?: TemplateRequiredInput[];
+  channels?: TemplateChannelPreset[];
+  recommendedPolicies?: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateTemplatePayload {
+  name: string;
+  description: string;
+  category: string;
+  defaultConfig: Record<string, unknown>;
+  channels?: Array<{ type: string; enabled: boolean; defaults: Record<string, unknown> }>;
+  recommendedPolicies?: string[];
+  manifestTemplate?: Record<string, unknown>;
+}
+
+export interface TemplateConfigPreview {
+  config: Record<string, unknown>;
+  secretRefs: Record<string, string>;
+}
+
+export interface CreateProfilePayload {
+  workspaceId: string;
+  name: string;
+  description: string;
+  fleetIds?: string[];
+  defaults: Record<string, unknown>;
+  mergeStrategy?: Record<string, "override" | "merge" | "prepend" | "append">;
+  allowInstanceOverrides?: boolean;
+  lockedFields?: string[];
+  priority?: number;
+  createdBy?: string;
+}
+
+export interface UpdateProfilePayload {
+  name?: string;
+  description?: string;
+  fleetIds?: string[];
+  defaults?: Record<string, unknown>;
+  mergeStrategy?: Record<string, "override" | "merge" | "prepend" | "append">;
+  allowInstanceOverrides?: boolean;
+  lockedFields?: string[];
+  priority?: number;
+  isActive?: boolean;
 }
 
 export interface ManifestVersion {
@@ -578,6 +637,23 @@ class ApiClient {
     return this.fetch(`/templates/${id}`);
   }
 
+  async createTemplate(data: CreateTemplatePayload): Promise<Template> {
+    return this.fetch('/templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async previewTemplateConfig(id: string, data: {
+    values?: Record<string, string>;
+    configOverrides?: Record<string, unknown>;
+  }): Promise<TemplateConfigPreview> {
+    return this.fetch(`/templates/${id}/preview`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   // Change Sets
   async listChangeSets(params?: { botInstanceId?: string; status?: string }): Promise<ChangeSet[]> {
     const searchParams = new URLSearchParams();
@@ -672,8 +748,35 @@ class ApiClient {
   }
 
   // Profiles
-  async listProfiles(): Promise<Profile[]> {
-    return this.fetch('/profiles');
+  async listProfiles(params?: { workspaceId?: string; fleetId?: string; isActive?: boolean }): Promise<Profile[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.workspaceId) searchParams.set('workspaceId', params.workspaceId);
+    if (params?.fleetId) searchParams.set('fleetId', params.fleetId);
+    if (params?.isActive !== undefined) searchParams.set('isActive', String(params.isActive));
+    const query = searchParams.toString();
+    return this.fetch(`/profiles${query ? `?${query}` : ''}`);
+  }
+
+  async getProfile(id: string): Promise<Profile> {
+    return this.fetch(`/profiles/${id}`);
+  }
+
+  async createProfile(data: CreateProfilePayload): Promise<Profile> {
+    return this.fetch('/profiles', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateProfile(id: string, data: UpdateProfilePayload): Promise<Profile> {
+    return this.fetch(`/profiles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProfile(id: string): Promise<void> {
+    await this.fetch(`/profiles/${id}`, { method: 'DELETE' });
   }
 
   // Overlays
