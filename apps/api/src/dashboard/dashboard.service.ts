@@ -141,7 +141,7 @@ export class DashboardService {
     });
 
     // Active alerts count from the alerting service
-    const activeAlerts = this.alerting.getActiveAlertCount();
+    const activeAlerts = await this.alerting.getActiveAlertCount();
 
     return {
       totalBots,
@@ -177,7 +177,7 @@ export class DashboardService {
     }));
 
     // Get recent alerts from the alerting service
-    const activeAlerts = this.alerting.getActiveAlerts();
+    const activeAlerts = await this.alerting.getActiveAlerts();
     const recentAlerts = activeAlerts.slice(0, 10).map((alert) => ({
       id: alert.id,
       severity: alert.severity.toUpperCase(),

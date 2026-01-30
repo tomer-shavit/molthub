@@ -2,19 +2,23 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { 
-  LayoutDashboard, 
-  Bot, 
-  Settings, 
-  FileText, 
-  Activity, 
-  History, 
+import {
+  LayoutDashboard,
+  Bot,
+  Settings,
+  FileText,
+  Activity,
+  History,
   Layers,
   Shield,
   Plug,
   ChevronDown,
   Menu,
-  X
+  X,
+  AlertTriangle,
+  DollarSign,
+  Target,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -30,9 +34,13 @@ const navItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: <LayoutDashboard className="w-4 h-4" /> },
   { label: "Fleets", href: "/fleets", icon: <Layers className="w-4 h-4" /> },
   { label: "Bots", href: "/bots", icon: <Bot className="w-4 h-4" /> },
-  { 
-    label: "Configuration", 
-    href: "#", 
+  { label: "Channels", href: "/channels", icon: <MessageSquare className="w-4 h-4" /> },
+  { label: "Alerts", href: "/alerts", icon: <AlertTriangle className="w-4 h-4" /> },
+  { label: "SLOs", href: "/slos", icon: <Target className="w-4 h-4" /> },
+  { label: "Costs", href: "/costs", icon: <DollarSign className="w-4 h-4" /> },
+  {
+    label: "Configuration",
+    href: "#",
     icon: <Settings className="w-4 h-4" />,
     children: [
       { label: "Profiles", href: "/profiles" },

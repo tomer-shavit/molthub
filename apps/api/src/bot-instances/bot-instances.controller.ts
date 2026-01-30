@@ -12,13 +12,14 @@ import {
 } from "@nestjs/common";
 import { BotInstance } from "@molthub/database";
 import { BotInstancesService } from "./bot-instances.service";
-import { 
-  CreateBotInstanceDto, 
-  UpdateBotInstanceDto, 
+import {
+  CreateBotInstanceDto,
+  UpdateBotInstanceDto,
   UpdateBotStatusDto,
   UpdateBotHealthDto,
-  ListBotInstancesQueryDto 
+  ListBotInstancesQueryDto
 } from "./bot-instances.dto";
+import { CompareBotsDto, BulkActionDto, BulkActionResultItem } from "./bot-compare.dto";
 
 @Controller("bot-instances")
 export class BotInstancesController {
@@ -32,6 +33,16 @@ export class BotInstancesController {
   @Get()
   findAll(@Query() query: ListBotInstancesQueryDto): Promise<BotInstance[]> {
     return this.botInstancesService.findAll(query);
+  }
+
+  @Post("compare")
+  compareBots(@Body() dto: CompareBotsDto): Promise<BotInstance[]> {
+    return this.botInstancesService.compareBots(dto.instanceIds);
+  }
+
+  @Post("bulk-action")
+  bulkAction(@Body() dto: BulkActionDto): Promise<BulkActionResultItem[]> {
+    return this.botInstancesService.bulkAction(dto.instanceIds, dto.action);
   }
 
   @Get("dashboard")

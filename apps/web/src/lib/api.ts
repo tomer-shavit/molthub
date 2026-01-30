@@ -385,6 +385,73 @@ export interface DashboardActivity {
   }>;
 }
 
+export interface BotComparison {
+  instances: BotInstance[];
+}
+
+export interface BulkActionPayload {
+  instanceIds: string[];
+  action: "restart" | "pause" | "stop" | "start";
+}
+
+export interface BulkActionResult {
+  instanceId: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface ChannelBinding {
+  id: string;
+  channelType: string;
+  status: "active" | "inactive" | "error";
+  config?: Record<string, unknown>;
+}
+
+export type SloMetric = 'UPTIME' | 'LATENCY_P50' | 'LATENCY_P95' | 'LATENCY_P99' | 'ERROR_RATE' | 'CHANNEL_HEALTH';
+
+export type SloWindow = 'ROLLING_1H' | 'ROLLING_24H' | 'ROLLING_7D' | 'ROLLING_30D' | 'CALENDAR_DAY' | 'CALENDAR_WEEK' | 'CALENDAR_MONTH';
+
+export interface SloDefinition {
+  id: string;
+  instanceId: string;
+  name: string;
+  description?: string;
+  metric: SloMetric;
+  targetValue: number;
+  window: SloWindow;
+  currentValue?: number;
+  isBreached: boolean;
+  breachedAt?: string;
+  breachCount: number;
+  lastEvaluatedAt?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  instance?: {
+    id: string;
+    name: string;
+    status: string;
+    health: string;
+  };
+}
+
+export interface SloSummary {
+  total: number;
+  breached: number;
+  healthy: number;
+  compliancePercent: number;
+}
+
+export interface CreateSloPayload {
+  name: string;
+  description?: string;
+  instanceId: string;
+  metric: SloMetric;
+  targetValue: number;
+  window: SloWindow;
+}
+
 class ApiClient {
   private async fetch(path: string, options?: RequestInit) {
     const response = await fetch(`${API_URL}${path}`, {
@@ -726,6 +793,366 @@ class ApiClient {
   }> {
     return this.fetch(`/onboarding/deploy/${instanceId}/status`);
   }
+
+  // Multi-Bot UX
+  async compareBots(ids: string[]): Promise<BotInstance[]> {
+    return this.fetch('/bot-instances/compare', {
+      method: 'POST',
+      body: JSON.stringify({ instanceIds: ids }),
+    });
+  }
+
+  async bulkAction(data: BulkActionPayload): Promise<BulkActionResult[]> {
+    return this.fetch('/bot-instances/bulk-action', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ============================================
+  // Costs
+  // ============================================
+
+  async listCostEvents(filters?: {
+    instanceId?: string;
+    provider?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedCostEvents> {
+    const params = new URLSearchParams();
+    if (filters?.instanceId) params.set('instanceId', filters.instanceId);
+    if (filters?.provider) params.set('provider', filters.provider);
+    if (filters?.from) params.set('from', filters.from);
+    if (filters?.to) params.set('to', filters.to);
+    if (filters?.page) params.set('page', filters.page.toString());
+    if (filters?.limit) params.set('limit', filters.limit.toString());
+    return this.fetch(`/costs/events?${params}`);
+  }
+
+  async recordCostEvent(data: CreateCostEventPayload): Promise<CostEvent> {
+    return this.fetch('/costs/events', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getCostSummary(filters?: {
+    instanceId?: string;
+    from?: string;
+    to?: string;
+  }): Promise<CostSummary> {
+    const params = new URLSearchParams();
+    if (filters?.instanceId) params.set('instanceId', filters.instanceId);
+    if (filters?.from) params.set('from', filters.from);
+    if (filters?.to) params.set('to', filters.to);
+    return this.fetch(`/costs/summary?${params}`);
+  }
+
+  async getInstanceCosts(instanceId: string): Promise<CostSummary> {
+    return this.fetch(`/costs/instance/${instanceId}`);
+  }
+
+  // ============================================
+  // Budgets
+  // ============================================
+
+  async listBudgets(filters?: {
+    instanceId?: string;
+    fleetId?: string;
+    isActive?: boolean;
+  }): Promise<BudgetConfig[]> {
+    const params = new URLSearchParams();
+    if (filters?.instanceId) params.set('instanceId', filters.instanceId);
+    if (filters?.fleetId) params.set('fleetId', filters.fleetId);
+    if (filters?.isActive !== undefined) params.set('isActive', String(filters.isActive));
+    return this.fetch(`/budgets?${params}`);
+  }
+
+  async createBudget(data: CreateBudgetPayload): Promise<BudgetConfig> {
+    return this.fetch('/budgets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateBudget(id: string, data: Partial<CreateBudgetPayload> & { isActive?: boolean }): Promise<BudgetConfig> {
+    return this.fetch(`/budgets/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteBudget(id: string): Promise<void> {
+    await this.fetch(`/budgets/${id}`, { method: 'DELETE' });
+  }
+
+  // ============================================
+  // SLOs
+  // ============================================
+
+  async listSlos(filters?: {
+    instanceId?: string;
+    isBreached?: boolean;
+    isActive?: boolean;
+  }): Promise<SloDefinition[]> {
+    const params = new URLSearchParams();
+    if (filters?.instanceId) params.set('instanceId', filters.instanceId);
+    if (filters?.isBreached !== undefined) params.set('isBreached', String(filters.isBreached));
+    if (filters?.isActive !== undefined) params.set('isActive', String(filters.isActive));
+    return this.fetch(`/slos?${params}`);
+  }
+
+  async getSlo(id: string): Promise<SloDefinition> {
+    return this.fetch(`/slos/${id}`);
+  }
+
+  async createSlo(data: CreateSloPayload): Promise<SloDefinition> {
+    return this.fetch('/slos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSlo(id: string, data: Partial<CreateSloPayload> & { isActive?: boolean }): Promise<SloDefinition> {
+    return this.fetch(`/slos/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSlo(id: string): Promise<void> {
+    await this.fetch(`/slos/${id}`, { method: 'DELETE' });
+  }
+
+  async getSloSummary(): Promise<SloSummary> {
+    return this.fetch('/slos/summary');
+  }
+
+  // ============================================
+  // Alerts
+  // ============================================
+
+  async listAlerts(filters?: {
+    instanceId?: string;
+    fleetId?: string;
+    severity?: HealthAlertSeverity;
+    status?: HealthAlertStatus;
+    rule?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedAlerts> {
+    const params = new URLSearchParams();
+    if (filters?.instanceId) params.set('instanceId', filters.instanceId);
+    if (filters?.fleetId) params.set('fleetId', filters.fleetId);
+    if (filters?.severity) params.set('severity', filters.severity);
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.rule) params.set('rule', filters.rule);
+    if (filters?.from) params.set('from', filters.from);
+    if (filters?.to) params.set('to', filters.to);
+    if (filters?.page) params.set('page', filters.page.toString());
+    if (filters?.limit) params.set('limit', filters.limit.toString());
+    return this.fetch(`/alerts?${params}`);
+  }
+
+  async getAlert(alertId: string): Promise<HealthAlert> {
+    return this.fetch(`/alerts/${alertId}`);
+  }
+
+  async acknowledgeAlert(alertId: string, data?: { acknowledgedBy?: string }): Promise<HealthAlert> {
+    return this.fetch(`/alerts/${alertId}/acknowledge`, {
+      method: 'POST',
+      body: JSON.stringify(data ?? {}),
+    });
+  }
+
+  async resolveAlert(alertId: string): Promise<HealthAlert> {
+    return this.fetch(`/alerts/${alertId}/resolve`, { method: 'POST' });
+  }
+
+  async suppressAlert(alertId: string): Promise<HealthAlert> {
+    return this.fetch(`/alerts/${alertId}/suppress`, { method: 'POST' });
+  }
+
+  async remediateAlert(alertId: string): Promise<RemediationResult> {
+    return this.fetch(`/alerts/${alertId}/remediate`, { method: 'POST' });
+  }
+
+  async getAlertSummary(): Promise<AlertSummary> {
+    return this.fetch('/alerts/summary');
+  }
+
+  async getActiveAlertCount(): Promise<{ count: number }> {
+    return this.fetch('/alerts/active-count');
+  }
+}
+
+// ============================================
+// Cost & Budget Types
+// ============================================
+
+export type CostProvider = 'OPENAI' | 'ANTHROPIC' | 'GOOGLE' | 'AWS_BEDROCK' | 'AZURE_OPENAI' | 'CUSTOM';
+
+export interface CostEvent {
+  id: string;
+  instanceId: string;
+  provider: CostProvider;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
+  channelType?: string;
+  traceId?: string;
+  metadata: Record<string, unknown>;
+  occurredAt: string;
+}
+
+export interface CostSummaryByProvider {
+  provider: string;
+  _sum: {
+    costCents: number | null;
+    inputTokens: number | null;
+    outputTokens: number | null;
+  };
+  _count: {
+    id: number;
+  };
+}
+
+export interface CostSummaryByModel {
+  model: string;
+  provider: string;
+  _sum: {
+    costCents: number | null;
+    inputTokens: number | null;
+    outputTokens: number | null;
+  };
+  _count: {
+    id: number;
+  };
+}
+
+export interface CostSummaryByChannel {
+  channelType: string | null;
+  _sum: {
+    costCents: number | null;
+  };
+  _count: {
+    id: number;
+  };
+}
+
+export interface CostSummary {
+  totalCostCents: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalEvents: number;
+  byProvider: CostSummaryByProvider[];
+  byModel: CostSummaryByModel[];
+  byChannel: CostSummaryByChannel[];
+}
+
+export interface PaginatedCostEvents {
+  data: CostEvent[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface BudgetConfig {
+  id: string;
+  instanceId?: string;
+  fleetId?: string;
+  name: string;
+  description?: string;
+  monthlyLimitCents: number;
+  currency: string;
+  warnThresholdPct: number;
+  criticalThresholdPct: number;
+  currentSpendCents: number;
+  periodStart: string;
+  periodEnd?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface CreateBudgetPayload {
+  name: string;
+  instanceId?: string;
+  fleetId?: string;
+  description?: string;
+  monthlyLimitCents: number;
+  currency?: string;
+  warnThresholdPct?: number;
+  criticalThresholdPct?: number;
+}
+
+export interface CreateCostEventPayload {
+  instanceId: string;
+  provider: CostProvider;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
+  channelType?: string;
+  traceId?: string;
+}
+
+// ============================================
+// Alert Types
+// ============================================
+
+export type HealthAlertSeverity = 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL';
+export type HealthAlertStatus = 'ACTIVE' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SUPPRESSED';
+
+export interface HealthAlert {
+  id: string;
+  instanceId?: string;
+  fleetId?: string;
+  rule: string;
+  severity: HealthAlertSeverity;
+  status: HealthAlertStatus;
+  title: string;
+  message: string;
+  detail?: string;
+  remediationAction?: string;
+  remediationNote?: string;
+  firstTriggeredAt: string;
+  lastTriggeredAt: string;
+  resolvedAt?: string;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+  consecutiveHits: number;
+  createdAt: string;
+  updatedAt: string;
+  instance?: { id: string; name: string; fleetId: string };
+  fleet?: { id: string; name: string };
+}
+
+export interface AlertSummary {
+  bySeverity: Record<string, number>;
+  byStatus: Record<string, number>;
+  total: number;
+}
+
+export interface PaginatedAlerts {
+  data: HealthAlert[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface RemediationResult {
+  success: boolean;
+  action: string;
+  message: string;
+  detail?: string;
 }
 
 export const api = new ApiClient();
