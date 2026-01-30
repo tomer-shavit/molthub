@@ -6,7 +6,10 @@ import {
   BotStatus,
   GatewayConnectionStatus,
   ChannelAuthState,
+  AlertSeverity,
+  AlertStatus,
 } from "@molthub/database";
+import { AlertsService } from "../alerts/alerts.service";
 
 // ---- Types -----------------------------------------------------------------
 
@@ -16,44 +19,6 @@ export type AlertRule =
   | "config_drift"
   | "channel_auth_expired"
   | "health_check_failed";
-
-export type AlertSeverity = "info" | "warning" | "error" | "critical";
-
-export interface Alert {
-  id: string;
-  rule: AlertRule;
-  severity: AlertSeverity;
-  instanceId: string;
-  instanceName: string;
-  message: string;
-  detail?: string;
-  firstTriggeredAt: Date;
-  lastTriggeredAt: Date;
-  acknowledged: boolean;
-  acknowledgedAt?: Date;
-  acknowledgedBy?: string;
-}
-
-/**
- * In-memory alert store. In a production system this would be backed by a DB
- * table; for WP-10 we use a memory map keyed by `rule:instanceId`.
- */
-interface AlertRecord {
-  id: string;
-  rule: AlertRule;
-  severity: AlertSeverity;
-  instanceId: string;
-  instanceName: string;
-  message: string;
-  detail?: string;
-  firstTriggeredAt: Date;
-  lastTriggeredAt: Date;
-  acknowledged: boolean;
-  acknowledgedAt?: Date;
-  acknowledgedBy?: string;
-  /** Consecutive evaluation cycles the condition has been true. */
-  consecutiveHits: number;
-}
 
 // ---- Thresholds ------------------------------------------------------------
 
@@ -66,17 +31,23 @@ const DEGRADED_THRESHOLD_MIN = 5;
 /** Consecutive health check failures threshold. */
 const CONSECUTIVE_FAILURE_THRESHOLD = 3;
 
+// ---- Remediation action mapping --------------------------------------------
+
+const REMEDIATION_ACTIONS: Record<AlertRule, string> = {
+  unreachable_instance: "restart",
+  degraded_instance: "run-doctor",
+  config_drift: "reconcile",
+  channel_auth_expired: "re-pair-channel",
+  health_check_failed: "restart",
+};
+
 // ---- Service ---------------------------------------------------------------
 
 @Injectable()
 export class AlertingService {
   private readonly logger = new Logger(AlertingService.name);
 
-  /** In-memory alert store. Key = `rule:instanceId`. */
-  private readonly alerts = new Map<string, AlertRecord>();
-
-  /** Auto-incrementing ID counter. */
-  private nextId = 1;
+  constructor(private readonly alertsService: AlertsService) {}
 
   // ---- Scheduled evaluation ------------------------------------------------
 
@@ -89,7 +60,44 @@ export class AlertingService {
     }
   }
 
-  // ---- Public API ----------------------------------------------------------
+  // ---- Public API (delegates to AlertsService) -----------------------------
+
+  /**
+   * Return all active (non-resolved) alerts, optionally filtered by instance.
+   */
+  async getActiveAlerts(instanceId?: string) {
+    const result = await this.alertsService.listAlerts({
+      instanceId,
+      status: AlertStatus.ACTIVE,
+    });
+    return result.data;
+  }
+
+  /**
+   * Return all alerts (including acknowledged/resolved), optionally filtered by instance.
+   */
+  async getAllAlerts(instanceId?: string) {
+    const result = await this.alertsService.listAlerts({
+      instanceId,
+    });
+    return result.data;
+  }
+
+  /**
+   * Acknowledge an alert by ID.
+   */
+  async acknowledgeAlert(alertId: string, acknowledgedBy?: string) {
+    return this.alertsService.acknowledgeAlert(alertId, acknowledgedBy);
+  }
+
+  /**
+   * Get the count of active (unacknowledged) alerts.
+   */
+  async getActiveAlertCount(): Promise<number> {
+    return this.alertsService.getActiveAlertCount();
+  }
+
+  // ---- Alert evaluation engine ---------------------------------------------
 
   /**
    * Evaluate all alert rules across all instances.
@@ -107,69 +115,11 @@ export class AlertingService {
 
     for (const instance of instances) {
       await this.evaluateUnreachable(instance);
-      this.evaluateDegraded(instance);
-      this.evaluateConfigDrift(instance);
-      this.evaluateChannelAuthExpired(instance);
-      this.evaluateHealthCheckFailed(instance);
+      await this.evaluateDegraded(instance);
+      await this.evaluateConfigDrift(instance);
+      await this.evaluateChannelAuthExpired(instance);
+      await this.evaluateHealthCheckFailed(instance);
     }
-
-    // Clear alerts for conditions that are no longer true
-    this.pruneResolvedAlerts(instances.map((i) => i.id));
-  }
-
-  /**
-   * Return all active (non-acknowledged) alerts, optionally filtered by instance.
-   */
-  getActiveAlerts(instanceId?: string): Alert[] {
-    const result: Alert[] = [];
-    for (const record of this.alerts.values()) {
-      if (record.acknowledged) continue;
-      if (instanceId && record.instanceId !== instanceId) continue;
-      result.push(this.toAlert(record));
-    }
-    return result.sort(
-      (a, b) => b.lastTriggeredAt.getTime() - a.lastTriggeredAt.getTime(),
-    );
-  }
-
-  /**
-   * Return all alerts (including acknowledged), optionally filtered by instance.
-   */
-  getAllAlerts(instanceId?: string): Alert[] {
-    const result: Alert[] = [];
-    for (const record of this.alerts.values()) {
-      if (instanceId && record.instanceId !== instanceId) continue;
-      result.push(this.toAlert(record));
-    }
-    return result.sort(
-      (a, b) => b.lastTriggeredAt.getTime() - a.lastTriggeredAt.getTime(),
-    );
-  }
-
-  /**
-   * Acknowledge an alert by ID.
-   */
-  acknowledgeAlert(alertId: string, acknowledgedBy?: string): Alert | null {
-    for (const record of this.alerts.values()) {
-      if (record.id === alertId) {
-        record.acknowledged = true;
-        record.acknowledgedAt = new Date();
-        record.acknowledgedBy = acknowledgedBy ?? "system";
-        return this.toAlert(record);
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Get the count of active (unacknowledged) alerts.
-   */
-  getActiveAlertCount(): number {
-    let count = 0;
-    for (const record of this.alerts.values()) {
-      if (!record.acknowledged) count++;
-    }
-    return count;
   }
 
   // ---- Rule evaluators -----------------------------------------------------
@@ -177,12 +127,12 @@ export class AlertingService {
   private async evaluateUnreachable(instance: {
     id: string;
     name: string;
+    fleetId: string;
     gatewayConnection: {
       status: string;
       lastHeartbeat: Date | null;
     } | null;
   }): Promise<void> {
-    const key = `unreachable_instance:${instance.id}`;
     const conn = instance.gatewayConnection;
 
     const isUnreachable =
@@ -190,36 +140,36 @@ export class AlertingService {
       conn.status === GatewayConnectionStatus.ERROR ||
       conn.status === GatewayConnectionStatus.DISCONNECTED;
 
-    // Check duration
     const lastHeartbeat = conn?.lastHeartbeat;
     const minutesSinceHeartbeat = lastHeartbeat
       ? (Date.now() - lastHeartbeat.getTime()) / 60_000
       : Infinity;
 
     if (isUnreachable && minutesSinceHeartbeat >= UNREACHABLE_THRESHOLD_MIN) {
-      this.upsertAlert(key, {
+      await this.alertsService.upsertAlert({
         rule: "unreachable_instance",
-        severity: "critical",
+        severity: AlertSeverity.CRITICAL,
         instanceId: instance.id,
-        instanceName: instance.name,
+        fleetId: instance.fleetId,
+        title: `Instance unreachable: ${instance.name}`,
         message: `Instance "${instance.name}" has been unreachable for ${Math.round(minutesSinceHeartbeat)} minutes`,
         detail: `Last heartbeat: ${lastHeartbeat?.toISOString() ?? "never"}`,
+        remediationAction: REMEDIATION_ACTIONS.unreachable_instance,
       });
     } else {
-      this.resolveAlert(key);
+      await this.alertsService.resolveAlertByKey("unreachable_instance", instance.id);
     }
   }
 
-  private evaluateDegraded(instance: {
+  private async evaluateDegraded(instance: {
     id: string;
     name: string;
+    fleetId: string;
     health: string;
     lastHealthCheckAt: Date | null;
-  }): void {
-    const key = `degraded_instance:${instance.id}`;
-
+  }): Promise<void> {
     if (instance.health !== BotHealth.DEGRADED) {
-      this.resolveAlert(key);
+      await this.alertsService.resolveAlertByKey("degraded_instance", instance.id);
       return;
     }
 
@@ -228,173 +178,98 @@ export class AlertingService {
       ? (Date.now() - lastCheck.getTime()) / 60_000
       : 0;
 
-    const existing = this.alerts.get(key);
-    const effectiveMinutes = existing
-      ? (Date.now() - existing.firstTriggeredAt.getTime()) / 60_000
-      : minutesDegraded;
-
-    if (effectiveMinutes >= DEGRADED_THRESHOLD_MIN) {
-      this.upsertAlert(key, {
+    if (minutesDegraded >= DEGRADED_THRESHOLD_MIN) {
+      await this.alertsService.upsertAlert({
         rule: "degraded_instance",
-        severity: "warning",
+        severity: AlertSeverity.WARNING,
         instanceId: instance.id,
-        instanceName: instance.name,
-        message: `Instance "${instance.name}" has been degraded for ${Math.round(effectiveMinutes)} minutes`,
+        fleetId: instance.fleetId,
+        title: `Instance degraded: ${instance.name}`,
+        message: `Instance "${instance.name}" has been degraded for ${Math.round(minutesDegraded)} minutes`,
+        remediationAction: REMEDIATION_ACTIONS.degraded_instance,
       });
     }
   }
 
-  private evaluateConfigDrift(instance: {
+  private async evaluateConfigDrift(instance: {
     id: string;
     name: string;
+    fleetId: string;
     configHash: string | null;
     gatewayConnection: {
       configHash: string | null;
     } | null;
-  }): void {
-    const key = `config_drift:${instance.id}`;
-
+  }): Promise<void> {
     const gwHash = instance.gatewayConnection?.configHash;
     const instanceHash = instance.configHash;
 
     if (gwHash && instanceHash && gwHash !== instanceHash) {
-      this.upsertAlert(key, {
+      await this.alertsService.upsertAlert({
         rule: "config_drift",
-        severity: "error",
+        severity: AlertSeverity.ERROR,
         instanceId: instance.id,
-        instanceName: instance.name,
+        fleetId: instance.fleetId,
+        title: `Config drift: ${instance.name}`,
         message: `Configuration drift detected on "${instance.name}"`,
         detail: `Instance hash: ${instanceHash}, Gateway hash: ${gwHash}`,
+        remediationAction: REMEDIATION_ACTIONS.config_drift,
       });
     } else {
-      this.resolveAlert(key);
+      await this.alertsService.resolveAlertByKey("config_drift", instance.id);
     }
   }
 
-  private evaluateChannelAuthExpired(instance: {
+  private async evaluateChannelAuthExpired(instance: {
     id: string;
     name: string;
+    fleetId: string;
     channelAuthSessions: Array<{
       channelType: string;
       state: string;
     }>;
-  }): void {
-    const key = `channel_auth_expired:${instance.id}`;
-
+  }): Promise<void> {
     const expiredSessions = instance.channelAuthSessions.filter(
-      (s) => s.state === ChannelAuthState.EXPIRED || s.state === ChannelAuthState.ERROR,
+      (s) =>
+        s.state === ChannelAuthState.EXPIRED ||
+        s.state === ChannelAuthState.ERROR,
     );
 
     if (expiredSessions.length > 0) {
       const channels = expiredSessions.map((s) => s.channelType).join(", ");
-      this.upsertAlert(key, {
+      await this.alertsService.upsertAlert({
         rule: "channel_auth_expired",
-        severity: "error",
+        severity: AlertSeverity.ERROR,
         instanceId: instance.id,
-        instanceName: instance.name,
+        fleetId: instance.fleetId,
+        title: `Channel auth expired: ${instance.name}`,
         message: `Channel auth expired/failed on "${instance.name}"`,
         detail: `Affected channels: ${channels}`,
+        remediationAction: REMEDIATION_ACTIONS.channel_auth_expired,
       });
     } else {
-      this.resolveAlert(key);
+      await this.alertsService.resolveAlertByKey("channel_auth_expired", instance.id);
     }
   }
 
-  private evaluateHealthCheckFailed(instance: {
+  private async evaluateHealthCheckFailed(instance: {
     id: string;
     name: string;
+    fleetId: string;
     errorCount: number;
     health: string;
-  }): void {
-    const key = `health_check_failed:${instance.id}`;
-
+  }): Promise<void> {
     if (instance.errorCount >= CONSECUTIVE_FAILURE_THRESHOLD) {
-      this.upsertAlert(key, {
+      await this.alertsService.upsertAlert({
         rule: "health_check_failed",
-        severity: "error",
+        severity: AlertSeverity.ERROR,
         instanceId: instance.id,
-        instanceName: instance.name,
+        fleetId: instance.fleetId,
+        title: `Health check failed: ${instance.name}`,
         message: `${instance.errorCount} consecutive health check failures on "${instance.name}"`,
+        remediationAction: REMEDIATION_ACTIONS.health_check_failed,
       });
     } else {
-      this.resolveAlert(key);
+      await this.alertsService.resolveAlertByKey("health_check_failed", instance.id);
     }
-  }
-
-  // ---- Alert management helpers --------------------------------------------
-
-  private upsertAlert(
-    key: string,
-    data: {
-      rule: AlertRule;
-      severity: AlertSeverity;
-      instanceId: string;
-      instanceName: string;
-      message: string;
-      detail?: string;
-    },
-  ): void {
-    const existing = this.alerts.get(key);
-    if (existing) {
-      existing.lastTriggeredAt = new Date();
-      existing.message = data.message;
-      existing.detail = data.detail;
-      existing.severity = data.severity;
-      existing.consecutiveHits++;
-      // Un-acknowledge if re-triggered after acknowledgment
-      if (existing.acknowledged) {
-        existing.acknowledged = false;
-        existing.acknowledgedAt = undefined;
-        existing.acknowledgedBy = undefined;
-      }
-    } else {
-      const id = `alert_${this.nextId++}`;
-      this.alerts.set(key, {
-        id,
-        rule: data.rule,
-        severity: data.severity,
-        instanceId: data.instanceId,
-        instanceName: data.instanceName,
-        message: data.message,
-        detail: data.detail,
-        firstTriggeredAt: new Date(),
-        lastTriggeredAt: new Date(),
-        acknowledged: false,
-        consecutiveHits: 1,
-      });
-    }
-  }
-
-  private resolveAlert(key: string): void {
-    this.alerts.delete(key);
-  }
-
-  /**
-   * Remove alerts for instances that no longer exist.
-   */
-  private pruneResolvedAlerts(activeInstanceIds: string[]): void {
-    const activeSet = new Set(activeInstanceIds);
-    for (const [key, record] of this.alerts) {
-      if (!activeSet.has(record.instanceId)) {
-        this.alerts.delete(key);
-      }
-    }
-  }
-
-  private toAlert(record: AlertRecord): Alert {
-    return {
-      id: record.id,
-      rule: record.rule,
-      severity: record.severity,
-      instanceId: record.instanceId,
-      instanceName: record.instanceName,
-      message: record.message,
-      detail: record.detail,
-      firstTriggeredAt: record.firstTriggeredAt,
-      lastTriggeredAt: record.lastTriggeredAt,
-      acknowledged: record.acknowledged,
-      acknowledgedAt: record.acknowledgedAt,
-      acknowledgedBy: record.acknowledgedBy,
-    };
   }
 }

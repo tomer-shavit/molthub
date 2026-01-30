@@ -99,6 +99,10 @@ model Fleet {
   instances BotInstance[]
   profiles  Profile[]
 
+  // Phase 2 relations
+  budgetConfigs BudgetConfig[]
+  healthAlerts  HealthAlert[]
+
   @@unique([workspaceId, name])
   @@index([workspaceId])
   @@index([status])
@@ -175,6 +179,12 @@ model BotInstance {
   channelAuthSessions ChannelAuthSession[]
   healthSnapshots     HealthSnapshot[]
   securityAudits      SecurityAuditResult[]
+
+  // Phase 2 relations
+  sloDefinitions SloDefinition[]
+  budgetConfigs  BudgetConfig[]
+  costEvents     CostEvent[]
+  healthAlerts   HealthAlert[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -946,6 +956,200 @@ model SecurityAuditResult {
 
   @@index([instanceId])
   @@index([auditedAt])
+}
+
+// ============================================
+// PHASE 2: SLOs, BUDGETS, COSTS, ALERTS
+// ============================================
+
+enum SloMetric {
+  UPTIME
+  LATENCY_P50
+  LATENCY_P95
+  LATENCY_P99
+  ERROR_RATE
+  CHANNEL_HEALTH
+}
+
+enum SloWindow {
+  ROLLING_1H
+  ROLLING_24H
+  ROLLING_7D
+  ROLLING_30D
+  CALENDAR_DAY
+  CALENDAR_WEEK
+  CALENDAR_MONTH
+}
+
+// SloDefinition: Per-bot SLO targets
+model SloDefinition {
+  id         String      @id @default(cuid())
+  instanceId String
+  instance   BotInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+
+  metric      SloMetric
+  targetValue Float       // e.g., 99.9 for uptime %, or 200 for latency ms
+  window      SloWindow
+
+  // Current state
+  currentValue Float?
+  isBreached   Boolean  @default(false)
+  breachedAt   DateTime?
+  breachCount  Int      @default(0)
+
+  // Evaluation
+  lastEvaluatedAt DateTime?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String
+
+  @@unique([instanceId, name])
+  @@index([instanceId])
+  @@index([metric])
+  @@index([isBreached])
+  @@index([isActive])
+}
+
+// BudgetConfig: Per-bot or per-fleet monthly cost limits
+model BudgetConfig {
+  id String @id @default(cuid())
+
+  // Scope: either bot-level or fleet-level (exactly one must be set)
+  instanceId String?
+  instance   BotInstance? @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  fleetId    String?
+  fleet      Fleet?       @relation(fields: [fleetId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+
+  // Budget settings
+  monthlyLimitCents Int // Monthly budget in cents (e.g., 10000 = $100.00)
+  currency          String @default("USD")
+
+  // Alert thresholds (percentages of monthly limit)
+  warnThresholdPct     Int @default(75)  // Alert at 75% of budget
+  criticalThresholdPct Int @default(90)  // Critical alert at 90%
+
+  // Current state
+  currentSpendCents Int      @default(0)
+  periodStart       DateTime @default(now())
+  periodEnd         DateTime?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String
+
+  @@index([instanceId])
+  @@index([fleetId])
+  @@index([isActive])
+}
+
+enum CostProvider {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  AWS_BEDROCK
+  AZURE_OPENAI
+  CUSTOM
+}
+
+// CostEvent: Individual token usage / cost events
+model CostEvent {
+  id         String      @id @default(cuid())
+  instanceId String
+  instance   BotInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  // Provider info
+  provider CostProvider
+  model    String       // e.g., "gpt-4", "claude-3-opus"
+
+  // Token usage
+  inputTokens  Int @default(0)
+  outputTokens Int @default(0)
+
+  // Cost
+  costCents Int // Cost in cents
+
+  // Context
+  channelType String? // Which channel triggered this
+  traceId     String? // Optional link to a trace
+
+  // Metadata
+  metadata Json @default("{}")
+
+  occurredAt DateTime @default(now())
+
+  @@index([instanceId])
+  @@index([provider])
+  @@index([occurredAt])
+  @@index([instanceId, occurredAt])
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  SUPPRESSED
+}
+
+// HealthAlert: Persistent, DB-backed alerts with remediation
+model HealthAlert {
+  id String @id @default(cuid())
+
+  // Scope: bot-level or fleet-level
+  instanceId String?
+  instance   BotInstance? @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  fleetId    String?
+  fleet      Fleet?       @relation(fields: [fleetId], references: [id], onDelete: Cascade)
+
+  // Alert info
+  rule     String         // e.g., "unreachable_instance", "slo_breach", "budget_warning"
+  severity AlertSeverity
+  status   AlertStatus    @default(ACTIVE)
+
+  title   String
+  message String
+  detail  String?
+
+  // Remediation
+  remediationAction String? // "restart", "reconcile", "re-pair-channel", "run-doctor"
+  remediationNote   String?
+
+  // Timing
+  firstTriggeredAt DateTime @default(now())
+  lastTriggeredAt  DateTime @default(now())
+  resolvedAt       DateTime?
+  acknowledgedAt   DateTime?
+  acknowledgedBy   String?
+
+  // Tracking
+  consecutiveHits Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([instanceId])
+  @@index([fleetId])
+  @@index([rule])
+  @@index([severity])
+  @@index([status])
+  @@index([firstTriggeredAt])
 }
 
 // HealthSnapshot: Point-in-time health data from a bot's gateway

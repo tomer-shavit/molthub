@@ -10,6 +10,7 @@ import {
   PolicyEngine
 } from "@molthub/core";
 import { CreateBotInstanceDto, UpdateBotInstanceDto, ListBotInstancesQueryDto } from "./bot-instances.dto";
+import { BulkActionType, BulkActionResultItem } from "./bot-compare.dto";
 
 @Injectable()
 export class BotInstancesService {
@@ -222,6 +223,80 @@ export class BotInstancesService {
       where: { id },
       data: { status: BotStatus.DELETING },
     });
+  }
+
+  async compareBots(instanceIds: string[]): Promise<BotInstance[]> {
+    const instances = await prisma.botInstance.findMany({
+      where: { id: { in: instanceIds } },
+      include: {
+        fleet: {
+          select: {
+            id: true,
+            name: true,
+            environment: true,
+          },
+        },
+        connectorBindings: {
+          include: {
+            connector: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                status: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (instances.length !== instanceIds.length) {
+      const foundIds = new Set(instances.map((i) => i.id));
+      const missingIds = instanceIds.filter((id) => !foundIds.has(id));
+      throw new NotFoundException(
+        `Bot instances not found: ${missingIds.join(", ")}`
+      );
+    }
+
+    // Return in the same order as requested
+    const instanceMap = new Map(instances.map((i) => [i.id, i]));
+    return instanceIds.map((id) => instanceMap.get(id)!);
+  }
+
+  async bulkAction(
+    instanceIds: string[],
+    action: BulkActionType
+  ): Promise<BulkActionResultItem[]> {
+    const results: BulkActionResultItem[] = [];
+
+    for (const instanceId of instanceIds) {
+      try {
+        switch (action) {
+          case "restart":
+            await this.restart(instanceId);
+            break;
+          case "pause":
+            await this.pause(instanceId);
+            break;
+          case "stop":
+            await this.stop(instanceId);
+            break;
+          case "start":
+            await this.resume(instanceId);
+            break;
+        }
+        results.push({ instanceId, success: true });
+      } catch (error) {
+        results.push({
+          instanceId,
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
+
+    return results;
   }
 
   async getDashboardData(workspaceId: string) {
