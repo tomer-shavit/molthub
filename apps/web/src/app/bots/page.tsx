@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/table";
 import { TimeDisplay } from "@/components/ui/time-display";
 import Link from "next/link";
-import { Bot, ArrowRight } from "lucide-react";
+import { Bot, ArrowRight, Rocket } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 async function getBots(): Promise<BotInstance[]> {
   try {
@@ -62,8 +63,13 @@ export default async function BotsPage() {
             <TableBody>
               {bots.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    No bot instances found.
+                  <TableCell colSpan={6} className="p-0">
+                    <EmptyState
+                      icon={Rocket}
+                      title="No bots deployed yet"
+                      description="Deploy your first OpenClaw agent to get started."
+                      action={{ label: "Deploy a Bot", href: "/bots/new" }}
+                    />
                   </TableCell>
                 </TableRow>
               ) : (

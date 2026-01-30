@@ -214,23 +214,6 @@ export function PieChartComponent({ data, className, height = 300 }: PieChartPro
   );
 }
 
-/** @deprecated Use real data from API instead of generating mock data. */
-export function generateTimeSeriesData(
-  points: number = 24,
-  valueRange: [number, number] = [0, 100],
-  interval: number = 3600000 // 1 hour in ms
-) {
-  const now = Date.now();
-  return Array.from({ length: points }, (_, i) => {
-    const timestamp = now - (points - 1 - i) * interval;
-    return {
-      name: new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      timestamp,
-      value: Math.floor(Math.random() * (valueRange[1] - valueRange[0]) + valueRange[0]),
-    };
-  });
-}
-
 interface NoChartDataProps {
   height?: number;
   message?: string;

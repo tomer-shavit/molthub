@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { TimeDisplay } from "@/components/ui/time-display";
-import { api, type DashboardMetrics, type DashboardHealth, type Fleet } from "@/lib/api";
+import { api } from "@/lib/api";
 import Link from "next/link";
 import { 
   Bot, 
@@ -29,14 +29,11 @@ import {
   RefreshCw,
   Layers,
   ArrowRight,
-  TrendingUp,
-  TrendingDown,
   Zap,
   AlertCircle,
   CheckCircle2,
   XCircle,
-  Play,
-  RotateCcw
+  Play
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -102,14 +99,12 @@ export default async function FleetDashboardPage() {
           title="Total Bots"
           value={metrics?.totalBots ?? 0}
           description={`Across ${metrics?.totalFleets ?? 0} fleets`}
-          trend={{ value: 5, direction: "up", label: "vs last hour" }}
           icon={<Bot className="w-4 h-4" />}
         />
         <MetricCard
           title="Healthy"
           value={metrics?.healthyBots ?? 0}
           description={`${healthyPercentage}% of fleet`}
-          trend={{ value: 2, direction: "up", label: "vs last hour" }}
           icon={<Activity className="w-4 h-4" />}
           className={cn(
             "border-l-4",
@@ -144,21 +139,18 @@ export default async function FleetDashboardPage() {
           title="Message Volume"
           value={metrics?.messageVolume.toLocaleString() ?? "0"}
           description="Messages in last hour"
-          trend={{ value: 12, direction: "up", label: "vs previous" }}
           icon={<MessageSquare className="w-4 h-4" />}
         />
         <MetricCard
           title="Latency (p95)"
           value={`${Math.round(metrics?.latencyP95 ?? 0)}ms`}
           description="Response time"
-          trend={{ value: 8, direction: "down", label: "vs previous" }}
           icon={<Zap className="w-4 h-4" />}
         />
         <MetricCard
           title="Failure Rate"
           value={`${metrics?.failureRate ?? 0}%`}
           description="Error percentage"
-          trend={{ value: 2, direction: "down", label: "vs previous" }}
           icon={<AlertCircle className="w-4 h-4" />}
           className={(metrics?.failureRate ?? 0) > 1 ? "border-l-4 border-l-red-500" : ""}
         />
@@ -166,7 +158,6 @@ export default async function FleetDashboardPage() {
           title="Cost (Hourly)"
           value={`$${metrics?.costPerHour ?? 0}`}
           description="Estimated AWS spend"
-          trend={{ value: 3, direction: "up", label: "vs previous" }}
           icon={<DollarSign className="w-4 h-4" />}
         />
       </div>
