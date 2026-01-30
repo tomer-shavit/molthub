@@ -28,7 +28,10 @@ import { SandboxConfig as SandboxConfigComponent, type SandboxConfigData } from 
 import { cn } from "@/lib/utils";
 import { ContextualSuggestions } from "@/components/bots/contextual-suggestions";
 import { JustDeployedBanner } from "@/components/dashboard/just-deployed-banner";
-import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet, type DeploymentEvent } from "@/lib/api";
+import { EvolutionBanner, type EvolutionBannerData } from "@/components/moltbot/evolution-banner";
+import { LiveSkills } from "@/components/moltbot/live-skills";
+import { EvolutionDiff } from "@/components/moltbot/evolution-diff";
+import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet, type DeploymentEvent, type AgentEvolutionSnapshot } from "@/lib/api";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -52,6 +55,7 @@ import {
   Puzzle,
   Stethoscope,
   BarChart3,
+  GitCompare,
 } from "lucide-react";
 
 interface BotDetailClientProps {
@@ -60,14 +64,29 @@ interface BotDetailClientProps {
   metrics: TraceStats | null;
   changeSets: ChangeSet[];
   events: DeploymentEvent[];
+  evolution?: AgentEvolutionSnapshot | null;
 }
 
-export function BotDetailClient({ bot, traces, metrics, changeSets, events }: BotDetailClientProps) {
+export function BotDetailClient({ bot, traces, metrics, changeSets, events, evolution: initialEvolution }: BotDetailClientProps) {
   const [activeTab, setActiveTab] = useState("overview");
   const [isApplyingConfig, setIsApplyingConfig] = useState(false);
   const [pairingChannel, setPairingChannel] = useState<string | null>(null);
   const [pairingState, setPairingState] = useState<PairingState>("loading");
   const [pairingQr, setPairingQr] = useState<string | undefined>();
+  const [evolution, setEvolution] = useState<AgentEvolutionSnapshot | null>(initialEvolution || null);
+  const [isSyncingEvolution, setIsSyncingEvolution] = useState(false);
+
+  const handleSyncEvolution = useCallback(async () => {
+    setIsSyncingEvolution(true);
+    try {
+      const result = await api.syncEvolution(bot.id);
+      setEvolution(result);
+    } catch (err) {
+      console.error("Failed to sync evolution:", err);
+    } finally {
+      setIsSyncingEvolution(false);
+    }
+  }, [bot.id]);
 
   // Derive data from bot
   const uptimeHours = Math.floor(bot.uptimeSeconds / 3600);
@@ -325,10 +344,35 @@ export function BotDetailClient({ bot, traces, metrics, changeSets, events }: Bo
             <Puzzle className="w-4 h-4 mr-1.5" />
             Skills
           </TabsTrigger>
+          <TabsTrigger active={activeTab === "evolution"} onClick={() => setActiveTab("evolution")}>
+            <GitCompare className="w-4 h-4 mr-1.5" />
+            Evolution
+            {evolution?.hasEvolved && (
+              <Badge variant="secondary" className="ml-1.5 text-xs px-1.5 py-0">
+                {evolution.totalChanges}
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
         <TabsContent active={activeTab === "overview"} className="mt-6">
+          {/* Evolution Banner */}
+          <EvolutionBanner
+            evolution={evolution ? {
+              hasEvolved: evolution.hasEvolved,
+              totalChanges: evolution.totalChanges,
+              capturedAt: evolution.capturedAt,
+              gatewayReachable: evolution.gatewayReachable,
+              diff: evolution.diff,
+              liveSkills: evolution.liveSkills,
+              liveMcpServers: evolution.liveMcpServers,
+              liveChannels: evolution.liveChannels,
+            } : null}
+            onSync={handleSyncEvolution}
+            isSyncing={isSyncingEvolution}
+          />
+
           {/* Metrics Grid */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
             <MetricCard
@@ -620,10 +664,31 @@ export function BotDetailClient({ bot, traces, metrics, changeSets, events }: Bo
 
         {/* Skills Tab */}
         <TabsContent active={activeTab === "skills"} className="mt-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <SkillSelector skills={skills} />
-            <SandboxConfigComponent data={sandboxData} />
-          </div>
+          {evolution?.hasEvolved && evolution.liveSkills ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <LiveSkills
+                deployedSkills={skills.map((s) => s.name)}
+                liveSkills={evolution.liveSkills}
+                deployedMcpServers={[]}
+                liveMcpServers={evolution.liveMcpServers || []}
+              />
+              <SandboxConfigComponent data={sandboxData} />
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              <SkillSelector skills={skills} />
+              <SandboxConfigComponent data={sandboxData} />
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Evolution Tab */}
+        <TabsContent active={activeTab === "evolution"} className="mt-6">
+          <EvolutionDiff
+            deployedConfig={moltbotConfig as Record<string, unknown>}
+            liveConfig={evolution?.diff?.changes ? moltbotConfig as Record<string, unknown> : {}}
+            changes={(evolution?.diff?.changes || []) as Array<{ category: string; field: string; changeType: "added" | "removed" | "modified"; deployedValue?: unknown; liveValue?: unknown }>}
+          />
         </TabsContent>
       </Tabs>
 

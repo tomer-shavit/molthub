@@ -1,12 +1,14 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ContextualSuggestions } from "@/components/bots/contextual-suggestions";
 import { JustDeployedBanner } from "@/components/dashboard/just-deployed-banner";
-import type { BotInstance } from "@/lib/api";
+import { EvolutionIndicator } from "@/components/moltbot/evolution-indicator";
+import { api, type BotInstance, type AgentEvolutionSnapshot } from "@/lib/api";
 import Link from "next/link";
 import {
   Bot,
@@ -93,6 +95,15 @@ export function SingleBotDashboard({ bot }: SingleBotDashboardProps) {
   const status = statusConfig[bot.status] || { variant: "secondary" as const, label: bot.status };
   const health = healthConfig[bot.health] || healthConfig.UNKNOWN;
 
+  const [evolution, setEvolution] = useState<AgentEvolutionSnapshot | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api.getEvolution(bot.id)
+      .then((data) => { if (!cancelled) setEvolution(data); })
+      .catch((err) => { console.error("Failed to fetch evolution:", err); });
+    return () => { cancelled = true; };
+  }, [bot.id]);
+
   const manifest = bot.desiredManifest || {};
   const manifestObj = manifest as Record<string, unknown>;
   const gatewayConfig = (manifestObj?.gateway as Record<string, unknown>) || {};
@@ -117,6 +128,13 @@ export function SingleBotDashboard({ bot }: SingleBotDashboardProps) {
               <h2 className="text-2xl font-bold tracking-tight">{bot.name}</h2>
               <Badge variant={status.variant}>{status.label}</Badge>
               {health.icon}
+              {evolution && (
+                <EvolutionIndicator
+                  hasEvolved={evolution.hasEvolved}
+                  totalChanges={evolution.totalChanges}
+                  lastSyncedAt={evolution.capturedAt}
+                />
+              )}
             </div>
             <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
