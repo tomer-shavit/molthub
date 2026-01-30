@@ -421,6 +421,17 @@ export class LifecycleManagerService {
           gatewayPort: instance.gatewayPort ?? 18789,
         },
       },
+      ECS_FARGATE: {
+        type: "ecs-fargate",
+        ecs: {
+          region: (instance as any).metadata?.awsRegion ?? "us-east-1",
+          accessKeyId: (instance as any).metadata?.awsAccessKeyId ?? "",
+          secretAccessKey: (instance as any).metadata?.awsSecretAccessKey ?? "",
+          subnetIds: ((instance as any).metadata?.subnetIds as string[]) ?? [],
+          securityGroupId: (instance as any).metadata?.securityGroupId ?? "",
+          clusterName: `moltbot-${instance.name}`,
+        },
+      },
     };
 
     const config = configMap[typeStr] ?? { type: "local" as const };
@@ -467,6 +478,24 @@ export class LifecycleManagerService {
             deploymentName: (cfg.deploymentName as string) ?? "moltbot",
             gatewayPort: (cfg.gatewayPort as number) ?? 18789,
             kubeContext: cfg.kubeContext as string | undefined,
+          },
+        };
+      case "ECS_FARGATE":
+        return {
+          type: "ecs-fargate",
+          ecs: {
+            region: (cfg.region as string) ?? "us-east-1",
+            accessKeyId: (cfg.accessKeyId as string) ?? "",
+            secretAccessKey: (cfg.secretAccessKey as string) ?? "",
+            subnetIds: (cfg.subnetIds as string[]) ?? [],
+            securityGroupId: (cfg.securityGroupId as string) ?? "",
+            clusterName: (cfg.clusterName as string) ?? "moltbot-cluster",
+            executionRoleArn: cfg.executionRoleArn as string | undefined,
+            taskRoleArn: cfg.taskRoleArn as string | undefined,
+            cpu: cfg.cpu as number | undefined,
+            memory: cfg.memory as number | undefined,
+            image: cfg.image as string | undefined,
+            assignPublicIp: cfg.assignPublicIp as boolean | undefined,
           },
         };
       default:

@@ -15,6 +15,8 @@ export { LocalMachineTarget } from "./targets/local/local-target";
 export { RemoteVMTarget } from "./targets/remote-vm/remote-vm-target";
 export { DockerContainerTarget } from "./targets/docker/docker-target";
 export { KubernetesTarget, KubernetesManifests } from "./targets/kubernetes/kubernetes-target";
+export { EcsFargateTarget } from "./targets/ecs-fargate/ecs-fargate-target";
+export type { EcsFargateConfig } from "./targets/ecs-fargate/ecs-fargate-config";
 
 // Factories
 export { CloudProviderFactory, ProviderConfig } from "./providers/factory";
