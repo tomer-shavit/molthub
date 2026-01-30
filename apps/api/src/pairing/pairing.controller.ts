@@ -7,7 +7,7 @@ import {
   Body,
 } from "@nestjs/common";
 import { PairingService } from "./pairing.service";
-import { PairingActionDto, ListPairingsQueryDto } from "./pairing.dto";
+import { PairingActionDto, ApproveByCodeDto, ListPairingsQueryDto } from "./pairing.dto";
 import type { PairingState, OpenClawChannelType } from "@molthub/database";
 
 @Controller("bot-instances/:id/pairings")
@@ -75,6 +75,15 @@ export class PairingController {
       body.channelType as OpenClawChannelType,
       body.senderId,
     );
+  }
+
+  @Post("approve-by-code")
+  async approveByCode(
+    @Param("id") id: string,
+    @Body() body: ApproveByCodeDto,
+  ) {
+    await this.pairingService.verifyInstanceExists(id);
+    return this.pairingService.approveByCode(id, body.code);
   }
 
   @Post("sync")

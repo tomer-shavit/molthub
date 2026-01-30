@@ -360,7 +360,7 @@ export type GatewayConfig = z.infer<typeof GatewayConfigSchema>;
 // Logging Config
 // =============================================================================
 
-export const LogLevelSchema = z.enum(["debug", "info", "warn", "error"]);
+export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error"]);
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
 export const RedactSensitiveSchema = z.enum(["off", "tools"]);
@@ -434,6 +434,26 @@ export const ConfigPatchRequestSchema = z.object({
 export type ConfigPatchRequest = z.infer<typeof ConfigPatchRequestSchema>;
 
 // =============================================================================
+// Discovery Config (mDNS / LAN discovery)
+// =============================================================================
+
+export const DiscoveryConfigSchema = z.object({
+  mdns: z
+    .object({
+      mode: z.enum(["off", "minimal", "full"]).default("minimal"),
+    })
+    .optional(),
+});
+export type DiscoveryConfig = z.infer<typeof DiscoveryConfigSchema>;
+
+// =============================================================================
+// Inline Environment Variables
+// =============================================================================
+
+export const EnvConfigSchema = z.record(z.string(), z.string());
+export type EnvConfig = z.infer<typeof EnvConfigSchema>;
+
+// =============================================================================
 // Full OpenClaw Config Schema
 // =============================================================================
 
@@ -453,6 +473,8 @@ export const OpenClawConfigSchema = z.object({
   logging: LoggingConfigSchema.optional(),
   bindings: z.array(BindingEntrySchema).optional(),
   models: ModelsConfigSchema.optional(),
+  discovery: DiscoveryConfigSchema.optional(),
+  env: EnvConfigSchema.optional(),
 });
 /**
  * Full validated OpenClaw config type inferred from the Zod schema.

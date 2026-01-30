@@ -517,6 +517,69 @@ describe("Profile utility functions", () => {
   });
 });
 
+describe("Discovery config", () => {
+  it("accepts discovery with mdns mode", () => {
+    const result = OpenClawConfigSchema.safeParse({
+      discovery: { mdns: { mode: "full" } },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("applies default mdns mode of 'minimal'", () => {
+    const result = OpenClawConfigSchema.parse({
+      discovery: { mdns: {} },
+    });
+    expect(result.discovery?.mdns?.mode).toBe("minimal");
+  });
+
+  it("accepts discovery with mdns off", () => {
+    const result = OpenClawConfigSchema.safeParse({
+      discovery: { mdns: { mode: "off" } },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid mdns mode", () => {
+    const result = OpenClawConfigSchema.safeParse({
+      discovery: { mdns: { mode: "aggressive" } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts empty discovery object", () => {
+    const result = OpenClawConfigSchema.safeParse({
+      discovery: {},
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("Env config", () => {
+  it("accepts inline env key-value pairs", () => {
+    const result = OpenClawConfigSchema.safeParse({
+      env: {
+        API_KEY: "sk-abc123",
+        DEBUG: "true",
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts empty env object", () => {
+    const result = OpenClawConfigSchema.safeParse({
+      env: {},
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects non-string env values", () => {
+    const result = OpenClawConfigSchema.safeParse({
+      env: { COUNT: 42 },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("Sandbox config", () => {
   it("applies sandbox defaults", () => {
     const result = SandboxConfigSchema.parse({});

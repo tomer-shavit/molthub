@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum } from "class-validator";
+import { IsString, IsNotEmpty, IsOptional, IsEnum, Length } from "class-validator";
 
 /**
  * Valid channel types for pairing operations.
@@ -35,6 +35,12 @@ export class PairingActionDto {
   @IsString()
   @IsNotEmpty()
   senderId: string;
+}
+
+export class ApproveByCodeDto {
+  @IsString()
+  @Length(8, 8, { message: "code must be exactly 8 characters" })
+  code: string;
 }
 
 export class ListPairingsQueryDto {

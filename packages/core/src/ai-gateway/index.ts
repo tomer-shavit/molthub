@@ -1,6 +1,10 @@
 export {
   ModelApiSchema,
   type ModelApi,
+  ModelCostSchema,
+  type ModelCost,
+  ModelEntrySchema,
+  type ModelEntry,
   ModelProviderConfigSchema,
   type ModelProviderConfig,
   ModelsConfigSchema,
