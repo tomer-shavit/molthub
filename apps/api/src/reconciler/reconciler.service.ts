@@ -13,6 +13,7 @@ import type { MoltbotManifest } from "@molthub/core";
 import { ConfigGeneratorService } from "./config-generator.service";
 import { LifecycleManagerService } from "./lifecycle-manager.service";
 import { DriftDetectionService } from "./drift-detection.service";
+import { MoltbotSecurityAuditService } from "../security/security-audit.service";
 import type { DriftCheckResult } from "./drift-detection.service";
 
 // Re-export for backward compatibility with the controller
@@ -76,6 +77,7 @@ export class ReconcilerService {
     private readonly configGenerator: ConfigGeneratorService,
     private readonly lifecycleManager: LifecycleManagerService,
     private readonly driftDetection: DriftDetectionService,
+    private readonly securityAudit: MoltbotSecurityAuditService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -109,6 +111,19 @@ export class ReconcilerService {
       // 2. Parse and validate the desired manifest
       const manifest = this.parseManifest(instance);
       changes.push("Manifest validated");
+
+      // 2b. Pre-provisioning security audit
+      const auditResult = await this.securityAudit.preProvisioningAudit(manifest);
+      if (!auditResult.allowed) {
+        const blockerMessages = auditResult.blockers.map(b => b.message).join("; ");
+        throw new Error(`Security audit blocked provisioning: ${blockerMessages}`);
+      }
+      if (auditResult.warnings.length > 0) {
+        this.logger.warn(
+          `Security audit warnings for ${instanceId}: ${auditResult.warnings.map(w => w.message).join("; ")}`,
+        );
+      }
+      changes.push(`Security audit: ${auditResult.blockers.length} blockers, ${auditResult.warnings.length} warnings`);
 
       // 3. Generate config + hash
       const config = this.configGenerator.generateMoltbotConfig(manifest);

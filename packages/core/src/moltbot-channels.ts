@@ -37,7 +37,7 @@ export type ChannelType = z.infer<typeof ChannelTypeSchema>;
 /** Fields common to every channel block. */
 const BaseChannelFields = {
   enabled: z.boolean().default(true),
-  dmPolicy: DmPolicySchema.default("pairing"),
+  dmPolicy: DmPolicySchema.default("allowlist"),
   groupPolicy: GroupPolicySchema.default("disabled"),
   allowFrom: z.array(z.string()).optional(),
   groupAllowFrom: z.array(z.string()).optional(),
@@ -45,19 +45,48 @@ const BaseChannelFields = {
   mediaMaxMb: z.number().min(0).default(25),
 };
 
+/**
+ * Refine helper: validates that allowFrom / groupAllowFrom are non-empty
+ * when the corresponding policy is set to "allowlist".
+ */
+function refineChannelAllowlists<T extends z.ZodTypeAny>(schema: T) {
+  return schema
+    .refine(
+      (data: any) =>
+        data.dmPolicy !== "allowlist" ||
+        (Array.isArray(data.allowFrom) && data.allowFrom.length > 0),
+      {
+        message:
+          "allowFrom must contain at least one user ID when dmPolicy is 'allowlist'",
+        path: ["allowFrom"],
+      },
+    )
+    .refine(
+      (data: any) =>
+        data.groupPolicy !== "allowlist" ||
+        (Array.isArray(data.groupAllowFrom) && data.groupAllowFrom.length > 0),
+      {
+        message:
+          "groupAllowFrom must contain at least one group ID when groupPolicy is 'allowlist'",
+        path: ["groupAllowFrom"],
+      },
+    );
+}
+
 // =============================================================================
 // Per-Channel Schemas (discriminated by `type`)
 // =============================================================================
 
-export const WhatsAppChannelSchema = z.object({
+const WhatsAppChannelObjectSchema = z.object({
   type: z.literal("whatsapp"),
   ...BaseChannelFields,
   sendReadReceipts: z.boolean().default(false),
   chunkMode: z.enum(["length", "newline"]).default("length"),
 });
+export const WhatsAppChannelSchema = refineChannelAllowlists(WhatsAppChannelObjectSchema);
 export type WhatsAppChannel = z.infer<typeof WhatsAppChannelSchema>;
 
-export const TelegramChannelSchema = z.object({
+const TelegramChannelObjectSchema = z.object({
   type: z.literal("telegram"),
   ...BaseChannelFields,
   botToken: z.string().optional(),
@@ -71,9 +100,10 @@ export const TelegramChannelSchema = z.object({
     }),
   ).optional(),
 });
+export const TelegramChannelSchema = refineChannelAllowlists(TelegramChannelObjectSchema);
 export type TelegramChannel = z.infer<typeof TelegramChannelSchema>;
 
-export const DiscordChannelSchema = z.object({
+const DiscordChannelObjectSchema = z.object({
   type: z.literal("discord"),
   ...BaseChannelFields,
   token: z.string().optional(),
@@ -86,9 +116,10 @@ export const DiscordChannelSchema = z.object({
   ).optional(),
   replyToMode: z.enum(["off", "first", "all"]).default("first"),
 });
+export const DiscordChannelSchema = refineChannelAllowlists(DiscordChannelObjectSchema);
 export type DiscordChannel = z.infer<typeof DiscordChannelSchema>;
 
-export const SlackChannelSchema = z.object({
+const SlackChannelObjectSchema = z.object({
   type: z.literal("slack"),
   ...BaseChannelFields,
   botToken: z.string().optional(),
@@ -105,57 +136,65 @@ export const SlackChannelSchema = z.object({
     })
     .optional(),
 });
+export const SlackChannelSchema = refineChannelAllowlists(SlackChannelObjectSchema);
 export type SlackChannel = z.infer<typeof SlackChannelSchema>;
 
-export const SignalChannelSchema = z.object({
+const SignalChannelObjectSchema = z.object({
   type: z.literal("signal"),
   ...BaseChannelFields,
 });
+export const SignalChannelSchema = refineChannelAllowlists(SignalChannelObjectSchema);
 export type SignalChannel = z.infer<typeof SignalChannelSchema>;
 
-export const IMessageChannelSchema = z.object({
+const IMessageChannelObjectSchema = z.object({
   type: z.literal("imessage"),
   ...BaseChannelFields,
 });
+export const IMessageChannelSchema = refineChannelAllowlists(IMessageChannelObjectSchema);
 export type IMessageChannel = z.infer<typeof IMessageChannelSchema>;
 
-export const MattermostChannelSchema = z.object({
+const MattermostChannelObjectSchema = z.object({
   type: z.literal("mattermost"),
   ...BaseChannelFields,
   serverUrl: z.string().url().optional(),
   token: z.string().optional(),
 });
+export const MattermostChannelSchema = refineChannelAllowlists(MattermostChannelObjectSchema);
 export type MattermostChannel = z.infer<typeof MattermostChannelSchema>;
 
-export const GoogleChatChannelSchema = z.object({
+const GoogleChatChannelObjectSchema = z.object({
   type: z.literal("google-chat"),
   ...BaseChannelFields,
   serviceAccountKeyFile: z.string().optional(),
 });
+export const GoogleChatChannelSchema = refineChannelAllowlists(GoogleChatChannelObjectSchema);
 export type GoogleChatChannel = z.infer<typeof GoogleChatChannelSchema>;
 
-export const MSTeamsChannelSchema = z.object({
+const MSTeamsChannelObjectSchema = z.object({
   type: z.literal("ms-teams"),
   ...BaseChannelFields,
   appId: z.string().optional(),
   appPassword: z.string().optional(),
 });
+export const MSTeamsChannelSchema = refineChannelAllowlists(MSTeamsChannelObjectSchema);
 export type MSTeamsChannel = z.infer<typeof MSTeamsChannelSchema>;
 
-export const LINEChannelSchema = z.object({
+const LINEChannelObjectSchema = z.object({
   type: z.literal("line"),
   ...BaseChannelFields,
   channelAccessToken: z.string().optional(),
   channelSecret: z.string().optional(),
 });
+export const LINEChannelSchema = refineChannelAllowlists(LINEChannelObjectSchema);
 export type LINEChannel = z.infer<typeof LINEChannelSchema>;
 
-export const MatrixChannelSchema = z.object({
+const MatrixChannelObjectSchema = z.object({
   type: z.literal("matrix"),
   ...BaseChannelFields,
   homeserverUrl: z.string().url().optional(),
   accessToken: z.string().optional(),
 });
+export const MatrixChannelSchema = refineChannelAllowlists(MatrixChannelObjectSchema);
 export type MatrixChannel = z.infer<typeof MatrixChannelSchema>;
 
 // =============================================================================
@@ -163,18 +202,33 @@ export type MatrixChannel = z.infer<typeof MatrixChannelSchema>;
 // =============================================================================
 
 export const MoltbotChannelSchema = z.discriminatedUnion("type", [
-  WhatsAppChannelSchema,
-  TelegramChannelSchema,
-  DiscordChannelSchema,
-  SlackChannelSchema,
-  SignalChannelSchema,
-  IMessageChannelSchema,
-  MattermostChannelSchema,
-  GoogleChatChannelSchema,
-  MSTeamsChannelSchema,
-  LINEChannelSchema,
-  MatrixChannelSchema,
-]);
+  WhatsAppChannelObjectSchema,
+  TelegramChannelObjectSchema,
+  DiscordChannelObjectSchema,
+  SlackChannelObjectSchema,
+  SignalChannelObjectSchema,
+  IMessageChannelObjectSchema,
+  MattermostChannelObjectSchema,
+  GoogleChatChannelObjectSchema,
+  MSTeamsChannelObjectSchema,
+  LINEChannelObjectSchema,
+  MatrixChannelObjectSchema,
+]).superRefine((data, ctx) => {
+  if (data.dmPolicy === "allowlist" && (!Array.isArray(data.allowFrom) || data.allowFrom.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "allowFrom must contain at least one user ID when dmPolicy is 'allowlist'",
+      path: ["allowFrom"],
+    });
+  }
+  if (data.groupPolicy === "allowlist" && (!Array.isArray(data.groupAllowFrom) || data.groupAllowFrom.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "groupAllowFrom must contain at least one group ID when groupPolicy is 'allowlist'",
+      path: ["groupAllowFrom"],
+    });
+  }
+});
 export type MoltbotChannel = z.infer<typeof MoltbotChannelSchema>;
 
 /**
@@ -182,16 +236,16 @@ export type MoltbotChannel = z.infer<typeof MoltbotChannelSchema>;
  * Each key is optional; only configured channels need to appear.
  */
 export const ChannelsConfigSchema = z.object({
-  whatsapp: WhatsAppChannelSchema.omit({ type: true }).optional(),
-  telegram: TelegramChannelSchema.omit({ type: true }).optional(),
-  discord: DiscordChannelSchema.omit({ type: true }).optional(),
-  slack: SlackChannelSchema.omit({ type: true }).optional(),
-  signal: SignalChannelSchema.omit({ type: true }).optional(),
-  imessage: IMessageChannelSchema.omit({ type: true }).optional(),
-  mattermost: MattermostChannelSchema.omit({ type: true }).optional(),
-  "google-chat": GoogleChatChannelSchema.omit({ type: true }).optional(),
-  "ms-teams": MSTeamsChannelSchema.omit({ type: true }).optional(),
-  line: LINEChannelSchema.omit({ type: true }).optional(),
-  matrix: MatrixChannelSchema.omit({ type: true }).optional(),
+  whatsapp: refineChannelAllowlists(WhatsAppChannelObjectSchema.omit({ type: true })).optional(),
+  telegram: refineChannelAllowlists(TelegramChannelObjectSchema.omit({ type: true })).optional(),
+  discord: refineChannelAllowlists(DiscordChannelObjectSchema.omit({ type: true })).optional(),
+  slack: refineChannelAllowlists(SlackChannelObjectSchema.omit({ type: true })).optional(),
+  signal: refineChannelAllowlists(SignalChannelObjectSchema.omit({ type: true })).optional(),
+  imessage: refineChannelAllowlists(IMessageChannelObjectSchema.omit({ type: true })).optional(),
+  mattermost: refineChannelAllowlists(MattermostChannelObjectSchema.omit({ type: true })).optional(),
+  "google-chat": refineChannelAllowlists(GoogleChatChannelObjectSchema.omit({ type: true })).optional(),
+  "ms-teams": refineChannelAllowlists(MSTeamsChannelObjectSchema.omit({ type: true })).optional(),
+  line: refineChannelAllowlists(LINEChannelObjectSchema.omit({ type: true })).optional(),
+  matrix: refineChannelAllowlists(MatrixChannelObjectSchema.omit({ type: true })).optional(),
 }).optional();
 export type ChannelsConfig = z.infer<typeof ChannelsConfigSchema>;

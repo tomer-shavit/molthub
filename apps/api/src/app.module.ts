@@ -24,6 +24,7 @@ import { SkillPacksModule } from "./skill-packs/skill-packs.module";
 import { ChannelsModule } from "./channels/channels.module";
 import { AuthModule } from "./auth/auth.module";
 import { SecurityAuditModule } from "./security/security-audit.module";
+import { SecurityModule } from "./security/security.module";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 
 @Module({
@@ -61,6 +62,7 @@ import { JwtAuthGuard } from "./auth/jwt-auth.guard";
     SkillPacksModule,
     ChannelsModule,
     SecurityAuditModule,
+    SecurityModule,
   ],
   providers: [
     {

@@ -40,6 +40,12 @@ export const PolicyRuleType = z.enum([
   "require_workspace_isolation",
   "require_port_spacing",
   "forbid_open_group_policy",
+  "forbid_dangerous_tools",
+  "require_gateway_host_binding",
+  "require_sandbox_security_options",
+  "require_channel_allowlist",
+  "require_token_rotation",
+  "require_skill_verification",
 ]);
 export type PolicyRuleType = z.infer<typeof PolicyRuleType>;
 
@@ -213,6 +219,49 @@ export const PolicyRuleSchema = z.object({
     z.object({
       type: z.literal("forbid_open_group_policy"),
       forbiddenValues: z.array(z.string()).default(["open"]),
+      message: z.string().optional(),
+    }),
+
+    // Moltbot: password managers and credential stores must not be allowed
+    z.object({
+      type: z.literal("forbid_dangerous_tools"),
+      enabled: z.boolean().default(true),
+      message: z.string().optional(),
+    }),
+
+    // Moltbot: Gateway must not bind to 0.0.0.0
+    z.object({
+      type: z.literal("require_gateway_host_binding"),
+      enabled: z.boolean().default(true),
+      message: z.string().optional(),
+    }),
+
+    // Moltbot: Docker sandbox must have hardened security options
+    z.object({
+      type: z.literal("require_sandbox_security_options"),
+      enabled: z.boolean().default(true),
+      message: z.string().optional(),
+    }),
+
+    // Moltbot: All channels must use allowlist or pairing-based access control
+    z.object({
+      type: z.literal("require_channel_allowlist"),
+      enabled: z.boolean().default(true),
+      message: z.string().optional(),
+    }),
+
+    // Moltbot: Token rotation must be configured in production
+    z.object({
+      type: z.literal("require_token_rotation"),
+      enabled: z.boolean().default(true),
+      maxAgeDays: z.number().int().default(90),
+      message: z.string().optional(),
+    }),
+
+    // Moltbot: Non-bundled skills must have integrity hashes
+    z.object({
+      type: z.literal("require_skill_verification"),
+      enabled: z.boolean().default(true),
       message: z.string().optional(),
     }),
   ]),

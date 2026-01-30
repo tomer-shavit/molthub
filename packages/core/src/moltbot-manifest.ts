@@ -47,6 +47,17 @@ export const DeploymentTargetSchema = z.enum([
 export type DeploymentTarget = z.infer<typeof DeploymentTargetSchema>;
 
 // =============================================================================
+// Security Overrides
+// =============================================================================
+
+export const SecurityOverridesSchema = z.object({
+  allowOpenGateway: z.boolean().default(false),
+  allowSandboxOff: z.boolean().default(false),
+  allowOpenDmPolicy: z.boolean().default(false),
+});
+export type SecurityOverrides = z.infer<typeof SecurityOverridesSchema>;
+
+// =============================================================================
 // v2 Manifest — wraps MoltbotConfigSchema
 // =============================================================================
 
@@ -67,6 +78,7 @@ export const MoltbotManifestSchema = z.object({
     labels: z.record(z.string()).default({}),
     deploymentTarget: DeploymentTargetSchema.default("local"),
     profileName: z.string().optional(),
+    securityOverrides: SecurityOverridesSchema.optional(),
   }),
   spec: z.object({
     moltbotConfig: MoltbotConfigSchema,

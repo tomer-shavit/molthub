@@ -1,16 +1,24 @@
 import {
   PolicyPack,
   PolicyViolation,
-  PolicySeverity,
 } from "./policy-pack";
 
 // ── Moltbot config shape (used for evaluation) ─────────────────────────
 export interface MoltbotConfig {
   gateway?: {
     port?: number;
+    host?: string;
     auth?: {
       token?: string;
       password?: string;
+    };
+  };
+  sandbox?: {
+    mode?: string;
+    docker?: {
+      readOnlyRootfs?: boolean;
+      noNewPrivileges?: boolean;
+      dropCapabilities?: string[];
     };
   };
   channels?: Array<{
@@ -128,6 +136,59 @@ export const MOLTBOT_SECURITY_BASELINE: PolicyPack = {
         enabled: true,
       },
     },
+    {
+      id: "moltbot-forbid-dangerous-tools",
+      name: "Forbid Dangerous Tools",
+      description: "Password managers and credential stores must not be explicitly allowed",
+      type: "forbid_dangerous_tools",
+      severity: "ERROR",
+      targetResourceTypes: ["instance"],
+      enabled: true,
+      allowOverride: false,
+      config: {
+        type: "forbid_dangerous_tools",
+        enabled: true,
+      },
+    },
+    {
+      id: "moltbot-require-gateway-host-binding",
+      name: "Require Gateway Host Binding",
+      description: "Gateway must not bind to 0.0.0.0",
+      type: "require_gateway_host_binding",
+      severity: "ERROR",
+      targetResourceTypes: ["instance"],
+      enabled: true,
+      allowOverride: false,
+      config: {
+        type: "require_gateway_host_binding",
+        enabled: true,
+      },
+    },
+    {
+      id: "moltbot-require-sandbox-security-options",
+      name: "Require Sandbox Security Options",
+      description: "Docker sandbox must have hardened security options when enabled",
+      type: "require_sandbox_security_options",
+      severity: "WARNING",
+      targetResourceTypes: ["instance"],
+      enabled: true,
+      allowOverride: true,
+      config: {
+        type: "require_sandbox_security_options",
+        enabled: true,
+      },
+    },
+    {
+      id: "moltbot-require-channel-allowlist",
+      name: "Require Channel Allowlist",
+      description: "All channels must use allowlist or pairing-based access control",
+      type: "require_channel_allowlist",
+      severity: "ERROR",
+      targetResourceTypes: ["instance"],
+      enabled: true,
+      allowOverride: false,
+      config: { type: "require_channel_allowlist", enabled: true },
+    },
   ],
   isEnforced: true,
   priority: 100,
@@ -210,6 +271,33 @@ export const MOLTBOT_PRODUCTION_HARDENING: PolicyPack = {
         forbiddenValues: ["open"],
       },
     },
+    {
+      id: "moltbot-require-skill-verification",
+      name: "Require Skill Verification",
+      description: "Non-bundled skills must have integrity hashes in production",
+      type: "require_skill_verification",
+      severity: "ERROR",
+      targetResourceTypes: ["instance"],
+      targetEnvironments: ["prod"],
+      enabled: true,
+      allowOverride: false,
+      config: {
+        type: "require_skill_verification",
+        enabled: true,
+      },
+    },
+    {
+      id: "moltbot-require-token-rotation",
+      name: "Require Token Rotation Policy",
+      description: "Token rotation must be configured in production",
+      type: "require_token_rotation",
+      severity: "WARNING",
+      targetResourceTypes: ["instance"],
+      targetEnvironments: ["prod"],
+      enabled: true,
+      allowOverride: true,
+      config: { type: "require_token_rotation", enabled: true, maxAgeDays: 90 },
+    },
   ],
   isEnforced: true,
   priority: 200,
@@ -273,18 +361,6 @@ export const BUILTIN_MOLTBOT_POLICY_PACKS: PolicyPack[] = [
 ];
 
 // ── Evaluation functions ────────────────────────────────────────────────
-
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-  const parts = path.split(".");
-  let current: unknown = obj;
-  for (const part of parts) {
-    if (current === null || current === undefined || typeof current !== "object") {
-      return undefined;
-    }
-    current = (current as Record<string, unknown>)[part];
-  }
-  return current;
-}
 
 export function evaluateRequireGatewayAuth(
   config: MoltbotConfig,
@@ -398,6 +474,48 @@ export function evaluateRequireConfigPermissions(
         suggestedValue: expectedStateDirMode,
       },
     };
+  }
+
+  return { passed: true };
+}
+
+export function evaluateForbidDangerousTools(
+  config: MoltbotConfig,
+  ruleConfig: { enabled?: boolean; message?: string },
+): MoltbotRuleResult {
+  if (ruleConfig.enabled === false) {
+    return { passed: true };
+  }
+
+  const allowList = (config.tools as any)?.allow as string[] | undefined;
+  if (!allowList) {
+    return { passed: true };
+  }
+
+  // Import would create circular dep, so inline the patterns
+  const dangerousPatterns = [
+    "op", "op:*", "bw", "bw:*", "lpass", "lpass:*",
+    "keepassxc-cli", "security", "security:*",
+    "secret-tool", "secret-tool:*",
+    "browser:password-*", "browser:autofill-*",
+  ];
+
+  for (const tool of allowList) {
+    for (const pattern of dangerousPatterns) {
+      if (tool === pattern || (pattern.endsWith(":*") && tool.startsWith(pattern.slice(0, -1)))) {
+        return {
+          passed: false,
+          violation: {
+            ruleId: "forbid_dangerous_tools",
+            ruleName: "Forbid Dangerous Tools",
+            severity: "ERROR",
+            message: ruleConfig.message || `Tool '${tool}' matches dangerous pattern '${pattern}'. Password managers and credential stores must not be in the allow list.`,
+            field: "tools.allow",
+            currentValue: tool,
+          },
+        };
+      }
+    }
   }
 
   return { passed: true };
@@ -655,6 +773,191 @@ export function evaluateForbidOpenGroupPolicy(
   return { passed: true };
 }
 
+export function evaluateRequireChannelAllowlist(
+  config: MoltbotConfig,
+  ruleConfig: { enabled?: boolean; message?: string },
+): MoltbotRuleResult {
+  if (ruleConfig.enabled === false) {
+    return { passed: true };
+  }
+
+  const channels = config.channels || [];
+
+  for (const channel of channels) {
+    const name = channel.name || "unnamed";
+
+    if (channel.dmPolicy === "open") {
+      return {
+        passed: false,
+        violation: {
+          ruleId: "require_channel_allowlist",
+          ruleName: "Require Channel Allowlist",
+          severity: "ERROR",
+          message: ruleConfig.message || `Channel '${name}' has open DM/group policy. Use 'allowlist' or 'pairing' instead.`,
+          field: "channels.dmPolicy",
+          currentValue: channel.dmPolicy,
+          suggestedValue: "allowlist",
+        },
+      };
+    }
+
+    if (channel.groupPolicy === "open") {
+      return {
+        passed: false,
+        violation: {
+          ruleId: "require_channel_allowlist",
+          ruleName: "Require Channel Allowlist",
+          severity: "ERROR",
+          message: ruleConfig.message || `Channel '${name}' has open DM/group policy. Use 'allowlist' or 'pairing' instead.`,
+          field: "channels.groupPolicy",
+          currentValue: channel.groupPolicy,
+          suggestedValue: "allowlist",
+        },
+      };
+    }
+  }
+
+  return { passed: true };
+}
+
+export function evaluateRequireTokenRotation(
+  config: MoltbotConfig,
+  ruleConfig: { enabled?: boolean; maxAgeDays?: number; message?: string },
+): MoltbotRuleResult {
+  if (ruleConfig.enabled === false) {
+    return { passed: true };
+  }
+
+  const tokenRotation = (config as any).tokenRotation;
+
+  // If token rotation is explicitly disabled, warn
+  if (tokenRotation?.enabled === false) {
+    return {
+      passed: false,
+      violation: {
+        ruleId: "require_token_rotation",
+        ruleName: "Require Token Rotation Policy",
+        severity: "WARNING",
+        message: ruleConfig.message || "Token rotation is explicitly disabled. Enable token rotation for production environments.",
+        field: "tokenRotation.enabled",
+        currentValue: false,
+        suggestedValue: true,
+      },
+    };
+  }
+
+  return { passed: true };
+}
+
+export function evaluateRequireSkillVerification(
+  config: MoltbotConfig,
+  ruleConfig: { enabled?: boolean; message?: string },
+): MoltbotRuleResult {
+  if (ruleConfig.enabled === false) {
+    return { passed: true };
+  }
+
+  const skills = (config as any).skills;
+  if (!skills?.entries) {
+    return { passed: true };
+  }
+
+  const allowUnverified = skills.allowUnverified === true;
+  if (allowUnverified) {
+    return { passed: true };
+  }
+
+  for (const [skillId, entry] of Object.entries(skills.entries)) {
+    const skill = entry as { source?: string; integrity?: { sha256?: string } };
+    if (skill.source && skill.source !== "bundled") {
+      if (!skill.integrity?.sha256) {
+        return {
+          passed: false,
+          violation: {
+            ruleId: "require_skill_verification",
+            ruleName: "Require Skill Verification",
+            severity: "ERROR",
+            message: ruleConfig.message || `Non-bundled skill '${skillId}' (source: ${skill.source}) must have integrity.sha256 for verification`,
+            field: `skills.entries.${skillId}.integrity.sha256`,
+            currentValue: undefined,
+          },
+        };
+      }
+    }
+  }
+
+  return { passed: true };
+}
+
+export function evaluateRequireGatewayHostBinding(
+  config: MoltbotConfig,
+  ruleConfig: { enabled?: boolean; message?: string },
+): MoltbotRuleResult {
+  if (ruleConfig.enabled === false) {
+    return { passed: true };
+  }
+
+  if (config.gateway?.host === "0.0.0.0") {
+    return {
+      passed: false,
+      violation: {
+        ruleId: "require_gateway_host_binding",
+        ruleName: "Require Gateway Host Binding",
+        severity: "ERROR",
+        message: ruleConfig.message || "Gateway must not bind to 0.0.0.0 — use 127.0.0.1 or a specific interface",
+        field: "gateway.host",
+        currentValue: config.gateway.host,
+        suggestedValue: "127.0.0.1",
+      },
+    };
+  }
+
+  return { passed: true };
+}
+
+export function evaluateRequireSandboxSecurityOptions(
+  config: MoltbotConfig,
+  ruleConfig: { enabled?: boolean; message?: string },
+): MoltbotRuleResult {
+  if (ruleConfig.enabled === false) {
+    return { passed: true };
+  }
+
+  // Only check when sandbox is active (mode is not "off")
+  if (!config.sandbox?.mode || config.sandbox.mode === "off") {
+    return { passed: true };
+  }
+
+  const docker = config.sandbox?.docker;
+  const issues: string[] = [];
+
+  if (docker?.readOnlyRootfs !== true) {
+    issues.push("readOnlyRootfs must be true");
+  }
+  if (docker?.noNewPrivileges !== true) {
+    issues.push("noNewPrivileges must be true");
+  }
+  if (!docker?.dropCapabilities || !docker.dropCapabilities.includes("ALL")) {
+    issues.push('dropCapabilities must include "ALL"');
+  }
+
+  if (issues.length > 0) {
+    return {
+      passed: false,
+      violation: {
+        ruleId: "require_sandbox_security_options",
+        ruleName: "Require Sandbox Security Options",
+        severity: "WARNING",
+        message: ruleConfig.message || `Docker sandbox security options are not hardened: ${issues.join("; ")}`,
+        field: "sandbox.docker",
+        currentValue: docker,
+      },
+    };
+  }
+
+  return { passed: true };
+}
+
 // ── Main evaluation dispatcher ──────────────────────────────────────────
 
 export function evaluateMoltbotRule(
@@ -684,6 +987,18 @@ export function evaluateMoltbotRule(
       return evaluateRequirePortSpacing(config, ruleConfig as any, context);
     case "forbid_open_group_policy":
       return evaluateForbidOpenGroupPolicy(config, ruleConfig as any);
+    case "forbid_dangerous_tools":
+      return evaluateForbidDangerousTools(config, ruleConfig as any);
+    case "require_gateway_host_binding":
+      return evaluateRequireGatewayHostBinding(config, ruleConfig as any);
+    case "require_sandbox_security_options":
+      return evaluateRequireSandboxSecurityOptions(config, ruleConfig as any);
+    case "require_channel_allowlist":
+      return evaluateRequireChannelAllowlist(config, ruleConfig as any);
+    case "require_token_rotation":
+      return evaluateRequireTokenRotation(config, ruleConfig as any);
+    case "require_skill_verification":
+      return evaluateRequireSkillVerification(config, ruleConfig as any);
     default:
       return { passed: true };
   }

@@ -1,10 +1,16 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { prisma } from '@molthub/database';
 import { CreateSkillPackDto, UpdateSkillPackDto, AttachSkillPackDto, BulkAttachSkillPackDto } from './skill-packs.dto';
 import { SkillPackResponse, SkillPackWithBots, BotAttachmentResponse, BulkAttachResult, SyncResult } from './skill-packs.types';
+import { SkillVerificationService } from '../security/skill-verification.service';
 
 @Injectable()
 export class SkillPacksService {
+  private readonly logger = new Logger(SkillPacksService.name);
+
+  constructor(
+    private readonly skillVerification: SkillVerificationService,
+  ) {}
   async create(workspaceId: string, userId: string, dto: CreateSkillPackDto): Promise<SkillPackResponse> {
     // Check for duplicate name
     const existing = await prisma.skillPack.findFirst({
@@ -15,7 +21,7 @@ export class SkillPacksService {
       throw new ConflictException(`SkillPack '${dto.name}' already exists`);
     }
 
-    return prisma.skillPack.create({
+    const skillPack = await prisma.skillPack.create({
       data: {
         ...dto,
         workspaceId,
@@ -24,7 +30,20 @@ export class SkillPacksService {
         mcps: dto.mcps || [],
         envVars: dto.envVars || {},
       },
-    }) as Promise<SkillPackResponse>;
+    });
+
+    // Warn about unverified skills from non-bundled sources
+    const skills = (dto.skills || []) as Array<Record<string, unknown>>;
+    const unverifiedSkills = skills.filter(
+      (s) => s.source && s.source !== "bundled",
+    );
+    if (unverifiedSkills.length > 0) {
+      this.logger.warn(
+        `SkillPack '${dto.name}' contains ${unverifiedSkills.length} skill(s) from non-bundled sources that are unverified: ${unverifiedSkills.map((s) => s.name || s.source).join(", ")}`,
+      );
+    }
+
+    return skillPack as SkillPackResponse;
   }
 
   async findAll(workspaceId: string): Promise<SkillPackResponse[]> {

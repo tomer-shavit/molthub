@@ -84,4 +84,55 @@ export class ReconcilerScheduler {
       this.logger.error(`Stuck instance check failed: ${error}`);
     }
   }
+
+  /**
+   * Check for stale secrets daily.
+   * Logs warnings for any channel tokens or gateway auth secrets that
+   * haven't been rotated within the configured maximum age.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async checkTokenRotation(): Promise<void> {
+    this.logger.debug("Running daily token rotation check");
+
+    try {
+      const MAX_TOKEN_AGE_DAYS = 90;
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - MAX_TOKEN_AGE_DAYS);
+
+      // Find all running instances and check their secret age
+      const runningInstances = await prisma.botInstance.findMany({
+        where: {
+          status: { in: [BotStatus.RUNNING, BotStatus.DEGRADED] },
+        },
+        select: {
+          id: true,
+          name: true,
+          createdAt: true,
+          lastReconcileAt: true,
+        },
+      });
+
+      let staleCount = 0;
+
+      for (const instance of runningInstances) {
+        // Use lastReconcileAt as a proxy for "last time secrets were refreshed"
+        // If the instance hasn't been reconciled since the cutoff, flag it
+        const lastRefresh = instance.lastReconcileAt ?? instance.createdAt;
+        if (lastRefresh < cutoffDate) {
+          staleCount++;
+          this.logger.warn(
+            `Instance ${instance.id} (${instance.name}) has not been reconciled in ${MAX_TOKEN_AGE_DAYS}+ days — consider rotating secrets`,
+          );
+        }
+      }
+
+      if (staleCount > 0) {
+        this.logger.warn(`${staleCount}/${runningInstances.length} instances may need token rotation`);
+      } else {
+        this.logger.debug(`All ${runningInstances.length} running instances are within token rotation window`);
+      }
+    } catch (error) {
+      this.logger.error(`Token rotation check failed: ${error}`);
+    }
+  }
 }

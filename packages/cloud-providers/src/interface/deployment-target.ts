@@ -196,6 +196,16 @@ export interface RemoteVMConfig {
   privateKey?: string;
   /** SSH password (prefer privateKey) */
   password?: string;
+  /** SSH key fingerprint for verification */
+  sshKeyFingerprint?: string;
+  /** Disable password-based SSH authentication (default: true) */
+  disablePasswordAuth?: boolean;
+  /** Additional firewall ports to allow beyond SSH and gateway */
+  firewallPorts?: number[];
+  /** Run host hardening during install (default: true) */
+  hardenOnInstall?: boolean;
+  /** SSH port override — warn if set to 22 (default: 22) */
+  sshPort?: number;
 }
 
 /**
