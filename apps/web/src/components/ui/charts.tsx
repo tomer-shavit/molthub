@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
+import { BarChart3 } from "lucide-react";
 
 // Dynamically import recharts to avoid SSR issues
 const ResponsiveContainer = dynamic(
@@ -213,7 +214,7 @@ export function PieChartComponent({ data, className, height = 300 }: PieChartPro
   );
 }
 
-// Utility to generate mock time series data
+/** @deprecated Use real data from API instead of generating mock data. */
 export function generateTimeSeriesData(
   points: number = 24,
   valueRange: [number, number] = [0, 100],
@@ -228,4 +229,21 @@ export function generateTimeSeriesData(
       value: Math.floor(Math.random() * (valueRange[1] - valueRange[0]) + valueRange[0]),
     };
   });
+}
+
+interface NoChartDataProps {
+  height?: number;
+  message?: string;
+}
+
+export function NoChartData({ height = 200, message = "Not enough data to display" }: NoChartDataProps) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center text-muted-foreground"
+      style={{ height }}
+    >
+      <BarChart3 className="w-8 h-8 mb-2 opacity-30" />
+      <p className="text-sm">{message}</p>
+    </div>
+  );
 }

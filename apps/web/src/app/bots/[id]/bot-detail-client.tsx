@@ -26,6 +26,8 @@ import { QrPairing, type PairingState } from "@/components/moltbot/qr-pairing";
 import { SkillSelector, type SkillItem } from "@/components/moltbot/skill-selector";
 import { SandboxConfig as SandboxConfigComponent, type SandboxConfigData } from "@/components/moltbot/sandbox-config";
 import { cn } from "@/lib/utils";
+import { ContextualSuggestions } from "@/components/bots/contextual-suggestions";
+import { JustDeployedBanner } from "@/components/dashboard/just-deployed-banner";
 import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet, type DeploymentEvent } from "@/lib/api";
 import Link from "next/link";
 import {
@@ -224,6 +226,9 @@ export function BotDetailClient({ bot, traces, metrics, changeSets, events }: Bo
 
   return (
     <>
+      {/* Just Deployed Banner */}
+      {bot.createdAt && <JustDeployedBanner createdAt={bot.createdAt} />}
+
       {/* Header */}
       <div className="mb-6">
         <Link
@@ -576,6 +581,9 @@ export function BotDetailClient({ bot, traces, metrics, changeSets, events }: Bo
               </Table>
             </CardContent>
           </Card>
+
+          {/* Contextual Suggestions */}
+          <ContextualSuggestions bot={bot} />
         </TabsContent>
 
         {/* Channels Tab */}

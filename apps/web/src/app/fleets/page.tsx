@@ -7,6 +7,7 @@ import { api, type Fleet } from "@/lib/api";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Layers, ArrowRight, Wifi, Server } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 async function getFleets(): Promise<Fleet[]> {
   try {
@@ -37,10 +38,13 @@ export default async function FleetsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {fleets.length === 0 ? (
           <Card className="col-span-full">
-            <CardContent className="pt-6 text-center py-12">
-              <Layers className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">No fleets found.</p>
-              <Button className="mt-4">Create your first fleet</Button>
+            <CardContent className="pt-6">
+              <EmptyState
+                icon={Layers}
+                title="No fleets yet"
+                description="Fleets let you group and manage bots together. Create one to organize your agents."
+                action={{ label: "Create a Fleet", href: "/fleets/new" }}
+              />
             </CardContent>
           </Card>
         ) : (

@@ -9,7 +9,8 @@ import {
   ChannelStatus,
 } from "@/components/channels/channel-matrix";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Radio } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Radio, MessageSquare } from "lucide-react";
 
 const CHANNEL_TYPES = [
   "whatsapp",
@@ -124,18 +125,31 @@ export default function ChannelsPage() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Bot Channels</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ChannelMatrix
-            bots={matrixRows}
-            channelTypes={CHANNEL_TYPES}
-            onCellClick={handleCellClick}
-          />
-        </CardContent>
-      </Card>
+      {bots.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6">
+            <EmptyState
+              icon={MessageSquare}
+              title="No channels configured"
+              description="Deploy a bot first, then configure its messaging channels."
+              action={{ label: "Deploy a Bot", href: "/bots/new" }}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Bot Channels</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChannelMatrix
+              bots={matrixRows}
+              channelTypes={CHANNEL_TYPES}
+              onCellClick={handleCellClick}
+            />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

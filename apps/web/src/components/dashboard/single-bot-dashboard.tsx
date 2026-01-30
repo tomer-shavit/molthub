@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ContextualSuggestions } from "@/components/bots/contextual-suggestions";
+import { JustDeployedBanner } from "@/components/dashboard/just-deployed-banner";
 import type { BotInstance } from "@/lib/api";
 import Link from "next/link";
 import {
@@ -101,6 +103,9 @@ export function SingleBotDashboard({ bot }: SingleBotDashboardProps) {
 
   return (
     <div className="space-y-6">
+      {/* Just Deployed Banner */}
+      {bot.createdAt && <JustDeployedBanner createdAt={bot.createdAt} />}
+
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
@@ -301,6 +306,9 @@ export function SingleBotDashboard({ bot }: SingleBotDashboardProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Next Steps */}
+      <ContextualSuggestions bot={bot} />
     </div>
   );
 }

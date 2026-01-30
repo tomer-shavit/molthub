@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { api, type AlertSummary, type HealthAlert } from "@/lib/api";
 import { AlertTriangle, Bell, CheckCircle, ShieldAlert } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { AlertsList } from "./alerts-list";
 
 // ---------------------------------------------------------------------------
@@ -152,16 +153,29 @@ export default async function AlertsPage({
       {/* Summary Cards */}
       <SummaryCards summary={summary} />
 
-      {/* Alert List (client component for interactivity) */}
-      <AlertsList
-        initialAlerts={alertsResult.data}
-        initialTotal={alertsResult.total}
-        filters={{
-          severity: searchParams.severity,
-          status: searchParams.status,
-          instanceId: searchParams.instanceId,
-        }}
-      />
+      {/* Empty state when no alerts */}
+      {alertsResult.total === 0 && (summary?.total ?? 0) === 0 ? (
+        <Card>
+          <CardContent className="pt-6">
+            <EmptyState
+              icon={CheckCircle}
+              title="All clear"
+              description="No alerts right now. Your fleet is healthy."
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        /* Alert List (client component for interactivity) */
+        <AlertsList
+          initialAlerts={alertsResult.data}
+          initialTotal={alertsResult.total}
+          filters={{
+            severity: searchParams.severity,
+            status: searchParams.status,
+            instanceId: searchParams.instanceId,
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }
