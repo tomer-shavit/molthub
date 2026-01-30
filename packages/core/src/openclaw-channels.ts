@@ -37,7 +37,7 @@ export type ChannelType = z.infer<typeof ChannelTypeSchema>;
 /** Fields common to every channel block. */
 const BaseChannelFields = {
   enabled: z.boolean().default(true),
-  dmPolicy: DmPolicySchema.default("allowlist"),
+  dmPolicy: DmPolicySchema.default("pairing"),
   groupPolicy: GroupPolicySchema.default("disabled"),
   allowFrom: z.array(z.string()).optional(),
   groupAllowFrom: z.array(z.string()).optional(),
@@ -81,7 +81,7 @@ function refineChannelAllowlists<T extends z.ZodTypeAny>(schema: T) {
 const WhatsAppChannelObjectSchema = z.object({
   type: z.literal("whatsapp"),
   ...BaseChannelFields,
-  sendReadReceipts: z.boolean().default(false),
+  sendReadReceipts: z.boolean().default(true),
   chunkMode: z.enum(["length", "newline"]).default("length"),
 });
 export const WhatsAppChannelSchema = refineChannelAllowlists(WhatsAppChannelObjectSchema);
@@ -128,7 +128,7 @@ const SlackChannelObjectSchema = z.object({
   slashCommand: z
     .object({
       enabled: z.boolean().default(false),
-      command: z.string().default("/openclaw"),
+      name: z.string().default("/openclaw"),
     })
     .optional(),
   thread: z

@@ -1225,6 +1225,8 @@ model DevicePairing {
   platform     String?
 
   state        PairingState @default(PENDING)
+  pairingCode  String?
+  expiresAt    DateTime?
 
   approvedAt   DateTime?
   revokedAt    DateTime?
@@ -1239,6 +1241,7 @@ model DevicePairing {
   @@index([instanceId])
   @@index([state])
   @@index([channelType])
+  @@index([instanceId, pairingCode])
   @@unique([instanceId, channelType, senderId])
 }
 

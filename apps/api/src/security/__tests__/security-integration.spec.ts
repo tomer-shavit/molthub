@@ -193,12 +193,12 @@ describe("Suite 2 — Config Generator Security Enforcement", () => {
 // =============================================================================
 
 describe("Suite 3 — Channel Security Defaults", () => {
-  it("channel schema defaults dmPolicy to 'allowlist'", () => {
+  it("channel schema defaults dmPolicy to 'pairing'", () => {
     const result = WhatsAppChannelSchema.parse({
       type: "whatsapp",
       allowFrom: ["user1"],
     });
-    expect(result.dmPolicy).toBe("allowlist");
+    expect(result.dmPolicy).toBe("pairing");
   });
 
   it("channel with dmPolicy 'allowlist' requires non-empty allowFrom", () => {

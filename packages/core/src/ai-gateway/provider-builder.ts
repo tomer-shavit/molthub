@@ -66,10 +66,11 @@ export function injectGatewayIntoConfig(
   const gatewayProvider = buildGatewayProvider(settings);
 
   // Build the models.providers record, merging with any existing providers
-  const existingModels = config.models ?? {};
-  const existingProviders = existingModels.providers ?? {};
+  const existingModels = config.models;
+  const existingProviders = existingModels?.providers ?? {};
 
   const modelsSection: ModelsConfig = {
+    mode: existingModels?.mode ?? "merge",
     providers: {
       ...existingProviders,
       [providerName]: gatewayProvider,

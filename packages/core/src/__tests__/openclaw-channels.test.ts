@@ -83,13 +83,12 @@ describe("OpenClawChannelSchema (discriminated union)", () => {
     expect(OpenClawChannelSchema.safeParse({ type: "fax" }).success).toBe(false);
   });
 
-  it("applies default values (with allowFrom for default allowlist)", () => {
+  it("applies default values", () => {
     const parsed = OpenClawChannelSchema.parse({
       type: "whatsapp",
-      allowFrom: ["user-1"],
     });
     expect(parsed.enabled).toBe(true);
-    expect(parsed.dmPolicy).toBe("allowlist");
+    expect(parsed.dmPolicy).toBe("pairing");
     expect(parsed.groupPolicy).toBe("disabled");
     expect(parsed.historyLimit).toBe(50);
     expect(parsed.mediaMaxMb).toBe(25);
@@ -150,7 +149,7 @@ describe("WhatsApp-specific fields", () => {
 
   it("applies defaults for WhatsApp", () => {
     const parsed = WhatsAppChannelSchema.parse({ type: "whatsapp", dmPolicy: "pairing" });
-    expect(parsed.sendReadReceipts).toBe(false);
+    expect(parsed.sendReadReceipts).toBe(true);
     expect(parsed.chunkMode).toBe("length");
   });
 });
@@ -222,7 +221,7 @@ describe("Slack-specific fields", () => {
     const result = SlackChannelSchema.safeParse({
       type: "slack",
       dmPolicy: "pairing",
-      slashCommand: { enabled: true, command: "/molt" },
+      slashCommand: { enabled: true, name: "/molt" },
     });
     expect(result.success).toBe(true);
   });
@@ -327,7 +326,7 @@ describe("ChannelsConfigSchema (keyed format)", () => {
         dmPolicy: "pairing",
         botToken: "xoxb-token",
         appToken: "xapp-token",
-        slashCommand: { enabled: true, command: "/bot" },
+        slashCommand: { enabled: true, name: "/bot" },
       },
     });
     expect(result.success).toBe(true);

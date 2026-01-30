@@ -10,6 +10,7 @@ export interface MockGatewayClient {
   status: jest.Mock;
   configGet: jest.Mock;
   configApply: jest.Mock;
+  configPatch: jest.Mock;
   send: jest.Mock;
   on: jest.Mock;
   off: jest.Mock;
@@ -32,6 +33,7 @@ export function createMockGatewayClient(
     status: jest.fn().mockResolvedValue({ state: "running", version: "1.0.0", configHash: "abc123" }),
     configGet: jest.fn().mockResolvedValue({ config: { gateway: { port: 18789 } }, hash: "abc123" }),
     configApply: jest.fn().mockResolvedValue({ ok: true }),
+    configPatch: jest.fn().mockResolvedValue({ ok: true }),
     send: jest.fn().mockResolvedValue({ delivered: true }),
     on: jest.fn(),
     off: jest.fn(),
