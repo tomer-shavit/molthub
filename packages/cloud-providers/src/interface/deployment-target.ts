@@ -17,6 +17,7 @@ export enum DeploymentTargetType {
   CLOUD_RUN = "cloud-run",
   ACI = "aci",
   KUBERNETES = "kubernetes",
+  CLOUDFLARE_WORKERS = "cloudflare-workers",
 }
 
 /**
@@ -242,6 +243,37 @@ export interface KubernetesTargetConfig {
   replicas?: number;
 }
 
+/**
+ * Configuration for Cloudflare Workers deployment targets.
+ *
+ * Deploys a Moltbot gateway inside a Cloudflare Workers Sandbox container
+ * with optional R2 state persistence.
+ */
+export interface CloudflareWorkersConfig {
+  /** Cloudflare account ID */
+  accountId: string;
+  /** Worker name */
+  workerName: string;
+  /** R2 bucket name for state persistence */
+  r2BucketName?: string;
+  /** R2 access key ID */
+  r2AccessKeyId?: string;
+  /** R2 secret access key */
+  r2SecretAccessKey?: string;
+  /** Gateway auth token */
+  gatewayToken: string;
+  /** Gateway port (inside container) */
+  gatewayPort: number;
+  /** Cloudflare AI Gateway base URL (optional) */
+  aiGatewayBaseUrl?: string;
+  /** AI Gateway API key (optional) */
+  aiGatewayApiKey?: string;
+  /** Sandbox instance type (default: standard-4) */
+  sandboxInstanceType?: string;
+  /** Worker custom domain (optional) */
+  customDomain?: string;
+}
+
 import type { EcsFargateConfig } from "../targets/ecs-fargate/ecs-fargate-config";
 export type { EcsFargateConfig } from "../targets/ecs-fargate/ecs-fargate-config";
 
@@ -250,7 +282,8 @@ export type DeploymentTargetConfig =
   | { type: "remote-vm"; ssh: RemoteVMConfig }
   | { type: "docker"; docker: DockerTargetConfig }
   | { type: "kubernetes"; k8s: KubernetesTargetConfig }
-  | { type: "ecs-fargate"; ecs: EcsFargateConfig };
+  | { type: "ecs-fargate"; ecs: EcsFargateConfig }
+  | { type: "cloudflare-workers"; cloudflare: CloudflareWorkersConfig };
 
 // ── Utility types ──
 

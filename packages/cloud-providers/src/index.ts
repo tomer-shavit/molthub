@@ -17,6 +17,27 @@ export { DockerContainerTarget } from "./targets/docker/docker-target";
 export { KubernetesTarget, KubernetesManifests } from "./targets/kubernetes/kubernetes-target";
 export { EcsFargateTarget } from "./targets/ecs-fargate/ecs-fargate-target";
 export type { EcsFargateConfig } from "./targets/ecs-fargate/ecs-fargate-config";
+export {
+  CloudflareWorkersTarget,
+  R2StateSync,
+  DEFAULT_BACKUP_INTERVAL_MS,
+  generateWranglerConfig,
+  generateWorkerEntryPoint,
+  mapEnvironment,
+  rewriteAiGatewayUrl,
+  isSecretKey,
+  getSecretEntries,
+} from "./targets/cloudflare-workers";
+export type {
+  R2BackupMetadata,
+  SyncResult,
+  ShouldRestoreResult,
+  ValidationResult,
+  WranglerConfigOutput,
+  MoltbotContainerEnv,
+  WorkerSecrets,
+  EnvMappingResult,
+} from "./targets/cloudflare-workers";
 
 // Factories
 export { CloudProviderFactory, ProviderConfig } from "./providers/factory";
