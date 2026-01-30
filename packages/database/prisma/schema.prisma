@@ -186,6 +186,7 @@ model BotInstance {
   healthSnapshots     HealthSnapshot[]
   agentStateSnapshots AgentStateSnapshot[]
   securityAudits      SecurityAuditResult[]
+  devicePairings      DevicePairing[]
 
   // Phase 2 relations
   sloDefinitions SloDefinition[]
@@ -1209,4 +1210,41 @@ model AgentStateSnapshot {
 
   @@index([instanceId])
   @@index([instanceId, capturedAt])
+}
+
+// DevicePairing: Tracks device pairing requests and approvals for DM access control
+model DevicePairing {
+  id         String      @id @default(cuid())
+  instanceId String
+  instance   BotInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  channelType  MoltbotChannelType
+  senderId     String
+  senderName   String?
+  platform     String?
+
+  state        PairingState @default(PENDING)
+
+  approvedAt   DateTime?
+  revokedAt    DateTime?
+  lastSeenAt   DateTime?
+
+  ipAddress    String?
+  deviceInfo   String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([instanceId])
+  @@index([state])
+  @@index([channelType])
+  @@unique([instanceId, channelType, senderId])
+}
+
+enum PairingState {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+  EXPIRED
 }

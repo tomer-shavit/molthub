@@ -1182,6 +1182,52 @@ class ApiClient {
       body: JSON.stringify(settings),
     });
   }
+
+  // ============================================
+  // Device Pairings
+  // ============================================
+
+  async getPairings(instanceId: string, state?: string): Promise<DevicePairing[]> {
+    const params = state ? `?state=${state}` : '';
+    return this.fetch(`/bot-instances/${instanceId}/pairings${params}`);
+  }
+
+  async getPendingPairings(instanceId: string): Promise<DevicePairing[]> {
+    return this.fetch(`/bot-instances/${instanceId}/pairings/pending`);
+  }
+
+  async approvePairing(instanceId: string, channelType: string, senderId: string): Promise<DevicePairing> {
+    return this.fetch(`/bot-instances/${instanceId}/pairings/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ channelType, senderId }),
+    });
+  }
+
+  async rejectPairing(instanceId: string, channelType: string, senderId: string): Promise<DevicePairing> {
+    return this.fetch(`/bot-instances/${instanceId}/pairings/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ channelType, senderId }),
+    });
+  }
+
+  async approveAllPairings(instanceId: string): Promise<{ count: number }> {
+    return this.fetch(`/bot-instances/${instanceId}/pairings/approve-all`, {
+      method: 'POST',
+    });
+  }
+
+  async revokePairing(instanceId: string, channelType: string, senderId: string): Promise<DevicePairing> {
+    return this.fetch(`/bot-instances/${instanceId}/pairings/revoke`, {
+      method: 'POST',
+      body: JSON.stringify({ channelType, senderId }),
+    });
+  }
+
+  async syncPairings(instanceId: string): Promise<DevicePairing[]> {
+    return this.fetch(`/bot-instances/${instanceId}/pairings/sync`, {
+      method: 'POST',
+    });
+  }
 }
 
 // ============================================
@@ -1448,6 +1494,23 @@ export interface AgentEvolutionSnapshot {
   liveConfigHash: string;
   message?: string;
   snapshot?: null;
+}
+
+export interface DevicePairing {
+  id: string;
+  instanceId: string;
+  channelType: string;
+  senderId: string;
+  senderName?: string;
+  platform?: string;
+  state: 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVOKED' | 'EXPIRED';
+  approvedAt?: string;
+  revokedAt?: string;
+  lastSeenAt?: string;
+  ipAddress?: string;
+  deviceInfo?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const api = new ApiClient();

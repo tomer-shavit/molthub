@@ -33,6 +33,7 @@ import { ProvisioningModule } from "./provisioning/provisioning.module";
 import { DebugModule } from "./debug/debug.module";
 import { UserContextModule } from "./user-context/user-context.module";
 import { AgentEvolutionModule } from "./agent-evolution/agent-evolution.module";
+import { PairingModule } from "./pairing/pairing.module";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 
 @Module({
@@ -79,6 +80,7 @@ import { JwtAuthGuard } from "./auth/jwt-auth.guard";
     DebugModule,
     UserContextModule,
     AgentEvolutionModule,
+    PairingModule,
   ],
   providers: [
     {

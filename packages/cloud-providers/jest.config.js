@@ -2,7 +2,8 @@
 module.exports = {
   moduleFileExtensions: ["js", "json", "ts"],
   rootDir: ".",
-  testRegex: ".*\\.test\\.ts$",
+  testRegex: ".*\\.(?<!integration\\.)test\\.ts$",
+  testPathIgnorePatterns: ["/node_modules/", "/__integration__/"],
   transform: {
     "^.+\\.ts$": "ts-jest",
   },
