@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -19,9 +19,11 @@ import {
   DollarSign,
   Target,
   MessageSquare,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useUserStage } from "@/lib/user-stage-context";
 
 interface NavItem {
   label: string;
@@ -30,7 +32,7 @@ interface NavItem {
   children?: { label: string; href: string }[];
 }
 
-const navItems: NavItem[] = [
+const allNavItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: <LayoutDashboard className="w-4 h-4" /> },
   { label: "Fleets", href: "/fleets", icon: <Layers className="w-4 h-4" /> },
   { label: "Bots", href: "/bots", icon: <Bot className="w-4 h-4" /> },
@@ -55,13 +57,30 @@ const navItems: NavItem[] = [
   { label: "Connectors", href: "/connectors", icon: <Plug className="w-4 h-4" /> },
 ];
 
+// Items visible in the "getting-started" stage
+const gettingStartedLabels = new Set(["Dashboard", "Bots", "Channels"]);
+
 export function Sidebar() {
   const [expanded, setExpanded] = useState<string[]>([]);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { stage, isLoading } = useUserStage();
+
+  const navItems = useMemo(() => {
+    if (stage === "fleet") {
+      return allNavItems;
+    }
+    // getting-started: only Dashboard, Bots, Channels
+    return allNavItems.filter((item) => gettingStartedLabels.has(item.label));
+  }, [stage]);
+
+  // Empty stage: no sidebar at all
+  if (stage === "empty" && !isLoading) {
+    return null;
+  }
 
   const toggleExpand = (label: string) => {
-    setExpanded(prev => 
-      prev.includes(label) 
+    setExpanded(prev =>
+      prev.includes(label)
         ? prev.filter(l => l !== label)
         : [...prev, label]
     );
@@ -146,6 +165,16 @@ export function Sidebar() {
                 </li>
               ))}
             </ul>
+
+            {/* Deploy New Bot button */}
+            <div className="px-3 mt-4">
+              <Link href="/bots/new">
+                <Button className="w-full gap-2" variant="default">
+                  <Plus className="w-4 h-4" />
+                  Deploy New Bot
+                </Button>
+              </Link>
+            </div>
           </nav>
 
           {/* Footer */}
@@ -159,7 +188,7 @@ export function Sidebar() {
 
       {/* Overlay for mobile */}
       {mobileOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-30 bg-black/50 md:hidden"
           onClick={() => setMobileOpen(false)}
         />

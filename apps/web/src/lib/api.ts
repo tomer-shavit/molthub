@@ -452,6 +452,13 @@ export interface CreateSloPayload {
   window: SloWindow;
 }
 
+export interface UserContextResponse {
+  agentCount: number;
+  hasFleets: boolean;
+  hasTeams: boolean;
+  stage: 'empty' | 'getting-started' | 'fleet';
+}
+
 class ApiClient {
   private async fetch(path: string, options?: RequestInit) {
     const response = await fetch(`${API_URL}${path}`, {
@@ -1026,6 +1033,11 @@ class ApiClient {
 
   async debugTestConnectivity(instanceId: string): Promise<DebugConnectivityResult> {
     return this.fetch(`/instances/${instanceId}/debug/connectivity`);
+  }
+
+  // User Context
+  async getUserContext(): Promise<UserContextResponse> {
+    return this.fetch('/user-context');
   }
 }
 

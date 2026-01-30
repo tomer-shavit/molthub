@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { WebSocketProviderWrapper } from "./websocket-provider-wrapper";
+import { UserStageProviderWrapper } from "./user-stage-provider-wrapper";
 
 export const metadata: Metadata = {
   title: "Molthub - Moltbot Control Plane",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-background font-sans antialiased">
-        <WebSocketProviderWrapper>{children}</WebSocketProviderWrapper>
+        <WebSocketProviderWrapper>
+          <UserStageProviderWrapper>{children}</UserStageProviderWrapper>
+        </WebSocketProviderWrapper>
       </body>
     </html>
   );

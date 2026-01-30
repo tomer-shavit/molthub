@@ -31,6 +31,7 @@ import { CostsModule } from "./costs/costs.module";
 import { AlertsModule } from "./alerts/alerts.module";
 import { ProvisioningModule } from "./provisioning/provisioning.module";
 import { DebugModule } from "./debug/debug.module";
+import { UserContextModule } from "./user-context/user-context.module";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 
 @Module({
@@ -75,6 +76,7 @@ import { JwtAuthGuard } from "./auth/jwt-auth.guard";
     AlertsModule,
     ProvisioningModule,
     DebugModule,
+    UserContextModule,
   ],
   providers: [
     {
