@@ -172,15 +172,26 @@ export class StartAuthDto {
   botInstanceId?: string;
 }
 
+export class ValidateTokenDto {
+  @IsString()
+  token: string;
+
+  @IsString()
+  @IsOptional()
+  appToken?: string;
+}
+
 export class AuthStatusResponseDto {
   state: string;
   channelId: string;
   moltbotType: string;
   qrCode?: string;
+  qrExpiresAt?: string;
   pairingUrl?: string;
   error?: string;
   expiresAt?: string;
   startedAt: string;
+  platformDetails?: Record<string, unknown>;
 }
 
 // ============================================
