@@ -1142,6 +1142,26 @@ class ApiClient {
   async getUserContext(): Promise<UserContextResponse> {
     return this.fetch('/user-context');
   }
+
+  // ============================================
+  // Agent Evolution
+  // ============================================
+
+  async getLiveState(instanceId: string): Promise<AgentLiveState> {
+    return this.fetch(`/bot-instances/${instanceId}/live-state`);
+  }
+
+  async getEvolution(instanceId: string): Promise<AgentEvolutionSnapshot> {
+    return this.fetch(`/bot-instances/${instanceId}/evolution`);
+  }
+
+  async getEvolutionHistory(instanceId: string, limit = 50): Promise<{ snapshots: AgentEvolutionSnapshot[] }> {
+    return this.fetch(`/bot-instances/${instanceId}/evolution/history?limit=${limit}`);
+  }
+
+  async syncEvolution(instanceId: string): Promise<AgentEvolutionSnapshot> {
+    return this.fetch(`/bot-instances/${instanceId}/evolution/sync`, { method: 'POST' });
+  }
 }
 
 // ============================================
@@ -1354,6 +1374,60 @@ export interface DebugConnectivityResult {
   gatewayPort: { reachable: boolean; latencyMs: number };
   dns: { resolved: boolean; ip?: string };
   internet: { reachable: boolean };
+}
+
+// ============================================
+// Agent Evolution Types
+// ============================================
+
+export interface EvolutionChange {
+  category: string;
+  field: string;
+  changeType: 'added' | 'removed' | 'modified';
+  deployedValue?: unknown;
+  liveValue?: unknown;
+}
+
+export interface AgentEvolutionDiff {
+  changes: EvolutionChange[];
+  hasEvolved: boolean;
+  totalChanges: number;
+}
+
+export interface EvolutionSummary {
+  hasEvolved: boolean;
+  totalChanges: number;
+  categoryCounts: Record<string, number>;
+  changedCategories: string[];
+}
+
+export interface AgentLiveState {
+  gatewayReachable: boolean;
+  config: Record<string, unknown> | null;
+  configHash: string | null;
+  health: unknown | null;
+  diff: AgentEvolutionDiff;
+  summary: EvolutionSummary;
+  skills: string[];
+  mcpServers: string[];
+  channels: string[];
+  toolProfile: unknown;
+  lastSnapshotAt?: string | null;
+}
+
+export interface AgentEvolutionSnapshot {
+  hasEvolved: boolean;
+  totalChanges: number;
+  gatewayReachable: boolean;
+  capturedAt: string;
+  diff: AgentEvolutionDiff | null;
+  liveSkills: string[];
+  liveMcpServers: string[];
+  liveChannels: string[];
+  liveToolProfile: unknown;
+  liveConfigHash: string;
+  message?: string;
+  snapshot?: null;
 }
 
 export const api = new ApiClient();

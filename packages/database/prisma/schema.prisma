@@ -178,6 +178,7 @@ model BotInstance {
   moltbotProfile      MoltbotProfile?
   channelAuthSessions ChannelAuthSession[]
   healthSnapshots     HealthSnapshot[]
+  agentStateSnapshots AgentStateSnapshot[]
   securityAudits      SecurityAuditResult[]
 
   // Phase 2 relations
@@ -1174,4 +1175,32 @@ model HealthSnapshot {
   @@index([instanceId])
   @@index([capturedAt])
   @@index([isHealthy])
+}
+
+// AgentStateSnapshot: Periodic snapshot of agent live state from Gateway
+model AgentStateSnapshot {
+  id         String      @id @default(cuid())
+  instanceId String
+  instance   BotInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  // Live state captured from Gateway
+  liveConfig      Json
+  liveConfigHash  String
+  liveSkills      Json    @default("[]")
+  liveMcpServers  Json    @default("[]")
+  liveChannels    Json    @default("[]")
+  liveToolProfile Json?
+
+  // Pre-computed diff against deployed config
+  diffFromDeployed Json?
+  hasEvolved       Boolean @default(false)
+  totalChanges     Int     @default(0)
+
+  // Gateway state at capture time
+  gatewayReachable Boolean @default(true)
+
+  capturedAt DateTime @default(now())
+
+  @@index([instanceId])
+  @@index([instanceId, capturedAt])
 }

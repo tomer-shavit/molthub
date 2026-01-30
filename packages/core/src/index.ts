@@ -11,6 +11,7 @@ export * from "./moltbot-config";
 export * from "./moltbot-manifest";
 export * from "./moltbot-profile";
 export * from "./state-sync";
+export * from "./agent-evolution";
 
 export const MOLTHUB_VERSION = "0.1.0";
 export const API_VERSION = "molthub/v1";
