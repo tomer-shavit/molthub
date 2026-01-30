@@ -4,9 +4,15 @@
 
 import { GatewayClient } from "./client";
 import type { GatewayConnectionOptions } from "./protocol";
+import type { GatewayInterceptor } from "./interceptors/interface";
 
 export class GatewayManager {
   private readonly clients = new Map<string, GatewayClient>();
+  private readonly defaultInterceptors: GatewayInterceptor[];
+
+  constructor(defaultInterceptors?: GatewayInterceptor[]) {
+    this.defaultInterceptors = defaultInterceptors ?? [];
+  }
 
   /**
    * Get an existing connected client for the given instance, or create and
@@ -16,6 +22,7 @@ export class GatewayManager {
   async getClient(
     instanceId: string,
     options: GatewayConnectionOptions,
+    interceptors?: GatewayInterceptor[],
   ): Promise<GatewayClient> {
     const existing = this.clients.get(instanceId);
     if (existing && existing.isConnected()) {
@@ -32,7 +39,8 @@ export class GatewayManager {
       this.clients.delete(instanceId);
     }
 
-    const client = new GatewayClient(options);
+    const mergedInterceptors = [...this.defaultInterceptors, ...(interceptors ?? [])];
+    const client = new GatewayClient(options, mergedInterceptors);
     await client.connect();
     this.clients.set(instanceId, client);
 

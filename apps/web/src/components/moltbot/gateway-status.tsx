@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Wifi, WifiOff, Clock, Activity } from "lucide-react";
+import { ConnectionStatus } from "@/components/ui/connection-status";
+import { useGatewayWebSocket } from "@/hooks/use-gateway-websocket";
 
 export interface GatewayStatusData {
   connected: boolean;
@@ -15,11 +17,14 @@ export interface GatewayStatusData {
 
 interface GatewayStatusProps {
   data: GatewayStatusData;
+  instanceId?: string;
   className?: string;
 }
 
-export function GatewayStatus({ data, className }: GatewayStatusProps) {
+export function GatewayStatus({ data, instanceId, className }: GatewayStatusProps) {
   const { connected, latencyMs, lastHeartbeat, port, host } = data;
+  const { status: wsStatus } = useGatewayWebSocket(instanceId ?? "");
+  const wsConnected = wsStatus === "connected";
 
   const heartbeatDisplay = lastHeartbeat
     ? formatTimeSince(new Date(lastHeartbeat))
@@ -28,14 +33,17 @@ export function GatewayStatus({ data, className }: GatewayStatusProps) {
   return (
     <Card className={cn(className)}>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          {connected ? (
-            <Wifi className="w-4 h-4 text-green-500" />
-          ) : (
-            <WifiOff className="w-4 h-4 text-red-500" />
-          )}
-          Gateway Connection
-        </CardTitle>
+        <div className="flex items-center justify-between w-full">
+          <CardTitle className="text-base flex items-center gap-2">
+            {connected ? (
+              <Wifi className="w-4 h-4 text-green-500" />
+            ) : (
+              <WifiOff className="w-4 h-4 text-red-500" />
+            )}
+            Gateway Connection
+          </CardTitle>
+          {instanceId && <ConnectionStatus status={wsStatus} />}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
@@ -75,6 +83,15 @@ export function GatewayStatus({ data, className }: GatewayStatusProps) {
               {host ? `${host}:` : ""}{port}
             </span>
           </div>
+
+          {instanceId && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">WebSocket</span>
+              <Badge variant={wsConnected ? "success" : "secondary"}>
+                {wsConnected ? "Live" : "Not Connected"}
+              </Badge>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -8,6 +8,9 @@ export { GatewayClient } from "./client";
 // Manager
 export { GatewayManager } from "./manager";
 
+// Interceptors
+export * from "./interceptors";
+
 // Auth helpers
 export { buildAuth, buildConnectFrame, buildGatewayUrl } from "./auth";
 

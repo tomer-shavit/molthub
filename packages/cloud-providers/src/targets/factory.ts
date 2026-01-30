@@ -7,6 +7,7 @@ import { LocalMachineTarget } from "./local/local-target";
 import { RemoteVMTarget } from "./remote-vm/remote-vm-target";
 import { DockerContainerTarget } from "./docker/docker-target";
 import { KubernetesTarget } from "./kubernetes/kubernetes-target";
+import { CloudflareWorkersTarget } from "./cloudflare-workers/cloudflare-workers-target";
 
 /**
  * Factory for creating DeploymentTarget instances based on configuration.
@@ -47,6 +48,12 @@ export class DeploymentTargetFactory {
 
       case "ecs-fargate":
         throw new Error("ECS Fargate target is not yet implemented");
+
+      case "cloudflare-workers":
+        if (!config.cloudflare) {
+          throw new Error("Cloudflare Workers target requires 'cloudflare' configuration");
+        }
+        return new CloudflareWorkersTarget(config.cloudflare);
 
       default: {
         const exhaustive: never = config;
@@ -121,6 +128,12 @@ export class DeploymentTargetFactory {
         description: "Deploy on Azure Container Instances",
         status: "coming_soon",
       },
+      {
+        type: DeploymentTargetType.CLOUDFLARE_WORKERS,
+        name: "Cloudflare Workers",
+        description: "Deploy on Cloudflare Workers with Sandbox containers and R2 state persistence",
+        status: "ready",
+      },
     ];
   }
 
@@ -134,6 +147,7 @@ export class DeploymentTargetFactory {
       DeploymentTargetType.DOCKER,
       DeploymentTargetType.KUBERNETES,
       DeploymentTargetType.ECS_FARGATE,
+      DeploymentTargetType.CLOUDFLARE_WORKERS,
     ].includes(type);
   }
 }

@@ -6,6 +6,9 @@ import { EventEmitter } from "events";
 import WebSocket from "ws";
 import { v4 as uuidv4 } from "uuid";
 
+import { InterceptorChain } from "./interceptors/chain";
+import type { GatewayInterceptor, OutboundMessage, InboundMessage, GatewayInterceptorEvent } from "./interceptors/interface";
+
 import type {
   GatewayConnectionOptions,
   GatewayMessage,
@@ -81,13 +84,21 @@ export class GatewayClient extends EventEmitter {
     }
   >();
 
-  constructor(options: GatewayConnectionOptions) {
+  private readonly interceptorChain: InterceptorChain;
+
+  constructor(options: GatewayConnectionOptions, interceptors?: GatewayInterceptor[]) {
     super();
     this.options = options;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.reconnectOpts = options.reconnect
       ? { ...DEFAULT_RECONNECT, ...options.reconnect }
       : DEFAULT_RECONNECT;
+    this.interceptorChain = new InterceptorChain(interceptors);
+  }
+
+  /** Access the interceptor chain for adding/removing interceptors at runtime. */
+  get interceptors(): InterceptorChain {
+    return this.interceptorChain;
   }
 
   // ------------------------------------------------------------------
@@ -280,13 +291,21 @@ export class GatewayClient extends EventEmitter {
    * and returns a promise that resolves with the `result` field of the
    * response, or rejects with a typed error.
    */
-  private request<T>(method: string, params?: Record<string, unknown>): Promise<T> {
+  private async request<T>(method: string, params?: Record<string, unknown>): Promise<T> {
     this.ensureConnected();
 
     const id = uuidv4();
-    const msg: GatewayMessage = { id, method };
-    if (params !== undefined) {
-      msg.params = params;
+    const outbound: OutboundMessage = { id, method, params };
+
+    // Run outbound interceptors
+    const processed = await this.interceptorChain.processOutbound(outbound);
+    if (processed === null) {
+      return null as unknown as T; // Short-circuited by interceptor
+    }
+
+    const msg: GatewayMessage = { id: processed.id, method: processed.method };
+    if (processed.params !== undefined) {
+      msg.params = processed.params;
     }
 
     return new Promise<T>((resolve, reject) => {
@@ -364,13 +383,29 @@ export class GatewayClient extends EventEmitter {
     clearTimeout(pending.timer);
     this.pending.delete(response.id);
 
+    // Build inbound message for interceptor chain
+    const inbound: InboundMessage = { id: response.id };
     if (response.error) {
-      pending.reject(
-        new GatewayError(response.error.message, response.error.code),
-      );
+      inbound.error = { code: response.error.code, message: response.error.message };
     } else {
-      pending.resolve(response.result);
+      inbound.result = response.result;
     }
+
+    // Run inbound interceptors, then resolve/reject
+    this.interceptorChain
+      .processInbound(inbound)
+      .then((processed) => {
+        if (processed.error) {
+          pending.reject(
+            new GatewayError(processed.error.message, processed.error.code as GatewayErrorCode),
+          );
+        } else {
+          pending.resolve(processed.result);
+        }
+      })
+      .catch((err) => {
+        pending.reject(err);
+      });
   }
 
   private handleAgentCompletion(completion: AgentCompletion): void {
@@ -383,6 +418,15 @@ export class GatewayClient extends EventEmitter {
   }
 
   private handleEvent(event: GatewayEvent): void {
+    // Run event interceptors (fire-and-forget)
+    const interceptorEvent: GatewayInterceptorEvent = {
+      type: event.type,
+      data: event as unknown as Record<string, unknown>,
+    };
+    this.interceptorChain.processEvent(interceptorEvent).catch(() => {
+      // Swallow interceptor errors for events
+    });
+
     switch (event.type) {
       case "agentOutput":
         this.emit("agentOutput", event as AgentOutputEvent);

@@ -53,7 +53,7 @@ function startServer(handler?: (ws: WebSocket, msg: string) => void): Promise<vo
   return new Promise((resolve) => {
     wss = new WebSocketServer({ port: 0 }, () => {
       const addr = wss.address();
-      serverPort = typeof addr === "object" ? addr.port : 0;
+      serverPort = typeof addr === "object" && addr !== null ? addr.port : 0;
       resolve();
     });
 
@@ -645,7 +645,7 @@ describe("GatewayClient", () => {
   describe("methods when not connected", () => {
     it("should throw when calling health on disconnected client", async () => {
       const client = new GatewayClient(defaultOptions());
-      expect(() => client.health()).toThrow(GatewayConnectionError);
+      await expect(client.health()).rejects.toThrow(GatewayConnectionError);
     });
   });
 });

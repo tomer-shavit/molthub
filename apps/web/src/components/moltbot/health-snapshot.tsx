@@ -1,9 +1,12 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { HeartPulse, Wifi, MessageSquare, Wrench, Box } from "lucide-react";
+import { ConnectionStatus } from "@/components/ui/connection-status";
+import { useHealthStream } from "@/hooks/use-health-stream";
 
 export type HealthStatus = "healthy" | "degraded" | "unhealthy" | "unknown";
 
@@ -21,6 +24,7 @@ export interface HealthSnapshotData {
 
 interface HealthSnapshotProps {
   data: HealthSnapshotData;
+  instanceId?: string;
   className?: string;
 }
 
@@ -45,9 +49,21 @@ const statusDotColors: Record<HealthStatus, string> = {
   unknown: "bg-gray-400",
 };
 
-export function HealthSnapshot({ data, className }: HealthSnapshotProps) {
+export function HealthSnapshot({ data: initialData, instanceId, className }: HealthSnapshotProps) {
+  const { health: streamHealth, lastUpdated, isConnected, status: wsStatus } = useHealthStream(instanceId ?? "");
+  const data = streamHealth ?? initialData;
   const { overall, components, lastChecked } = data;
   const overallConfig = statusConfig[overall];
+
+  // Live "seconds ago" counter
+  const [secondsAgo, setSecondsAgo] = useState<number | null>(null);
+  useEffect(() => {
+    if (!lastUpdated) { setSecondsAgo(null); return; }
+    const tick = () => setSecondsAgo(Math.floor((Date.now() - lastUpdated.getTime()) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [lastUpdated]);
 
   return (
     <Card className={cn(className)}>
@@ -57,7 +73,10 @@ export function HealthSnapshot({ data, className }: HealthSnapshotProps) {
             <HeartPulse className="w-4 h-4" />
             Health
           </CardTitle>
-          <Badge variant={overallConfig.variant}>{overallConfig.label}</Badge>
+          <div className="flex items-center gap-2">
+            {instanceId && <ConnectionStatus status={wsStatus} showLabel={false} />}
+            <Badge variant={overallConfig.variant}>{overallConfig.label}</Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -83,10 +102,17 @@ export function HealthSnapshot({ data, className }: HealthSnapshotProps) {
           })}
         </div>
 
-        {lastChecked && (
+        {(lastUpdated || lastChecked) && (
           <p className="text-xs text-muted-foreground mt-4 pt-3 border-t">
-            Last checked: {new Date(lastChecked).toLocaleString()}
+            {lastUpdated && secondsAgo !== null
+              ? <>Last updated: {secondsAgo}s ago{isConnected && " \u2014 Real-time"}</>
+              : lastChecked
+                ? <>Last checked: {new Date(lastChecked).toLocaleString()}</>
+                : "No health data"}
           </p>
+        )}
+        {!lastUpdated && !lastChecked && (
+          <p className="text-xs text-muted-foreground mt-4 pt-3 border-t">No health data</p>
         )}
       </CardContent>
     </Card>
