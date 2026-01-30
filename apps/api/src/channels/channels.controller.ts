@@ -10,6 +10,7 @@ import {
   UpdateBindingDto,
   SendTestMessageDto,
   StartAuthDto,
+  ValidateTokenDto,
   GenerateConfigDto,
 } from "./channels.dto";
 import { ChannelTypeMeta } from "./channel-types";
@@ -82,6 +83,24 @@ export class ChannelsController {
   @Get(":id/auth/status")
   getAuthStatus(@Param("id") id: string) {
     return this.authService.getAuthStatus(id);
+  }
+
+  @Post(":id/auth/validate")
+  validateToken(
+    @Param("id") id: string,
+    @Body() dto: ValidateTokenDto,
+  ) {
+    return this.authService.validateToken(id, dto.token, dto.appToken);
+  }
+
+  @Post(":id/auth/refresh-qr")
+  refreshQr(@Param("id") id: string) {
+    return this.authService.refreshQr(id);
+  }
+
+  @Post(":id/auth/complete")
+  completeAuth(@Param("id") id: string) {
+    return this.authService.completeAuth(id);
   }
 
   // ==========================================

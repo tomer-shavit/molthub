@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
+import { Injectable, NotFoundException, BadRequestException, Logger } from "@nestjs/common";
 import { prisma } from "@molthub/database";
 import {
   MoltbotChannelType,
@@ -7,6 +7,7 @@ import {
   NODE_REQUIRED_CHANNELS,
   QR_PAIRING_CHANNELS,
 } from "./channel-types";
+import { ChannelAuthFactory } from "./auth/auth-factory";
 
 // ============================================
 // Auth Session (in-memory until ChannelAuthSession model lands via WP-06)
@@ -18,15 +19,20 @@ export interface AuthSession {
   moltbotType: MoltbotChannelType;
   state: ChannelAuthState;
   qrCode?: string;
+  qrExpiresAt?: Date;
   pairingUrl?: string;
   error?: string;
   startedAt: Date;
   expiresAt: Date;
   botInstanceId?: string;
+  /** Platform-specific details returned from real auth validation */
+  platformDetails?: Record<string, unknown>;
 }
 
 @Injectable()
 export class ChannelAuthService {
+  private readonly logger = new Logger(ChannelAuthService.name);
+
   /** In-memory auth session store. Keyed by channelId. */
   private sessions = new Map<string, AuthSession>();
 
@@ -35,6 +41,8 @@ export class ChannelAuthService {
 
   /** Token auth session timeout in ms (15 minutes) */
   private readonly TOKEN_TIMEOUT_MS = 15 * 60 * 1000;
+
+  constructor(private readonly authFactory: ChannelAuthFactory) {}
 
   // ==========================================
   // Start Auth Flow
@@ -69,12 +77,11 @@ export class ChannelAuthService {
 
     // Check if there is already an active (non-expired, non-error) session
     const existing = this.sessions.get(channelId);
-    if (existing && existing.state !== 'expired' && existing.state !== 'error') {
+    if (existing && existing.state !== "expired" && existing.state !== "error") {
       // Expire the old session before starting a new one
-      existing.state = 'expired';
+      existing.state = "expired";
     }
 
-    const meta = CHANNEL_TYPE_META[moltbotType];
     const now = new Date();
     const isQrPairing = QR_PAIRING_CHANNELS.includes(moltbotType);
     const timeoutMs = isQrPairing ? this.QR_TIMEOUT_MS : this.TOKEN_TIMEOUT_MS;
@@ -83,30 +90,45 @@ export class ChannelAuthService {
       id: `auth_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       channelId,
       moltbotType,
-      state: this.determineInitialState(moltbotType),
+      state: "pending",
       startedAt: now,
       expiresAt: new Date(now.getTime() + timeoutMs),
       botInstanceId,
     };
 
-    // Simulate channel-specific auth initialization
+    // Delegate to platform-specific auth service via factory
     if (isQrPairing) {
-      session.state = 'pairing';
-      session.qrCode = this.generateMockQrPayload(channelId, moltbotType);
+      const result = await this.authFactory.validateCredentials({
+        channelType: moltbotType,
+        channelId,
+        botInstanceId,
+      });
+
+      session.state = result.state;
+      if ("qrCode" in result && result.qrCode) {
+        session.qrCode = result.qrCode;
+      }
+      if ("qrExpiresAt" in result && result.qrExpiresAt) {
+        session.qrExpiresAt = result.qrExpiresAt as Date;
+      }
       session.pairingUrl = `moltbot://pair/${moltbotType}/${channelId}`;
-    } else if (meta.authMethod === 'token') {
+      if (result.error) {
+        session.error = result.error;
+      }
+    } else if (CHANNEL_TYPE_META[moltbotType].authMethod === "token") {
       // For token-based channels, check if required secrets are already present
       const secrets = (config?.secrets as Record<string, string>) || undefined;
+      const meta = CHANNEL_TYPE_META[moltbotType];
       const hasAllSecrets = meta.requiredSecrets.every(
         (s) => secrets?.[s] && secrets[s].length > 0,
       );
       if (hasAllSecrets) {
-        session.state = 'paired';
+        session.state = "paired";
       } else {
-        session.state = 'pending';
+        session.state = "pending";
       }
     } else {
-      session.state = 'pending';
+      session.state = "pending";
     }
 
     this.sessions.set(channelId, session);
@@ -114,11 +136,129 @@ export class ChannelAuthService {
     // Schedule expiration
     setTimeout(() => {
       const s = this.sessions.get(channelId);
-      if (s && s.id === session.id && s.state !== 'paired') {
-        s.state = 'expired';
+      if (s && s.id === session.id && s.state !== "paired") {
+        s.state = "expired";
       }
     }, timeoutMs);
 
+    return session;
+  }
+
+  // ==========================================
+  // Validate Token (real API-based validation)
+  // ==========================================
+
+  async validateToken(
+    channelId: string,
+    token: string,
+    appToken?: string,
+  ): Promise<AuthSession> {
+    const channel = await prisma.communicationChannel.findUnique({
+      where: { id: channelId },
+    });
+
+    if (!channel) {
+      throw new NotFoundException(`Channel ${channelId} not found`);
+    }
+
+    const config = channel.config as Record<string, unknown>;
+    const moltbotType = config?.moltbotType as MoltbotChannelType | undefined;
+
+    if (!moltbotType) {
+      throw new BadRequestException(
+        `Channel ${channelId} does not have a moltbotType configured`,
+      );
+    }
+
+    if (!this.authFactory.supportsTokenValidation(moltbotType)) {
+      throw new BadRequestException(
+        `Channel type '${moltbotType}' does not support token-based validation. ` +
+          (this.authFactory.requiresQrPairing(moltbotType)
+            ? "Use QR pairing instead."
+            : "Use startAuth flow instead."),
+      );
+    }
+
+    this.logger.log(`Validating ${moltbotType} token for channel ${channelId}`);
+
+    const result = await this.authFactory.validateCredentials({
+      channelType: moltbotType,
+      token,
+      appToken,
+    });
+
+    // Update session
+    const session =
+      this.sessions.get(channelId) || this.createSession(channelId, moltbotType);
+    session.state = result.state;
+    session.error = result.error;
+
+    // Store platform-specific details
+    if ("botInfo" in result && result.botInfo) {
+      session.platformDetails = { botInfo: result.botInfo };
+    }
+    if ("guilds" in result && result.guilds) {
+      session.platformDetails = {
+        ...session.platformDetails,
+        guilds: result.guilds,
+      };
+    }
+    if ("socketModeValid" in result) {
+      session.platformDetails = {
+        ...session.platformDetails,
+        socketModeValid: result.socketModeValid,
+      };
+    }
+
+    this.sessions.set(channelId, session);
+
+    // If validation succeeded, update channel status in DB
+    if (result.state === "paired") {
+      await prisma.communicationChannel.update({
+        where: { id: channelId },
+        data: {
+          status: "ACTIVE",
+          statusMessage: `${moltbotType} channel validated successfully`,
+        },
+      });
+    }
+
+    return session;
+  }
+
+  // ==========================================
+  // WhatsApp QR Refresh
+  // ==========================================
+
+  async refreshQr(channelId: string): Promise<AuthSession> {
+    const channel = await prisma.communicationChannel.findUnique({
+      where: { id: channelId },
+    });
+
+    if (!channel) {
+      throw new NotFoundException(`Channel ${channelId} not found`);
+    }
+
+    const config = channel.config as Record<string, unknown>;
+    const moltbotType = config?.moltbotType as MoltbotChannelType | undefined;
+
+    if (moltbotType !== "whatsapp") {
+      throw new BadRequestException(
+        "QR refresh is only supported for WhatsApp channels",
+      );
+    }
+
+    const whatsappService = this.authFactory.getWhatsAppService();
+    const result = await whatsappService.refreshQr(channelId);
+
+    const session =
+      this.sessions.get(channelId) || this.createSession(channelId, "whatsapp");
+    session.state = result.state;
+    session.qrCode = result.qrCode;
+    session.qrExpiresAt = result.qrExpiresAt;
+    session.error = result.error;
+
+    this.sessions.set(channelId, session);
     return session;
   }
 
@@ -138,46 +278,66 @@ export class ChannelAuthService {
     const session = this.sessions.get(channelId);
 
     if (!session) {
-      // No active session - return a default pending state
       const config = channel.config as Record<string, unknown>;
-      const moltbotType = (config?.moltbotType as MoltbotChannelType) || 'whatsapp';
+      const moltbotType =
+        (config?.moltbotType as MoltbotChannelType) || "whatsapp";
 
       return {
-        id: 'none',
+        id: "none",
         channelId,
         moltbotType,
-        state: 'pending',
+        state: "pending",
         startedAt: new Date(),
         expiresAt: new Date(),
       };
     }
 
     // Check for expiration
-    if (session.state !== 'paired' && session.state !== 'error' && new Date() > session.expiresAt) {
-      session.state = 'expired';
+    if (
+      session.state !== "paired" &&
+      session.state !== "error" &&
+      new Date() > session.expiresAt
+    ) {
+      session.state = "expired";
+    }
+
+    // For WhatsApp, also get real-time QR status
+    if (session.moltbotType === "whatsapp" && session.state === "pairing") {
+      const whatsappService = this.authFactory.getWhatsAppService();
+      const status = whatsappService.getSessionStatus(channelId);
+      session.qrCode = status.qrCode;
+      session.qrExpiresAt = status.qrExpiresAt;
+      if (status.state === "paired") {
+        session.state = "paired";
+      }
     }
 
     return session;
   }
 
   // ==========================================
-  // Complete Auth (called when credentials are confirmed)
+  // Complete Auth
   // ==========================================
 
   async completeAuth(channelId: string): Promise<AuthSession> {
     const session = this.sessions.get(channelId);
 
     if (!session) {
-      throw new NotFoundException(`No auth session found for channel ${channelId}`);
+      throw new NotFoundException(
+        `No auth session found for channel ${channelId}`,
+      );
     }
 
-    session.state = 'paired';
+    session.state = "paired";
 
-    // Update channel status in DB
+    if (session.moltbotType === "whatsapp") {
+      this.authFactory.getWhatsAppService().completePairing(channelId);
+    }
+
     await prisma.communicationChannel.update({
       where: { id: channelId },
       data: {
-        status: 'ACTIVE',
+        status: "ACTIVE",
         statusMessage: `${session.moltbotType} channel paired successfully`,
       },
     });
@@ -193,17 +353,22 @@ export class ChannelAuthService {
     const session = this.sessions.get(channelId);
 
     if (!session) {
-      throw new NotFoundException(`No auth session found for channel ${channelId}`);
+      throw new NotFoundException(
+        `No auth session found for channel ${channelId}`,
+      );
     }
 
-    session.state = 'error';
+    session.state = "error";
     session.error = error;
 
-    // Update channel status in DB
+    if (session.moltbotType === "whatsapp") {
+      this.authFactory.getWhatsAppService().failPairing(channelId, error);
+    }
+
     await prisma.communicationChannel.update({
       where: { id: channelId },
       data: {
-        status: 'ERROR',
+        status: "ERROR",
         statusMessage: error,
         lastError: error,
         errorCount: { increment: 1 },
@@ -222,7 +387,7 @@ export class ChannelAuthService {
     moltbotType: MoltbotChannelType,
   ): Promise<void> {
     if (!NODE_REQUIRED_CHANNELS.includes(moltbotType)) {
-      return; // No restriction
+      return;
     }
 
     const bot = await prisma.botInstance.findUnique({
@@ -234,14 +399,13 @@ export class ChannelAuthService {
       throw new NotFoundException(`Bot instance ${botInstanceId} not found`);
     }
 
-    // Check metadata for runtime info (desiredManifest or metadata may contain runtime)
     const metadata = bot.metadata as Record<string, unknown> | null;
     const runtime = metadata?.runtime as string | undefined;
 
-    if (runtime && runtime.toLowerCase() === 'bun') {
+    if (runtime && runtime.toLowerCase() === "bun") {
       throw new BadRequestException(
         `Channel type '${moltbotType}' requires Node.js runtime but bot '${bot.name}' ` +
-        `is configured to use Bun. WhatsApp and Telegram channels are not supported on Bun.`,
+          `is configured to use Bun. WhatsApp and Telegram channels are not supported on Bun.`,
       );
     }
   }
@@ -250,16 +414,21 @@ export class ChannelAuthService {
   // Private Helpers
   // ==========================================
 
-  private determineInitialState(type: MoltbotChannelType): ChannelAuthState {
-    if (QR_PAIRING_CHANNELS.includes(type)) {
-      return 'pairing';
-    }
-    return 'pending';
-  }
+  private createSession(
+    channelId: string,
+    moltbotType: MoltbotChannelType,
+  ): AuthSession {
+    const now = new Date();
+    const isQrPairing = QR_PAIRING_CHANNELS.includes(moltbotType);
+    const timeoutMs = isQrPairing ? this.QR_TIMEOUT_MS : this.TOKEN_TIMEOUT_MS;
 
-  private generateMockQrPayload(channelId: string, type: MoltbotChannelType): string {
-    // In production, this would call `moltbot channels login` and capture QR output
-    // For now, return a placeholder QR data string
-    return `moltbot-qr://${type}/${channelId}/${Date.now()}`;
+    return {
+      id: `auth_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      channelId,
+      moltbotType,
+      state: "pending",
+      startedAt: now,
+      expiresAt: new Date(now.getTime() + timeoutMs),
+    };
   }
 }
