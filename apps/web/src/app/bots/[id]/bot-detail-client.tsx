@@ -359,8 +359,8 @@ export function BotDetailClient({ bot, traces, metrics, changeSets, events }: Bo
 
           {/* Gateway + Health + Deployment Info */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
-            <GatewayStatus data={gatewayStatus} />
-            <HealthSnapshot data={healthSnapshot} />
+            <GatewayStatus data={gatewayStatus} instanceId={bot.id} />
+            <HealthSnapshot data={healthSnapshot} instanceId={bot.id} />
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -607,7 +607,7 @@ export function BotDetailClient({ bot, traces, metrics, changeSets, events }: Bo
 
         {/* Logs Tab */}
         <TabsContent active={activeTab === "logs"} className="mt-6">
-          <LogViewer logs={logEntries} isLive={bot.status === "RUNNING"} />
+          <LogViewer logs={logEntries} isLive={bot.status === "RUNNING"} instanceId={bot.id} />
         </TabsContent>
 
         {/* Skills Tab */}

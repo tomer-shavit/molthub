@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Terminal, ArrowDown, Search, X } from "lucide-react";
+import { Terminal, ArrowDown, Search, X, Radio } from "lucide-react";
+import { ConnectionStatus } from "@/components/ui/connection-status";
+import { useLogStream } from "@/hooks/use-log-stream";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -21,6 +23,7 @@ export interface LogEntry {
 interface LogViewerProps {
   logs: LogEntry[];
   isLive?: boolean;
+  instanceId?: string;
   className?: string;
 }
 
@@ -38,13 +41,20 @@ const levelBgColors: Record<LogLevel, string> = {
   error: "bg-red-100 text-red-700",
 };
 
-export function LogViewer({ logs, isLive = false, className }: LogViewerProps) {
+export function LogViewer({ logs: staticLogs, isLive: defaultLive = false, instanceId, className }: LogViewerProps) {
   const [filter, setFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState<Set<LogLevel>>(
     new Set(["debug", "info", "warn", "error"])
   );
   const [autoScroll, setAutoScroll] = useState(true);
+  const [liveMode, setLiveMode] = useState(defaultLive && !!instanceId);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // WebSocket log streaming
+  const { logs: streamLogs, isStreaming, status: wsStatus, clearLogs } = useLogStream(
+    liveMode && instanceId ? instanceId : ""
+  );
+  const activeLogs = liveMode && instanceId ? streamLogs : staticLogs;
 
   const toggleLevel = useCallback((level: LogLevel) => {
     setLevelFilter((prev) => {
@@ -58,7 +68,7 @@ export function LogViewer({ logs, isLive = false, className }: LogViewerProps) {
     });
   }, []);
 
-  const filteredLogs = logs.filter((log) => {
+  const filteredLogs = activeLogs.filter((log) => {
     if (!levelFilter.has(log.level)) return false;
     if (filter && !log.message.toLowerCase().includes(filter.toLowerCase())) return false;
     return true;
@@ -77,14 +87,27 @@ export function LogViewer({ logs, isLive = false, className }: LogViewerProps) {
           <CardTitle className="text-base flex items-center gap-2">
             <Terminal className="w-4 h-4" />
             Logs
-            {isLive && (
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-xs text-muted-foreground font-normal">Live</span>
-              </span>
+            {liveMode && isStreaming && (
+              <ConnectionStatus status={wsStatus} />
             )}
           </CardTitle>
           <div className="flex items-center gap-2">
+            {instanceId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLiveMode(!liveMode)}
+                className={cn(liveMode && "bg-accent")}
+              >
+                <Radio className="w-4 h-4 mr-1" />
+                {liveMode ? "Live" : "Static"}
+              </Button>
+            )}
+            {liveMode && instanceId && (
+              <Button variant="outline" size="sm" onClick={clearLogs}>
+                Clear
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -141,7 +164,7 @@ export function LogViewer({ logs, isLive = false, className }: LogViewerProps) {
         >
           {filteredLogs.length === 0 ? (
             <div className="flex items-center justify-center h-full min-h-[200px] text-gray-500">
-              No logs to display
+              {liveMode ? "Waiting for logs..." : "No logs to display"}
             </div>
           ) : (
             filteredLogs.map((log) => (
@@ -162,7 +185,7 @@ export function LogViewer({ logs, isLive = false, className }: LogViewerProps) {
         </div>
         <div className="flex items-center justify-between mt-2">
           <span className="text-xs text-muted-foreground">
-            {filteredLogs.length} of {logs.length} entries
+            {filteredLogs.length} of {activeLogs.length} entries
           </span>
         </div>
       </CardContent>
