@@ -57,19 +57,19 @@ export class CreateTraceDto {
 
   @IsObject()
   @IsOptional()
-  input?: Record<string, any>;
+  input?: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()
-  output?: Record<string, any>;
+  output?: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()
-  error?: Record<string, any>;
+  error?: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()

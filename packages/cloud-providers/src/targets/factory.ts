@@ -7,7 +7,6 @@ import { LocalMachineTarget } from "./local/local-target";
 import { RemoteVMTarget } from "./remote-vm/remote-vm-target";
 import { DockerContainerTarget } from "./docker/docker-target";
 import { KubernetesTarget } from "./kubernetes/kubernetes-target";
-import { EcsFargateTarget } from "./ecs-fargate/ecs-fargate-target";
 
 /**
  * Factory for creating DeploymentTarget instances based on configuration.
@@ -47,10 +46,7 @@ export class DeploymentTargetFactory {
         return new KubernetesTarget(config.k8s);
 
       case "ecs-fargate":
-        if (!config.ecs) {
-          throw new Error("ECS Fargate target requires 'ecs' configuration");
-        }
-        return new EcsFargateTarget(config.ecs);
+        throw new Error("ECS Fargate target is not yet implemented");
 
       default: {
         const exhaustive: never = config;

@@ -44,6 +44,23 @@ interface AzureResources {
   logAnalyticsWorkspaceId?: string;
 }
 
+/** Minimal shape of an Azure Container Group as returned by the SDK */
+interface AzureContainerGroup {
+  name?: string;
+  location?: string;
+  tags?: Record<string, string>;
+  properties?: {
+    provisioningState?: string;
+    containers?: Array<{
+      properties?: {
+        instanceView?: {
+          state?: string;
+        };
+      };
+    }>;
+  };
+}
+
 /**
  * Azure Container Instances Provider
  * 
@@ -229,7 +246,7 @@ export class AzureProvider implements CloudProvider {
         });
       } else {
         // Store as secure environment variable
-        (environmentVariables as any).push({
+        (environmentVariables as Array<{ name: string; value?: string; secureValue?: string }>).push({
           name,
           secureValue: value,
         });
@@ -370,8 +387,8 @@ export class AzureProvider implements CloudProvider {
         containerGroupName
       );
       return this.mapContainerInstance(group, instanceId);
-    } catch (error: any) {
-      if (error.statusCode === 404) {
+    } catch (error: unknown) {
+      if ((error as { statusCode?: number }).statusCode === 404) {
         return null;
       }
       throw error;
@@ -457,12 +474,12 @@ export class AzureProvider implements CloudProvider {
     );
 
     const events: LogEvent[] = [];
-    const tables = (result as any).tables;
+    const tables = (result as { tables?: Array<{ rows?: unknown[][] }> }).tables;
     if (tables && tables[0]?.rows) {
       for (const row of tables[0].rows) {
         events.push({
-          timestamp: new Date(row[0]),
-          message: row[1],
+          timestamp: new Date(row[0] as string | number),
+          message: row[1] as string,
         });
       }
     }
@@ -506,8 +523,8 @@ export class AzureProvider implements CloudProvider {
     try {
       const secret = await this.resources.keyVaultClient.getSecret(secretName);
       return secret.value || null;
-    } catch (error: any) {
-      if (error.statusCode === 404) {
+    } catch (error: unknown) {
+      if ((error as { statusCode?: number }).statusCode === 404) {
         return null;
       }
       throw error;
@@ -550,7 +567,7 @@ export class AzureProvider implements CloudProvider {
     return this.sanitizeName(`molthub-${instanceId}`);
   }
 
-  private mapContainerInstance(group: any, instanceId: string): ContainerInstance {
+  private mapContainerInstance(group: AzureContainerGroup, instanceId: string): ContainerInstance {
     const containers = group.properties?.containers || [];
     const container = containers[0];
     const instanceView = container?.properties?.instanceView;

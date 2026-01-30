@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { prisma, Template } from "@molthub/database";
+import { Prisma } from "@molthub/database";
 import {
   CreateTemplateDto,
   PreviewConfigDto,
@@ -108,7 +109,7 @@ export class TemplatesService {
         category: dto.category,
         manifestTemplate: (dto.defaultConfig ??
           dto.manifestTemplate ??
-          {}) as any,
+          {}) as Prisma.InputJsonValue,
         isBuiltin: false,
         workspaceId: "default",
       },
@@ -129,7 +130,7 @@ export class TemplatesService {
 
     const result = this.configGenerator.generateConfig(template, {
       values: dto.values,
-      configOverrides: dto.configOverrides as any,
+      configOverrides: dto.configOverrides as Record<string, unknown> | undefined,
     });
 
     return {
@@ -150,7 +151,7 @@ export class TemplatesService {
 
     const result = this.configGenerator.generateConfig(template, {
       values: dto.values,
-      configOverrides: dto.configOverrides as any,
+      configOverrides: dto.configOverrides as Record<string, unknown> | undefined,
       instanceName: dto.instanceName,
       workspace: dto.workspace,
       environment: dto.environment,
@@ -192,7 +193,7 @@ export class TemplatesService {
       id: dbTemplate.id,
       name: dbTemplate.name,
       description: dbTemplate.description,
-      category: (dbTemplate.category as any) ?? "minimal",
+      category: (dbTemplate.category as BuiltinTemplate["category"]) ?? "minimal",
       defaultConfig: (dbTemplate.manifestTemplate as Record<string, unknown>) ?? {},
       requiredInputs: [],
       channels: [],

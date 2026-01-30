@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, Profile } from "@molthub/database";
+import { prisma, Prisma, Profile } from "@molthub/database";
 import { CreateProfileDto, UpdateProfileDto, ListProfilesQueryDto } from "./profiles.dto";
 
 @Injectable()
@@ -11,7 +11,7 @@ export class ProfilesService {
         name: dto.name,
         description: dto.description,
         fleetIds: dto.fleetIds || [],
-        defaults: dto.defaults as any,
+        defaults: dto.defaults as Prisma.InputJsonValue,
         mergeStrategy: dto.mergeStrategy || {},
         allowInstanceOverrides: dto.allowInstanceOverrides ?? true,
         lockedFields: dto.lockedFields || [],
@@ -60,7 +60,7 @@ export class ProfilesService {
         ...(dto.name && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.fleetIds && { fleetIds: dto.fleetIds }),
-        ...(dto.defaults && { defaults: dto.defaults as any }),
+        ...(dto.defaults && { defaults: dto.defaults as Prisma.InputJsonValue }),
         ...(dto.mergeStrategy && { mergeStrategy: dto.mergeStrategy }),
         ...(dto.allowInstanceOverrides !== undefined && { allowInstanceOverrides: dto.allowInstanceOverrides }),
         ...(dto.lockedFields && { lockedFields: dto.lockedFields }),

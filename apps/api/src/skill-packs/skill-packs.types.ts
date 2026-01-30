@@ -3,8 +3,8 @@ export interface SkillPackResponse {
   name: string;
   description: string | null;
   workspaceId: string;
-  skills: any[];
-  mcps: any[];
+  skills: Record<string, unknown>[];
+  mcps: Record<string, unknown>[];
   envVars: Record<string, string>;
   isBuiltin: boolean;
   version: number;

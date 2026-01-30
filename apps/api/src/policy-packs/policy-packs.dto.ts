@@ -33,7 +33,7 @@ export class CreatePolicyPackDto {
 
   @IsArray()
   @IsOptional()
-  rules?: any[];
+  rules?: Record<string, unknown>[];
 
   @IsBoolean()
   @IsOptional()
@@ -76,7 +76,7 @@ export class UpdatePolicyPackDto {
 
   @IsArray()
   @IsOptional()
-  rules?: any[];
+  rules?: Record<string, unknown>[];
 
   @IsBoolean()
   @IsOptional()
@@ -120,5 +120,5 @@ export class EvaluatePolicyDto {
   resourceId: string;
 
   @IsObject()
-  manifest: Record<string, any>;
+  manifest: Record<string, unknown>;
 }

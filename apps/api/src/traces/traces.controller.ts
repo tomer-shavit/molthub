@@ -7,9 +7,9 @@ import {
   Param,
   Query,
 } from "@nestjs/common";
+import { Trace } from "@molthub/database";
 import { TracesService } from "./traces.service";
 import { CreateTraceDto, ListTracesQueryDto } from "./traces.dto";
-import { Trace } from "@molthub/database";
 
 @Controller("traces")
 export class TracesController {
@@ -31,12 +31,12 @@ export class TracesController {
   }
 
   @Get("by-trace-id/:traceId")
-  findByTraceId(@Param("traceId") traceId: string): Promise<any> {
+  findByTraceId(@Param("traceId") traceId: string): Promise<Trace & { children: Trace[] }> {
     return this.tracesService.findByTraceId(traceId);
   }
 
   @Get("by-trace-id/:traceId/tree")
-  getTraceTree(@Param("traceId") traceId: string): Promise<any> {
+  getTraceTree(@Param("traceId") traceId: string): Promise<Record<string, unknown>> {
     return this.tracesService.getTraceTree(traceId);
   }
 
@@ -45,7 +45,7 @@ export class TracesController {
     @Param("botInstanceId") botInstanceId: string,
     @Query("from") from: string,
     @Query("to") to: string,
-  ): Promise<any> {
+  ): Promise<Record<string, unknown>> {
     return this.tracesService.getStats(
       botInstanceId,
       new Date(from),
@@ -54,12 +54,12 @@ export class TracesController {
   }
 
   @Post(":id/complete")
-  complete(@Param("id") id: string, @Body("output") output?: Record<string, any>): Promise<Trace> {
+  complete(@Param("id") id: string, @Body("output") output?: Record<string, unknown>): Promise<Trace> {
     return this.tracesService.complete(id, output);
   }
 
   @Post(":id/fail")
-  fail(@Param("id") id: string, @Body("error") error: Record<string, any>): Promise<Trace> {
+  fail(@Param("id") id: string, @Body("error") error: Record<string, unknown>): Promise<Trace> {
     return this.tracesService.fail(id, error);
   }
 }

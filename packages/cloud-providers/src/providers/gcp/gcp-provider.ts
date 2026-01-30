@@ -32,6 +32,17 @@ interface GCPResources {
   loggingClient: Logging;
 }
 
+/** Minimal shape of a Cloud Run service as returned by the SDK */
+interface GCPServiceInfo {
+  name?: string;
+  labels?: Record<string, string>;
+  template?: Record<string, unknown>;
+  conditions?: Array<{ type?: string; status?: string; reason?: string }>;
+  status?: { url?: string };
+  createTime?: string;
+  updateTime?: string;
+}
+
 /**
  * Google Cloud Run Provider
  * 
@@ -83,13 +94,15 @@ export class GCPProvider implements CloudProvider {
       await this.resources.runClient.listServices({
         parent: `projects/${this.resources.projectId}/locations/${this.region}`,
       });
-    } catch (error: any) {
-      if (error.code === 7) {
+    } catch (error: unknown) {
+      const grpcError = error as { code?: number; message?: string };
+      if (grpcError.code === 7) {
         errors.push("Permission denied. Ensure Cloud Run API is enabled and you have appropriate permissions.");
-      } else if (error.code === 5) {
+      } else if (grpcError.code === 5) {
         errors.push(`Project '${this.resources.projectId}' not found`);
       } else {
-        errors.push(`Failed to validate GCP access: ${error.message}`);
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`Failed to validate GCP access: ${message}`);
       }
     }
 
@@ -98,7 +111,7 @@ export class GCPProvider implements CloudProvider {
       await this.resources.secretClient.listSecrets({
         parent: `projects/${this.resources.projectId}`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       warnings.push("Cannot access Secret Manager. Secrets will not be available.");
     }
 
@@ -163,7 +176,7 @@ export class GCPProvider implements CloudProvider {
     for (const [name, value] of Object.entries(config.secrets || {})) {
       const secretId = `${serviceName}-${name}`.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
       await this.storeSecretInGSM(secretId, value);
-      (envs as any).push({
+      (envs as Array<{ name: string; value?: string; valueSource?: { secretKeyRef: { secret: string; version: string } } }>).push({
         name,
         valueSource: {
           secretKeyRef: {
@@ -218,13 +231,13 @@ export class GCPProvider implements CloudProvider {
     const operation = await this.resources.runClient.createService({
       parent,
       serviceId: serviceName,
-      service: service as any,
+      service: service as Record<string, unknown>,
     });
 
     // Wait for operation to complete
-    const [response] = await (operation as any).promise();
+    const [response] = await (operation as unknown as { promise(): Promise<unknown[]> }).promise();
 
-    return this.mapServiceToContainer(response, instanceId);
+    return this.mapServiceToContainer(response as GCPServiceInfo, instanceId);
   }
 
   private async storeSecretInGSM(secretId: string, value: string): Promise<string> {
@@ -238,8 +251,8 @@ export class GCPProvider implements CloudProvider {
     try {
       // Try to get existing secret
       await this.resources.secretClient.getSecret({ name: secretName });
-    } catch (error: any) {
-      if (error.code === 5) {
+    } catch (error: unknown) {
+      if ((error as { code?: number }).code === 5) {
         // Secret doesn't exist, create it
         await this.resources.secretClient.createSecret({
           parent,
@@ -285,19 +298,24 @@ export class GCPProvider implements CloudProvider {
 
     // Build update
     const updateMask: string[] = [];
-    const currentTemplate = currentService.template as any;
-    const service: any = {
+    const currentTemplate = currentService.template as Record<string, unknown>;
+    const currentSpec = (currentTemplate?.spec || {}) as Record<string, unknown>;
+    const currentContainers = (currentSpec?.containers || []) as Array<Record<string, unknown>>;
+    const service: Record<string, unknown> = {
       name,
       template: {
         ...currentTemplate,
         spec: {
-          ...currentTemplate?.spec,
-          containers: [...(currentTemplate?.spec?.containers || [])],
+          ...currentSpec,
+          containers: [...currentContainers],
         },
       },
     };
 
-    const container = service.template.spec.containers[0];
+    const serviceTemplate = service.template as Record<string, unknown>;
+    const serviceSpec = serviceTemplate.spec as Record<string, unknown>;
+    const serviceContainers = serviceSpec.containers as Array<Record<string, unknown>>;
+    const container = serviceContainers[0];
 
     if (config.image) {
       container.image = config.image;
@@ -305,9 +323,10 @@ export class GCPProvider implements CloudProvider {
     }
 
     if (config.cpu || config.memory) {
+      const existingResources = container.resources as Record<string, Record<string, string>> | undefined;
       container.resources = {
         limits: {
-          cpu: `${config.cpu || container.resources?.limits?.cpu || 1}`,
+          cpu: `${config.cpu || existingResources?.limits?.cpu || 1}`,
           memory: `${config.memory || 512}Mi`,
         },
       };
@@ -316,12 +335,12 @@ export class GCPProvider implements CloudProvider {
 
     if (config.environment) {
       // Merge with existing env vars
-      const existingEnv = container.env || [];
+      const existingEnv = (container.env || []) as Array<{ name: string }>;
       const newEnv = Object.entries(config.environment).map(([name, value]) => ({
         name,
         value: String(value),
       }));
-      container.env = [...existingEnv.filter((e: any) => !config.environment?.[e.name]), ...newEnv];
+      container.env = [...existingEnv.filter((e: { name: string }) => !config.environment?.[e.name]), ...newEnv];
       updateMask.push("template.spec.containers.env");
     }
 
@@ -336,8 +355,8 @@ export class GCPProvider implements CloudProvider {
       },
     });
 
-    const [response] = await (operation as any).promise();
-    return this.mapServiceToContainer(response, instanceId);
+    const [response] = await (operation as unknown as { promise(): Promise<unknown[]> }).promise();
+    return this.mapServiceToContainer(response as GCPServiceInfo, instanceId);
   }
 
   async stopContainer(instanceId: string): Promise<void> {
@@ -362,13 +381,13 @@ export class GCPProvider implements CloudProvider {
             },
           },
         },
-      } as any,
+      } as Record<string, unknown>,
       updateMask: {
         paths: ["template.metadata.annotations.autoscaling.knative.dev/minScale"],
       },
     });
 
-    await (operation as any).promise();
+    await (operation as unknown as { promise(): Promise<unknown[]> }).promise();
   }
 
   async startContainer(instanceId: string): Promise<void> {
@@ -390,13 +409,13 @@ export class GCPProvider implements CloudProvider {
             },
           },
         },
-      } as any,
+      } as Record<string, unknown>,
       updateMask: {
         paths: ["template.metadata.annotations.autoscaling.knative.dev/minScale"],
       },
     });
 
-    await (operation as any).promise();
+    await (operation as unknown as { promise(): Promise<unknown[]> }).promise();
   }
 
   async deleteContainer(instanceId: string): Promise<void> {
@@ -420,9 +439,9 @@ export class GCPProvider implements CloudProvider {
 
     try {
       const [service] = await this.resources.runClient.getService({ name });
-      return this.mapServiceToContainer(service, instanceId);
-    } catch (error: any) {
-      if (error.code === 5) {
+      return this.mapServiceToContainer(service as GCPServiceInfo, instanceId);
+    } catch (error: unknown) {
+      if ((error as { code?: number }).code === 5) {
         return null;
       }
       throw error;
@@ -442,7 +461,7 @@ export class GCPProvider implements CloudProvider {
 
     let containers = services
       .filter((s) => s.labels?.managedBy === "molthub")
-      .map((s) => this.mapServiceToContainer(s, s.labels?.["molthub.io/instance-id"] || s.name?.split('/').pop() || ''));
+      .map((s) => this.mapServiceToContainer(s as GCPServiceInfo, s.labels?.["molthub.io/instance-id"] || s.name?.split('/').pop() || ''));
 
     if (filters?.status) {
       containers = containers.filter((c) => c.status === filters.status);
@@ -473,9 +492,9 @@ export class GCPProvider implements CloudProvider {
       let date: Date;
       if (timestamp && typeof timestamp === 'object' && 'toDate' in timestamp) {
         // It's a Timestamp object from protobuf
-        date = (timestamp as any).toDate();
+        date = (timestamp as { toDate(): Date }).toDate();
       } else if (timestamp) {
-        date = new Date(timestamp as any);
+        date = new Date(timestamp as string | number);
       } else {
         date = new Date();
       }
@@ -515,8 +534,8 @@ export class GCPProvider implements CloudProvider {
         name: `${secretId}/versions/latest`,
       });
       return version.payload?.data?.toString() || null;
-    } catch (error: any) {
-      if (error.code === 5) {
+    } catch (error: unknown) {
+      if ((error as { code?: number }).code === 5) {
         return null;
       }
       throw error;
@@ -558,13 +577,15 @@ export class GCPProvider implements CloudProvider {
       .substring(0, 63);
   }
 
-  private mapServiceToContainer(service: any, instanceId: string): ContainerInstance {
+  private mapServiceToContainer(service: GCPServiceInfo, instanceId: string): ContainerInstance {
     const template = service.template;
-    const container = template?.spec?.containers?.[0];
+    const spec = template?.spec as Record<string, unknown> | undefined;
+    const containers = spec?.containers as Array<Record<string, unknown>> | undefined;
+    const container = containers?.[0];
     const conditions = service.conditions || [];
 
     let status: ContainerInstance["status"] = "PENDING";
-    const readyCondition = conditions.find((c: any) => c.type === "Ready");
+    const readyCondition = conditions.find((c: { type?: string }) => c.type === "Ready");
     
     if (readyCondition?.status === "True") {
       status = "RUNNING";

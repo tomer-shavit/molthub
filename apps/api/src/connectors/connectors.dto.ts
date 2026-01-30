@@ -27,7 +27,7 @@ export class CreateConnectorDto {
   type: string;
 
   @IsObject()
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 
   @IsBoolean()
   @IsOptional()
@@ -58,7 +58,7 @@ export class UpdateConnectorDto {
 
   @IsObject()
   @IsOptional()
-  config?: Record<string, any>;
+  config?: Record<string, unknown>;
 
   @IsBoolean()
   @IsOptional()
@@ -101,5 +101,5 @@ export class ListConnectorsQueryDto {
 export class TestConnectionDto {
   @IsObject()
   @IsOptional()
-  options?: Record<string, any>;
+  options?: Record<string, unknown>;
 }

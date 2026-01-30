@@ -2,6 +2,26 @@
   "name": "molthub",
   "version": "0.1.0",
   "private": true,
+  "description": "Self-hosted control plane for managing fleets of Moltbot instances",
+  "license": "MIT",
+  "author": "Molthub Contributors",
+  "homepage": "https://github.com/tomer-shavit/molthub",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tomer-shavit/molthub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tomer-shavit/molthub/issues"
+  },
+  "keywords": [
+    "moltbot",
+    "control-plane",
+    "bot-management",
+    "fleet-management",
+    "self-hosted",
+    "nestjs",
+    "nextjs"
+  ],
   "packageManager": "pnpm@8.15.0",
   "scripts": {
     "build": "turbo build",

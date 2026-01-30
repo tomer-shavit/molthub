@@ -72,9 +72,32 @@ Use the E2E testing agent or write tests directly. No PR may be created without 
 
 ---
 
-## Step 5: Verify Against Docs and Spec
+## Step 5: Automated Code Review (MANDATORY — Runs Automatically)
 
-After implementation and tests pass:
+After tests pass and before creating a PR, you MUST run the code review agent. **Do not skip this step. Do not ask the user whether to run it — just run it.**
+
+1. Use the `Task` tool to spawn a review agent:
+   - `subagent_type`: `"everything-claude-code:code-reviewer"`
+   - In the prompt, include:
+     a. The **original user request** (copy it verbatim from the start of the conversation)
+     b. The **list of all files changed or created** during this session
+     c. A brief summary of what was implemented
+     d. Instruct the agent to follow the review process defined in `.claude/commands/review.md`
+2. Read the review agent's response carefully
+3. If the review returns **SUGGEST CHANGES** or **REQUEST CHANGES**:
+   - Implement ALL critical issues immediately
+   - Implement suggested improvements unless they contradict the approved plan
+   - Re-run affected tests after making changes
+4. If the review returns **APPROVE**, proceed to Step 6
+5. After addressing review feedback, re-run the review agent ONE more time to confirm fixes
+
+This step is automatic — the implementing agent triggers it as part of the normal workflow. The user does not need to request it.
+
+---
+
+## Step 6: Verify Against Docs and Spec
+
+After implementation, tests, and code review pass:
 
 1. Re-read the relevant docs in `.claude/docs/`
 2. Re-read the original feature requirements
@@ -86,7 +109,7 @@ After implementation and tests pass:
 
 ---
 
-## Step 6: Create PR to Master
+## Step 7: Create PR to Master
 
 Once everything passes verification:
 
@@ -107,6 +130,7 @@ Once everything passes verification:
 - **Never skip the docs.** Every session starts by reading `.claude/docs/`.
 - **Never skip planning.** Use `EnterPlanMode` for non-trivial work.
 - **Never skip tests.** E2E tests are required for completion.
+- **Never skip code review.** The review agent runs automatically after tests pass — do not skip it or ask the user first.
 - **Never skip verification.** Re-read docs after implementation.
 - **Use parallel agents** when implementing independent plan steps.
 - **One PR per feature/fix** pushed to `master` via `gh pr create`.

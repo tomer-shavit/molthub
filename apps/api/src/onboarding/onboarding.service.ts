@@ -1,5 +1,5 @@
 import { Injectable, Logger, BadRequestException } from "@nestjs/common";
-import { prisma, BotStatus, BotHealth } from "@molthub/database";
+import { prisma, Prisma, BotStatus, BotHealth, ChannelType, ChannelStatus, DeploymentType } from "@molthub/database";
 import { ReconcilerService } from "../reconciler/reconciler.service";
 import { ConfigGeneratorService } from "../reconciler/config-generator.service";
 import {
@@ -100,7 +100,7 @@ export class OnboardingService {
         data: {
           workspaceId: workspace.id,
           name: "Default Fleet",
-          environment: env.toUpperCase() as any,
+          environment: env as "dev" | "staging" | "prod",
           status: "ACTIVE",
         },
       });
@@ -177,8 +177,8 @@ export class OnboardingService {
     const deploymentTarget = await prisma.deploymentTarget.create({
       data: {
         name: `${dto.botName}-target`,
-        type: deploymentType as any,
-        config: targetConfig as any,
+        type: deploymentType as DeploymentType,
+        config: targetConfig as Prisma.InputJsonValue,
       },
     });
 
@@ -190,8 +190,8 @@ export class OnboardingService {
         name: dto.botName,
         status: BotStatus.CREATING,
         health: BotHealth.UNKNOWN,
-        desiredManifest: manifest as any,
-        deploymentType: deploymentType as any,
+        desiredManifest: manifest as Prisma.InputJsonValue,
+        deploymentType: deploymentType as DeploymentType,
         deploymentTargetId: deploymentTarget.id,
         gatewayPort: 18789,
         templateId: dto.templateId,
@@ -199,7 +199,7 @@ export class OnboardingService {
         metadata: {
           gatewayAuthToken, // stored encrypted in practice
           ...targetConfig,
-        } as any,
+        } as Prisma.InputJsonValue,
         createdBy: userId,
       },
     });
@@ -221,9 +221,9 @@ export class OnboardingService {
           data: {
             workspaceId: workspace.id,
             name: `${dto.botName}-${ch.type}`,
-            type: channelType as any,
-            config: (ch.config || {}) as any,
-            status: "PENDING" as any,
+            type: channelType as ChannelType,
+            config: (ch.config || {}) as Prisma.InputJsonValue,
+            status: "PENDING" as ChannelStatus,
             createdBy: userId,
           },
         });

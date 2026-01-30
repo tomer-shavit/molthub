@@ -53,7 +53,7 @@ export class ChannelAuthService {
       throw new NotFoundException(`Channel ${channelId} not found`);
     }
 
-    const config = channel.config as Record<string, any>;
+    const config = channel.config as Record<string, unknown>;
     const moltbotType = config?.moltbotType as MoltbotChannelType | undefined;
 
     if (!moltbotType) {
@@ -96,7 +96,7 @@ export class ChannelAuthService {
       session.pairingUrl = `moltbot://pair/${moltbotType}/${channelId}`;
     } else if (meta.authMethod === 'token') {
       // For token-based channels, check if required secrets are already present
-      const secrets = config?.secrets as Record<string, string> | undefined;
+      const secrets = (config?.secrets as Record<string, string>) || undefined;
       const hasAllSecrets = meta.requiredSecrets.every(
         (s) => secrets?.[s] && secrets[s].length > 0,
       );
@@ -139,7 +139,7 @@ export class ChannelAuthService {
 
     if (!session) {
       // No active session - return a default pending state
-      const config = channel.config as Record<string, any>;
+      const config = channel.config as Record<string, unknown>;
       const moltbotType = (config?.moltbotType as MoltbotChannelType) || 'whatsapp';
 
       return {
@@ -235,7 +235,7 @@ export class ChannelAuthService {
     }
 
     // Check metadata for runtime info (desiredManifest or metadata may contain runtime)
-    const metadata = bot.metadata as Record<string, any> | null;
+    const metadata = bot.metadata as Record<string, unknown> | null;
     const runtime = metadata?.runtime as string | undefined;
 
     if (runtime && runtime.toLowerCase() === 'bun') {

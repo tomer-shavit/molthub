@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, PolicyPack } from "@molthub/database";
-import { validatePolicyPack, PolicyEngine, BUILTIN_POLICY_PACKS } from "@molthub/core";
+import { prisma, Prisma, PolicyPack } from "@molthub/database";
+import { validatePolicyPack, PolicyEngine, BUILTIN_POLICY_PACKS, PolicyRule, PolicyViolation } from "@molthub/core";
 import { CreatePolicyPackDto, UpdatePolicyPackDto, ListPolicyPacksQueryDto, EvaluatePolicyDto } from "./policy-packs.dto";
 
 @Injectable()
@@ -33,9 +33,9 @@ export class PolicyPacksService {
         name: dto.name,
         description: dto.description,
         autoApply: dto.autoApply ?? false,
-        targetEnvironments: dto.targetEnvironments as any,
-        targetTags: dto.targetTags as any,
-        rules: dto.rules as any,
+        targetEnvironments: dto.targetEnvironments as Prisma.InputJsonValue,
+        targetTags: dto.targetTags as Prisma.InputJsonValue,
+        rules: dto.rules as Prisma.InputJsonValue,
         isEnforced: dto.isEnforced ?? false,
         priority: dto.priority || 0,
         version: dto.version || "1.0.0",
@@ -62,7 +62,7 @@ export class PolicyPacksService {
     // Check builtin packs first
     const builtin = BUILTIN_POLICY_PACKS.find(p => p.id === id);
     if (builtin) {
-      return builtin as any;
+      return builtin as unknown as PolicyPack;
     }
 
     const policyPack = await prisma.policyPack.findUnique({
@@ -89,9 +89,9 @@ export class PolicyPacksService {
         ...(dto.name && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.autoApply !== undefined && { autoApply: dto.autoApply }),
-        ...(dto.targetEnvironments && { targetEnvironments: dto.targetEnvironments as any }),
-        ...(dto.targetTags && { targetTags: dto.targetTags as any }),
-        ...(dto.rules && { rules: dto.rules as any }),
+        ...(dto.targetEnvironments && { targetEnvironments: dto.targetEnvironments as Prisma.InputJsonValue }),
+        ...(dto.targetTags && { targetTags: dto.targetTags as Prisma.InputJsonValue }),
+        ...(dto.rules && { rules: dto.rules as Prisma.InputJsonValue }),
         ...(dto.isEnforced !== undefined && { isEnforced: dto.isEnforced }),
         ...(dto.priority !== undefined && { priority: dto.priority }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
@@ -109,20 +109,20 @@ export class PolicyPacksService {
     await prisma.policyPack.delete({ where: { id } });
   }
 
-  async evaluate(dto: EvaluatePolicyDto): Promise<any> {
+  async evaluate(dto: EvaluatePolicyDto): Promise<Record<string, unknown>> {
     const policyPack = await this.findOne(dto.policyPackId);
-    
+
     // Evaluate the manifest against the policy pack
-    const violations: any[] = [];
-    
-    for (const rule of (policyPack.rules as any[]) || []) {
+    const violations: Array<{ ruleId: string; ruleName: string; severity: string; message: string }> = [];
+
+    for (const rule of (policyPack.rules as Record<string, unknown>[]) || []) {
       // Simple rule evaluation - can be expanded
       const result = this.evaluateRule(rule, dto.manifest);
       if (!result.passed) {
         violations.push({
-          ruleId: rule.id,
-          ruleName: rule.name,
-          severity: rule.severity,
+          ruleId: rule.id as string,
+          ruleName: rule.name as string,
+          severity: rule.severity as string,
           message: result.message,
         });
       }
@@ -139,29 +139,33 @@ export class PolicyPacksService {
     };
   }
 
-  private evaluateRule(rule: any, manifest: any): { passed: boolean; message?: string } {
+  private evaluateRule(rule: Record<string, unknown>, manifest: Record<string, unknown>): { passed: boolean; message?: string } {
     // Simplified rule evaluation - full implementation would be more comprehensive
+    const ruleConfig = rule.config as Record<string, unknown> | undefined;
+    const field = ruleConfig?.field as string | undefined;
     switch (rule.type) {
-      case "required_field":
-        const value = this.getPath(manifest, rule.config.field);
+      case "required_field": {
+        const value = field ? this.getPath(manifest, field) : undefined;
         if (value === undefined || value === null) {
-          return { passed: false, message: rule.errorMessage || `${rule.config.field} is required` };
+          return { passed: false, message: (rule.errorMessage as string) || `${field} is required` };
         }
         return { passed: true };
-      
-      case "forbidden_field":
-        const forbiddenValue = this.getPath(manifest, rule.config.field);
+      }
+
+      case "forbidden_field": {
+        const forbiddenValue = field ? this.getPath(manifest, field) : undefined;
         if (forbiddenValue !== undefined) {
-          return { passed: false, message: rule.errorMessage || `${rule.config.field} is forbidden` };
+          return { passed: false, message: (rule.errorMessage as string) || `${field} is forbidden` };
         }
         return { passed: true };
-      
+      }
+
       default:
         return { passed: true };
     }
   }
 
-  private getPath(obj: any, path: string): any {
-    return path.split('.').reduce((o, p) => o?.[p], obj);
+  private getPath(obj: Record<string, unknown>, path: string): unknown {
+    return path.split('.').reduce<unknown>((o, p) => (o as Record<string, unknown>)?.[p], obj);
   }
 }

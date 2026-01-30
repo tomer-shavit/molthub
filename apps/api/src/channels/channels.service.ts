@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import {
   prisma,
+  Prisma,
   CommunicationChannel,
   BotChannelBinding,
   ChannelType,
@@ -93,10 +94,10 @@ export class ChannelsService {
         name: dto.name,
         workspaceId: dto.workspaceId,
         type: dbType,
-        config: config as any,
-        defaults: {} as any,
+        config: config as Prisma.InputJsonValue,
+        defaults: {} as Prisma.InputJsonValue,
         isShared: dto.isShared ?? true,
-        tags: (dto.tags || {}) as any,
+        tags: (dto.tags || {}) as Prisma.InputJsonValue,
         createdBy: dto.createdBy || "system",
         status: ChannelStatus.PENDING,
       },
@@ -104,7 +105,7 @@ export class ChannelsService {
   }
 
   async findAll(query: ListChannelsQueryDto): Promise<CommunicationChannel[]> {
-    const where: any = {
+    const where: Record<string, unknown> = {
       workspaceId: query.workspaceId,
       ...(query.type && { type: query.type }),
       ...(query.status && { status: query.status }),
@@ -123,7 +124,7 @@ export class ChannelsService {
     // Filter by moltbotType if specified
     if (query.moltbotType) {
       return channels.filter((ch) => {
-        const cfg = ch.config as Record<string, any> | null;
+        const cfg = ch.config as Record<string, unknown> | null;
         return cfg?.moltbotType === query.moltbotType;
       });
     }
@@ -131,7 +132,7 @@ export class ChannelsService {
     return channels;
   }
 
-  async findOne(id: string): Promise<CommunicationChannel & { botBindings: any[] }> {
+  async findOne(id: string): Promise<CommunicationChannel & { botBindings: BotChannelBinding[] }> {
     const channel = await prisma.communicationChannel.findUnique({
       where: { id },
       include: {
@@ -161,12 +162,12 @@ export class ChannelsService {
 
   async update(id: string, dto: UpdateChannelDto): Promise<CommunicationChannel> {
     const channel = await this.findOne(id);
-    const existingConfig = (channel.config as Record<string, any>) || {};
+    const existingConfig = (channel.config as Record<string, unknown>) || {} as Record<string, unknown>;
 
     // Merge policies
     if (dto.policies) {
       existingConfig.policies = {
-        ...(existingConfig.policies || {}),
+        ...((existingConfig.policies as Record<string, unknown>) || {}),
         ...dto.policies,
       };
     }
@@ -174,7 +175,7 @@ export class ChannelsService {
     // Merge type-specific config
     if (dto.typeConfig) {
       existingConfig.typeConfig = {
-        ...(existingConfig.typeConfig || {}),
+        ...((existingConfig.typeConfig as Record<string, unknown>) || {}),
         ...dto.typeConfig,
       };
     }
@@ -182,7 +183,7 @@ export class ChannelsService {
     // Merge secrets (never overwrite with empty)
     if (dto.secrets) {
       existingConfig.secrets = {
-        ...(existingConfig.secrets || {}),
+        ...((existingConfig.secrets as Record<string, unknown>) || {}),
         ...dto.secrets,
       };
     }
@@ -196,10 +197,10 @@ export class ChannelsService {
       where: { id },
       data: {
         ...(dto.name && { name: dto.name }),
-        config: existingConfig as any,
+        config: existingConfig as Prisma.InputJsonValue,
         ...(dto.isShared !== undefined && { isShared: dto.isShared }),
         ...(dto.status && { status: dto.status }),
-        ...(dto.tags && { tags: dto.tags as any }),
+        ...(dto.tags && { tags: dto.tags as Prisma.InputJsonValue }),
       },
     });
   }
@@ -243,7 +244,7 @@ export class ChannelsService {
     }
 
     // Runtime check for Node-required channels
-    const config = channel.config as Record<string, any> | null;
+    const config = channel.config as Record<string, unknown> | null;
     const moltbotType = config?.moltbotType as MoltbotChannelType | undefined;
     if (moltbotType && NODE_REQUIRED_CHANNELS.includes(moltbotType)) {
       await this.authService.validateRuntimeCompatibility(dto.botId, moltbotType);
@@ -269,8 +270,8 @@ export class ChannelsService {
         botId: dto.botId,
         channelId,
         purpose: dto.purpose,
-        settings: (dto.settings || {}) as any,
-        targetDestination: dto.targetDestination as any,
+        settings: (dto.settings || {}) as Prisma.InputJsonValue,
+        targetDestination: dto.targetDestination as Prisma.InputJsonValue,
         isActive: dto.isActive ?? true,
       },
     });
@@ -287,14 +288,14 @@ export class ChannelsService {
       where: { id: bindingId },
       data: {
         ...(dto.purpose && { purpose: dto.purpose }),
-        ...(dto.settings && { settings: dto.settings as any }),
-        ...(dto.targetDestination && { targetDestination: dto.targetDestination as any }),
+        ...(dto.settings && { settings: dto.settings as Prisma.InputJsonValue }),
+        ...(dto.targetDestination && { targetDestination: dto.targetDestination as Prisma.InputJsonValue }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
       },
     });
   }
 
-  async getBoundBots(channelId: string): Promise<any[]> {
+  async getBoundBots(channelId: string): Promise<BotChannelBinding[]> {
     return prisma.botChannelBinding.findMany({
       where: { channelId },
       include: {
@@ -313,7 +314,7 @@ export class ChannelsService {
     });
   }
 
-  async getBotChannels(botId: string): Promise<any[]> {
+  async getBotChannels(botId: string): Promise<BotChannelBinding[]> {
     return prisma.botChannelBinding.findMany({
       where: { botId },
       include: {
@@ -352,7 +353,7 @@ export class ChannelsService {
 
     const channelDataList: ChannelData[] = bindings
       .map((binding) => {
-        const config = binding.channel.config as Record<string, any> | null;
+        const config = binding.channel.config as Record<string, unknown> | null;
         if (!config?.moltbotType) return null;
 
         return {
@@ -374,7 +375,7 @@ export class ChannelsService {
   // Testing & Health
   // ==========================================
 
-  async testConnection(id: string, dto: TestChannelDto): Promise<any> {
+  async testConnection(id: string, dto: TestChannelDto): Promise<Record<string, unknown>> {
     const channel = await prisma.communicationChannel.findUnique({
       where: { id },
     });
@@ -383,7 +384,7 @@ export class ChannelsService {
       throw new NotFoundException(`Channel ${id} not found`);
     }
 
-    const config = dto.config || (channel.config as Record<string, any>);
+    const config = dto.config || (channel.config as Record<string, unknown>);
     const moltbotType = config?.moltbotType as MoltbotChannelType | undefined;
 
     if (!moltbotType) {
@@ -444,7 +445,7 @@ export class ChannelsService {
     return testResult;
   }
 
-  async sendTestMessage(id: string, dto: SendTestMessageDto): Promise<any> {
+  async sendTestMessage(id: string, dto: SendTestMessageDto): Promise<Record<string, unknown>> {
     const channel = await prisma.communicationChannel.findUnique({
       where: { id },
     });
@@ -473,7 +474,7 @@ export class ChannelsService {
     return result;
   }
 
-  async checkBotChannelsHealth(botId: string): Promise<any> {
+  async checkBotChannelsHealth(botId: string): Promise<Record<string, unknown>> {
     const bindings = await prisma.botChannelBinding.findMany({
       where: { botId, isActive: true },
       include: { channel: true },
@@ -481,7 +482,7 @@ export class ChannelsService {
 
     const results = await Promise.all(
       bindings.map(async (binding) => {
-        const config = binding.channel.config as Record<string, any> | null;
+        const config = binding.channel.config as Record<string, unknown> | null;
         const moltbotType = config?.moltbotType as string | undefined;
 
         // Simulate health check
@@ -524,7 +525,7 @@ export class ChannelsService {
   // Stats
   // ==========================================
 
-  async getChannelStats(id: string): Promise<any> {
+  async getChannelStats(id: string): Promise<Record<string, unknown>> {
     const channel = await prisma.communicationChannel.findUnique({
       where: { id },
       include: {
@@ -536,7 +537,7 @@ export class ChannelsService {
       throw new NotFoundException(`Channel ${id} not found`);
     }
 
-    const config = channel.config as Record<string, any> | null;
+    const config = channel.config as Record<string, unknown> | null;
 
     const recentBindings = await prisma.botChannelBinding.findMany({
       where: { channelId: id },
@@ -581,7 +582,7 @@ export class ChannelsService {
   // Private Helpers
   // ==========================================
 
-  private buildStoredConfig(dto: CreateChannelDto): Record<string, any> {
+  private buildStoredConfig(dto: CreateChannelDto): Record<string, unknown> {
     return {
       moltbotType: dto.moltbotType,
       enabled: dto.enabled ?? true,

@@ -31,7 +31,7 @@ export class ChangeSetsController {
   }
 
   @Get(":id/status")
-  getRolloutStatus(@Param("id") id: string): Promise<any> {
+  getRolloutStatus(@Param("id") id: string): Promise<Record<string, unknown>> {
     return this.changeSetsService.getRolloutStatus(id);
   }
 

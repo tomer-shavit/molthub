@@ -131,11 +131,12 @@ export class DigitalOceanProvider implements CloudProvider {
     try {
       // Validate API token by listing apps
       await this.fetch<{ apps: DOApp[] }>("/apps");
-    } catch (error: any) {
-      if (error.message?.includes("401")) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("401")) {
         errors.push("Invalid API token");
       } else {
-        errors.push(`Failed to validate DigitalOcean access: ${error.message}`);
+        errors.push(`Failed to validate DigitalOcean access: ${message}`);
       }
     }
 

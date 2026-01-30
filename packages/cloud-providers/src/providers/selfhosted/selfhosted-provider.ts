@@ -37,6 +37,13 @@ interface DockerContainer {
   ports: Array<{ privatePort: number; publicPort?: number; type: string }>;
 }
 
+/** Minimal shape of docker inspect JSON output */
+interface DockerInspectInfo {
+  NetworkSettings?: {
+    Ports?: Record<string, unknown[]>;
+  };
+}
+
 export class SelfHostedProvider implements CloudProvider {
   readonly type: CloudProviderType = "selfhosted";
   region: string = "local";
@@ -382,11 +389,11 @@ volumes:
     }
   }
 
-  private getContainerEndpoint(info: any): string | undefined {
+  private getContainerEndpoint(info: DockerInspectInfo): string | undefined {
     const ports = info.NetworkSettings?.Ports || {};
     for (const [containerPort, bindings] of Object.entries(ports)) {
       if (bindings && Array.isArray(bindings) && bindings.length > 0) {
-        const hostPort = bindings[0].HostPort;
+        const hostPort = (bindings[0] as { HostPort?: string }).HostPort;
         return `http://localhost:${hostPort}`;
       }
     }

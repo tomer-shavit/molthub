@@ -1,145 +1,160 @@
 ---
-description: "Product vision for Molthub as a control plane for Moltbot swarms"
+description: "Product vision for Molthub — the open-source control plane for autonomous Moltbot agents"
 globs: []
 alwaysApply: false
 ---
 
-# Molthub Vision Document
+# Molthub Vision
 
-## What Molthub Is
+## One-Liner
 
-Molthub is an open source, self hosted control plane for running and operating a swarm of Moltbots. It gives you one place to provision many Moltbot instances, configure them consistently, attach channels and integrations, enforce security guardrails, roll out changes safely, and get fleet level visibility into health, logs, traces, cost, and quality. It is designed to integrate tightly with Moltbot's real control surfaces. The CLI, the Gateway WebSocket protocol, the config model, and the onboarding and doctor workflows.
-
-## What We Know About Moltbot That Molthub Should Build On
-
-### Gateway-Centric Architecture
-The Gateway WebSocket protocol is the single control plane transport that all clients connect to (CLI, web UI, apps, nodes). Molthub should treat this as the canonical integration surface for control and telemetry.
-
-### First-Class Onboarding and Background Service Model
-The recommended setup is `moltbot onboard --install-daemon`, which configures local vs remote gateway, auth, channels, and installs a background service via systemd/launchd.
-
-### Strongly Opinionated About Runtime
-Node is the recommended runtime. It is explicitly required for WhatsApp and Telegram. Bun is not recommended due to bugs for those channels. Molthub should encode this into templates and validation.
-
-### Scriptable and Machine-Friendly
-Gateway lifecycle commands support `--json` for scripting. Gateway status reports config path mismatches between CLI and service. This is perfect for Molthub's reconciler and diagnostics.
-
-### Explicit Health and Diagnostics
-`moltbot status` and `moltbot health --json` provide structured health snapshots, plus recommended repair flows for common failures like WhatsApp relinking. Molthub can surface these as first class UI health panels and alerts.
-
-`moltbot doctor` can generate gateway auth tokens, run health checks, and audit or repair supervisor configs. Molthub can invoke this logic during provisioning or drift repair.
-
-### Multiple Isolated Profiles and State Dirs
-Moltbot docs describe using `CLAWDBOT_PROFILE`, `CLAWDBOT_STATE_DIR`, and `CLAWDBOT_CONFIG_PATH` to isolate state. Warns about config mismatches when the daemon is running a different config than the CLI. Molthub should treat "isolation per instance" as mandatory.
-
-### RPC-Style Config Apply
-The FAQ describes an RPC style `config.apply` that validates, writes full config, and restarts the Gateway. Molthub should model "apply" as a safe, validated transaction.
-
-### Supply Chain Risk
-There is a recent GitHub issue claiming the moltbot package on npm is not owned by the project. Molthub should prefer pinned, verifiable install methods and document safe install paths.
+Molthub is an open-source control plane that lets anyone — a solo founder, a small team, or an enterprise — deploy, configure, and orchestrate fleets of autonomous Moltbot agents across any infrastructure, with security, observability, and inter-bot collaboration built in.
 
 ---
 
-## What Molthub Is, In Platform Terms
+## The Problem
 
-Molthub is not "another bot". It is an operator layer for Moltbot.
+AI agents are powerful individually. But running them in production is hard: provisioning infrastructure, managing secrets, configuring channels, monitoring health, controlling costs, enforcing security — all of this is manual, fragile, and doesn't scale.
 
-### 1. Fleet Provisioning and Lifecycle
+And when you want multiple agents working together — delegating tasks, sharing context, coordinating toward a goal — there's nothing. You're on your own stitching together scripts and hoping it holds.
 
-Molthub's job is to make "I need 200 Moltbots" feel like "I need 200 services".
-
-- **One click create**: Name it, tag it, choose template. Molthub provisions compute, deploys Moltbot, and runs health checks using Moltbot's own health surfaces.
-- **Lifecycle actions**: Start, stop, restart, redeploy, destroy. Implemented via cloud adapter plus Moltbot gateway lifecycle semantics.
-- **Bulk operations**: Restart 50 bots. Roll out a version pin to a whole fleet. Freeze rollouts.
-
-### 2. Configuration at Scale, Without Config Sprawl
-
-Core primitives:
-- **Template**: "Slack support bot", "Ops bot", "Personal assistant"
-- **Profile**: Shared defaults. "Prod baseline", "EU residency baseline"
-- **Overlay**: Small deltas applied to a group or single bot
-
-**Golden rule**: Molthub should not invent a competing Moltbot configuration universe. It should generate and manage Moltbot's config consistently, isolate state per instance, and apply changes respecting Moltbot's restart requirements and tooling.
-
-### 3. Connectors, Not Duplicated Secrets
-
-First class Connectors:
-- Slack connector with token reference and scopes
-- Telegram connector with bot token reference
-- Model provider connector with API keys or OAuth references
-
-Bots attach to connectors. Rotate once. See blast radius.
-
-### 4. Policy Packs and Guardrails
-
-Examples:
-- No public admin endpoints by default
-- No plaintext secrets, only secret store references
-- Egress allowlist required in prod
-- Skills allowlist, version pinning
-- Mandatory audit logs for changes
-
-This is the difference between "I can run 200 bots" and "I can run 200 bots safely".
-
-### 5. Operations and Observability Built Around Moltbot's Reality
-
-- **Fleet health**: How many bots are degraded, why, and since when
-- **Per bot health**: Using Moltbot status and health --json surfaces, plus infra health
-- **Repair actions**: "Relink WhatsApp", "Restart gateway", "Fix daemon config mismatch"
-- **Traceability**: From inbound message, to model call, to tool call, to response
+We believe the future is autonomous agent teams that can run a company's operations. Molthub makes that possible.
 
 ---
 
-## What "Seamless Integration" Specifically Means
+## Who It's For
 
-### Provisioning Should Mimic Moltbot Onboarding, But Cloud-Native
-Moltbot onboarding wizard configures gateway mode and installs a daemon. Molthub should replicate the outcomes in a reproducible, per-instance way. Must generate and store gateway auth tokens securely.
+### Solo Operators
+A single person who wants to run a one-person corporation. Deploy a Moltbot that handles customer support, another that manages code reviews, another that monitors infrastructure — all coordinated, all secure, all monitored. Molthub makes "one-person company" real.
 
-### Configuration Apply Should Use Moltbot's Semantics
-`config.apply` validates, writes config, and restarts the gateway. Molthub should implement "Apply" as a transaction with validation, diff preview, and explicit restart implications. Should detect and prevent "CLI config path vs service config path mismatch" issues.
+### Small Teams
+A team of 3-10 people that wants agent leverage. Set up specialized bots for different functions, give them personalities and goals, let them collaborate. Molthub handles the infrastructure and orchestration so the team focuses on what the bots should do, not how to keep them running.
 
-### Diagnostics Should Wrap Moltbot's Own Tools
-"Show me what's wrong" should expose the same deep diagnosis as `moltbot status --deep` and `moltbot health --json`. "Repair" should leverage doctor-style checks.
-
-### Runtime Constraints Should Be Enforced
-If a user selects WhatsApp or Telegram, Molthub should force Node runtime and block Bun.
-
-### Plugin and Extension Model Should Be First Class
-Plugins under `plugins.entries.<id>.config` pattern with version pinning and rollout controls.
+### Enterprises
+Organizations that need hundreds of agents across departments, with governance, RBAC, audit trails, cost controls, and compliance. Molthub provides the fleet management, policy enforcement, and observability they require.
 
 ---
 
-## Metrics and Dashboards That Matter for a Swarm
+## Core Principles
 
-### Reliability
-- Bots running, degraded, down
-- Message throughput by channel
-- End to end latency percentiles
-- Error taxonomy: provider errors, channel auth failures, tool failures
+### 1. Deploy Anywhere
+Moltbots should run wherever the user wants. Local machines, Docker, Kubernetes, AWS ECS, Azure, GCP — Molthub abstracts the infrastructure through deployment targets. Users bring their own stack. Molthub handles the lifecycle.
 
-### Security Posture
-- Bots with risky exposure settings
-- Overly broad tool permissions
-- Secrets nearing expiry, rotated, or missing
-- Config drift: "Service is not using the intended config path"
+### 2. Secure by Default
+Every Moltbot deployed through Molthub starts secure: gateway auth tokens generated and stored properly, no plaintext secrets, policy packs enforcing guardrails, audit logs for every change. Security isn't an add-on — it's the baseline.
 
-### Cost and Efficiency
-- Cost per bot, per tenant, per channel
-- Token in/out, retries, fallback rate
-- Cache hit rate
+### 3. Autonomous Agents with Personality and Purpose
+Each Moltbot gets a personality, a system prompt, high-level goals, and specialized skills. They're not generic chatbots — they're autonomous agents with defined roles: "You are the DevOps lead. Your goal is zero-downtime deployments. You own the CI/CD pipeline."
 
-### Quality
-- Success rate by scenario
-- Escalation rate
-- Golden test replay score after rollout
+### 4. Teams of Agents with Hierarchy
+Moltbots can be organized into teams with a lead and members. The lead delegates tasks, members execute, results flow back. Teams have roadmaps, goals, and shared context. Molthub orchestrates all inter-bot communication — bots never talk directly, everything is auditable and rule-governed.
+
+### 5. Observable and Controllable
+Health, communications, skills, tools, costs — everything is visible. Alerts fire when something degrades. Users can pause, restart, reconfigure, or destroy any bot at any time. Full control, full visibility.
+
+### 6. Open Source First
+Molthub is open source. Anyone can self-host it, extend it, contribute to it. The entire platform — provisioning, orchestration, monitoring, team coordination — is available to everyone.
+
+### 7. Hosted Option for Those Who Want It
+For users who don't want to manage infrastructure, a future hosted SaaS offering will provide the full Molthub experience as a managed service. Same capabilities, zero ops burden. But self-hosting is always an option — no vendor lock-in.
 
 ---
 
-## The Dream State
+## What Molthub Does
 
-A platform where managing 500 Moltbots is normal. You would expect:
-- Templates, profiles, overlays, connectors, policy packs
-- Change sets with canary rollouts and rollback gates
-- Fleet dashboards showing health, cost, and quality regressions
-- Deep message traces and a replay sandbox
-- Strong governance: audit logs, RBAC, secrets scoping, egress controls
+### Deploy and Manage Moltbots
+
+- **One-click setup**: Pick a template, choose your infrastructure (Docker, ECS, K8s, Azure, GCP), configure channels, deploy. A non-technical user can get a production Moltbot running through a guided wizard.
+- **Lifecycle management**: Start, stop, restart, redeploy, destroy. All through the UI, API, or CLI.
+- **Multi-cloud**: Deploy targets are pluggable. AWS today, Kubernetes tomorrow, Azure next week. Users choose their stack.
+- **Bulk operations**: Restart 50 bots. Roll out a config change to a fleet. Pin versions across environments.
+
+### Configure at Scale
+
+- **Templates**: Pre-built configurations for common use cases — support bot, coding assistant, ops bot, messaging bot.
+- **Profiles**: Shared defaults across bots. "Production baseline", "EU data residency", "high-security".
+- **Overlays**: Small deltas applied per-bot or per-group without duplicating entire configs.
+- **Connectors**: First-class integrations for Slack, Telegram, Discord, WhatsApp, and model providers. Attach once, rotate once, see blast radius.
+
+### Give Bots Identity and Purpose
+
+- **Personality**: Each bot has a system prompt defining who it is, how it communicates, what it cares about.
+- **Goals**: High-level objectives like "reduce support ticket resolution time" or "keep CI green". Goals inform how the bot prioritizes and acts.
+- **Skills and tools**: Each bot has a defined set of capabilities — which tools it can use, which APIs it can call, what actions it's authorized to take.
+- **Specialization**: Bots are specialists, not generalists. A DevOps bot, a customer support bot, a data analysis bot — each excels at its domain.
+
+### Organize Bots into Teams
+
+- **Team hierarchy**: A team has a lead bot and member bots. The lead understands the team's goals and delegates work to the right specialist.
+- **Goal-driven coordination**: Users set team-level goals and roadmaps. The lead breaks these into tasks and assigns them based on member capabilities.
+- **Rule-governed communication**: All inter-bot communication flows through Molthub. Users define rules: who can talk to whom, what context is shared, what requires human approval.
+- **Shared context**: Teams maintain shared context that members can read and contribute to, enabling coherent multi-agent workflows.
+- **Auditable**: Every message, every delegation, every result is logged and traceable.
+
+### Monitor Everything
+
+- **Health dashboard**: Fleet-wide and per-bot health. Which bots are running, degraded, or down — and why.
+- **Communication monitoring**: See what each bot is saying across channels. Track message volume, response times, error rates.
+- **Skills and tools usage**: Which tools each bot is using, how often, success rates.
+- **Cost tracking**: Token usage, API costs, infrastructure costs — per bot, per team, per channel.
+- **SLOs**: Define targets (uptime, latency, error rate) and track compliance.
+- **Alerts**: Get notified when health degrades, costs spike, SLOs breach, or bots need attention. Alerts include remediation suggestions.
+
+### Enforce Security
+
+- **Gateway auth**: Every bot gets secure auth tokens, stored in secret managers, never in plaintext.
+- **Policy packs**: Configurable guardrails — no public admin endpoints, egress allowlists, skills allowlists, mandatory audit logs.
+- **RBAC**: Control who can deploy, configure, or destroy bots.
+- **Secrets management**: Centralized secret rotation with blast radius visibility.
+- **Security audit**: Continuous scanning for misconfigurations and vulnerabilities.
+
+---
+
+## The Vision: One-Person Corporate
+
+Imagine a solo founder who deploys:
+- A **customer support bot** on Telegram and WhatsApp that handles inbound queries 24/7
+- A **DevOps bot** that monitors infrastructure, handles deployments, and responds to incidents
+- A **code review bot** that reviews PRs, suggests improvements, and enforces standards
+- A **business operations bot** that tracks metrics, generates reports, and manages schedules
+- A **team lead bot** that coordinates the others, delegates tasks, and escalates to the human when needed
+
+All deployed through Molthub. All monitored. All secure. All communicating with each other through governed channels. The founder sets goals, reviews results, and intervenes when needed — but the bots handle the day-to-day.
+
+That's a one-person corporate. That's what Molthub enables.
+
+---
+
+## Technical Foundation: Built on Moltbot's Real Surfaces
+
+Molthub is not a generic orchestrator. It integrates tightly with Moltbot's actual control surfaces:
+
+- **Gateway WebSocket protocol**: The canonical integration surface for control and telemetry. All bot communication flows through Gateway.
+- **Config model**: Molthub generates and manages Moltbot's JSON5 config, respecting its semantics (config.apply, restart requirements, validation).
+- **Health and diagnostics**: `moltbot status`, `moltbot health --json`, `moltbot doctor` — Molthub wraps these for monitoring and automated repair.
+- **Onboarding and daemon model**: Molthub replicates Moltbot's onboarding outcomes (gateway auth, daemon installation, profile isolation) in a reproducible, cloud-native way.
+- **Runtime constraints**: WhatsApp and Telegram require Node. Molthub enforces this in templates and validation.
+- **Profile isolation**: Each bot instance gets isolated state via `CLAWDBOT_PROFILE`, `CLAWDBOT_STATE_DIR`, and `CLAWDBOT_CONFIG_PATH`.
+
+---
+
+## Deployment Model
+
+### Self-Hosted (Primary)
+Users run Molthub on their own infrastructure. The control plane (NestJS API + Next.js dashboard + PostgreSQL) runs wherever they want. Bots deploy to their chosen targets.
+
+### Hosted SaaS (Future)
+A managed offering where Molthub handles everything — the control plane, the infrastructure, the monitoring. Same capabilities as self-hosted, zero ops burden. For users who want the power without the infrastructure management.
+
+Both paths use the same codebase. No feature gates. No artificial limitations on self-hosted.
+
+---
+
+## Success Metrics
+
+- A non-technical user can deploy their first production Moltbot in under 5 minutes
+- A solo operator can run a team of 5+ specialized bots with full monitoring
+- An enterprise can manage 500+ bots across multiple clouds with governance and compliance
+- All inter-bot communication is auditable and rule-governed
+- Zero plaintext secrets in any deployment
+- Open-source community actively contributing deployment targets, templates, and integrations

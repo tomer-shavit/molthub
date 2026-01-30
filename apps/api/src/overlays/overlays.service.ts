@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma, Overlay } from "@molthub/database";
+import { prisma, Prisma, Overlay } from "@molthub/database";
 import { CreateOverlayDto, UpdateOverlayDto, ListOverlaysQueryDto } from "./overlays.dto";
 
 @Injectable()
@@ -11,12 +11,12 @@ export class OverlaysService {
         name: dto.name,
         description: dto.description,
         targetType: dto.targetType,
-        targetSelector: dto.targetSelector as any,
-        overrides: dto.overrides as any,
+        targetSelector: dto.targetSelector as Prisma.InputJsonValue,
+        overrides: dto.overrides as Prisma.InputJsonValue,
         priority: dto.priority || 0,
         enabled: dto.enabled ?? true,
-        rollout: dto.rollout as any,
-        schedule: dto.schedule as any,
+        rollout: dto.rollout as Prisma.InputJsonValue,
+        schedule: dto.schedule as Prisma.InputJsonValue,
         createdBy: dto.createdBy || "system",
       },
     });
@@ -56,12 +56,12 @@ export class OverlaysService {
         ...(dto.name && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.targetType && { targetType: dto.targetType }),
-        ...(dto.targetSelector && { targetSelector: dto.targetSelector as any }),
-        ...(dto.overrides && { overrides: dto.overrides as any }),
+        ...(dto.targetSelector && { targetSelector: dto.targetSelector as Prisma.InputJsonValue }),
+        ...(dto.overrides && { overrides: dto.overrides as Prisma.InputJsonValue }),
         ...(dto.priority !== undefined && { priority: dto.priority }),
         ...(dto.enabled !== undefined && { enabled: dto.enabled }),
-        ...(dto.rollout && { rollout: dto.rollout as any }),
-        ...(dto.schedule && { schedule: dto.schedule as any }),
+        ...(dto.rollout && { rollout: dto.rollout as Prisma.InputJsonValue }),
+        ...(dto.schedule && { schedule: dto.schedule as Prisma.InputJsonValue }),
       },
     });
   }
@@ -87,7 +87,7 @@ export class OverlaysService {
 
     // Filter overlays based on target selectors
     return overlays.filter(overlay => {
-      const selector = overlay.targetSelector as any;
+      const selector = overlay.targetSelector as Record<string, unknown>;
       
       switch (overlay.targetType) {
         case "fleet":
@@ -95,7 +95,7 @@ export class OverlaysService {
         case "environment":
           return !filters.environment || selector?.environment === filters.environment;
         case "instance":
-          return !filters.instanceIds || selector?.instanceIds?.some((id: string) => filters.instanceIds?.includes(id));
+          return !filters.instanceIds || (selector?.instanceIds as string[] | undefined)?.some((id: string) => filters.instanceIds?.includes(id));
         case "tag":
           if (!filters.tags || !selector?.tags) return true;
           return Object.entries(selector.tags).every(([key, value]) => 

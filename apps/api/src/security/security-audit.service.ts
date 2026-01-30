@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma } from "@molthub/database";
+import { prisma, Prisma } from "@molthub/database";
 import {
   BUILTIN_MOLTBOT_POLICY_PACKS,
   MoltbotConfig,
@@ -61,21 +61,25 @@ export class MoltbotSecurityAuditService {
       throw new NotFoundException(`Instance '${instanceId}' not found`);
     }
 
-    const config = (instance.config as Record<string, unknown>) || {};
-    const moltbotConfig = config as unknown as MoltbotConfig;
-    const environment = ((instance as any).environment || "dev") as "dev" | "staging" | "prod";
+    const manifest = (instance.desiredManifest as Record<string, unknown>) || {};
+    const spec = (manifest?.spec as Record<string, unknown>) || {};
+    const metadata = (manifest?.metadata as Record<string, unknown>) || {};
+    const moltbotConfig = (spec.moltbotConfig || {}) as unknown as MoltbotConfig;
+    const rawEnv = (metadata.environment as string) || "dev";
+    const environment: "dev" | "staging" | "prod" = rawEnv === "local" ? "dev" : (rawEnv as "dev" | "staging" | "prod");
 
     // Gather other instances for cross-instance checks
     const otherInstances = await prisma.botInstance.findMany({
       where: { id: { not: instanceId } },
-      select: { id: true, config: true },
+      select: { id: true, desiredManifest: true },
     });
 
     const context: MoltbotEvaluationContext = {
       environment,
       otherInstances: otherInstances.map((inst) => {
-        const otherConfig = (inst.config as Record<string, unknown>) || {};
-        const otherMoltbot = otherConfig as unknown as MoltbotConfig;
+        const otherManifest = (inst.desiredManifest as Record<string, unknown>) || {};
+        const otherSpec = (otherManifest?.spec as Record<string, unknown>) || {};
+        const otherMoltbot = (otherSpec?.moltbotConfig || {}) as unknown as MoltbotConfig;
         return {
           instanceId: inst.id,
           workspace: otherMoltbot.agents?.defaults?.workspace,
@@ -126,7 +130,7 @@ export class MoltbotSecurityAuditService {
 
     const configHash = crypto
       .createHash("sha256")
-      .update(JSON.stringify(config))
+      .update(JSON.stringify(moltbotConfig))
       .digest("hex")
       .slice(0, 16);
 
@@ -178,7 +182,9 @@ export class MoltbotSecurityAuditService {
       throw new NotFoundException(`Instance '${instanceId}' not found`);
     }
 
-    let config = (instance.config as Record<string, unknown>) || {};
+    const manifest = (instance.desiredManifest as Record<string, unknown>) || {};
+    const manifestSpec = (manifest.spec as Record<string, unknown>) || {};
+    let config = (manifestSpec.moltbotConfig as Record<string, unknown>) || {};
 
     for (const fixId of fixIds) {
       const fix = fixes.find((f) => f.findingId === fixId);
@@ -200,9 +206,13 @@ export class MoltbotSecurityAuditService {
 
     // Save updated config
     if (appliedFixes.length > 0) {
+      const updatedManifest = {
+        ...manifest,
+        spec: { ...manifestSpec, moltbotConfig: config },
+      };
       await prisma.botInstance.update({
         where: { id: instanceId },
-        data: { config: config as any },
+        data: { desiredManifest: updatedManifest as Prisma.InputJsonValue },
       });
     }
 
@@ -247,7 +257,7 @@ export class MoltbotSecurityAuditService {
       const result = evaluateMoltbotPolicyPack(
         pack,
         "pre-provisioning",
-        config as any,
+        config as unknown as MoltbotConfig,
         context,
       );
 
@@ -273,23 +283,25 @@ export class MoltbotSecurityAuditService {
     let score = 0;
 
     // Gateway auth configured (20 points)
-    const gateway = config.gateway as any;
-    if (gateway?.auth?.token || gateway?.auth?.password) {
+    const gateway = config.gateway as Record<string, unknown> | undefined;
+    const gatewayAuth = gateway?.auth as Record<string, unknown> | undefined;
+    if (gatewayAuth?.token || gatewayAuth?.password) {
       score += 20;
     }
 
     // Sandbox enabled (20 points)
-    const sandbox = config.sandbox as any;
+    const sandbox = config.sandbox as Record<string, unknown> | undefined;
     if (sandbox?.mode && sandbox.mode !== "off") {
       score += 15;
       // Bonus for Docker security options
-      if (sandbox.docker?.readOnlyRootfs && sandbox.docker?.noNewPrivileges) {
+      const sandboxDocker = sandbox.docker as Record<string, unknown> | undefined;
+      if (sandboxDocker?.readOnlyRootfs && sandboxDocker?.noNewPrivileges) {
         score += 5;
       }
     }
 
     // Allowlists configured (15 points)
-    const channels = config.channels as any;
+    const channels = config.channels as Record<string, Record<string, unknown>> | undefined;
     if (channels) {
       const channelKeys = Object.keys(channels).filter(k => channels[k]?.enabled);
       const hasAllowlists = channelKeys.every(k => {
@@ -304,13 +316,13 @@ export class MoltbotSecurityAuditService {
     }
 
     // Tool profile not "full" (10 points)
-    const tools = config.tools as any;
+    const tools = config.tools as Record<string, unknown> | undefined;
     if (!tools?.profile || tools.profile !== "full") {
       score += 10;
     }
 
     // Sensitive data redaction enabled (10 points)
-    const logging = config.logging as any;
+    const logging = config.logging as Record<string, unknown> | undefined;
     if (logging?.redactSensitive === "tools") {
       score += 10;
     }
@@ -321,7 +333,7 @@ export class MoltbotSecurityAuditService {
     }
 
     // Skills verification (15 points)
-    const skills = config.skills as any;
+    const skills = config.skills as Record<string, unknown> | undefined;
     if (skills?.allowUnverified !== true) {
       score += 15;
     }

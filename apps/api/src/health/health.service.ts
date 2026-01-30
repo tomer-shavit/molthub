@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { prisma } from "@molthub/database";
 
-interface HealthCheckResult {
+export interface HealthCheckResult {
   status: "ok" | "error" | "degraded";
   checks: {
     database: { status: "ok" | "error"; responseTime: number };

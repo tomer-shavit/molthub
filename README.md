@@ -1,10 +1,24 @@
 # Molthub
 
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](./)
-[![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)](./)
-[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![CI](https://github.com/tomer-shavit/molthub/actions/workflows/ci.yml/badge.svg)](https://github.com/tomer-shavit/molthub/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Self-hosted control plane for Moltbot instances. Deploy and manage multiple Moltbot instances on AWS ECS Fargate with a seamless web UI.
+Open-source, self-hosted control plane for managing fleets of Moltbot instances. Deploy, configure, monitor, and secure hundreds of bots from a single dashboard.
+
+## Why Molthub?
+
+- **Fleet-First**: Manage hundreds of Moltbot instances as easily as one. Templates, profiles, and overlays eliminate configuration sprawl.
+- **Moltbot-Native**: Built around Moltbot's real control surfaces -- Gateway protocol, config model, health checks, and diagnostics. Not a generic wrapper.
+- **Secure by Default**: Policy Engine blocks unsafe configs. Secrets never stored in plaintext. Audit trail for every change. No public inbound by default.
+- **Observable**: Fleet health dashboards, per-bot operational views, end-to-end trace visualization, and cost tracking -- all built in.
+
+## When NOT to Use Molthub
+
+- You only need a single Moltbot instance and don't need fleet management.
+- You want a fully managed SaaS (Molthub is self-hosted).
+- You're not using Moltbot (Molthub is purpose-built for Moltbot, not a generic bot manager).
 
 ## Features
 
@@ -72,6 +86,19 @@ Self-hosted control plane for Moltbot instances. Deploy and manage multiple Molt
                     │   Fargate   │
                     └─────────────┘
 ```
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| `@molthub/api` | NestJS REST API -- fleet management, reconciler, audit, traces |
+| `@molthub/web` | Next.js dashboard -- health views, config management, trace viewer |
+| `@molthub/core` | Shared Zod schemas, TypeScript types, Policy Engine |
+| `@molthub/database` | Prisma schema and PostgreSQL client |
+| `@molthub/adapters-aws` | AWS ECS, Secrets Manager, CloudWatch integrations |
+| `@molthub/cloud-providers` | Multi-cloud deployment providers |
+| `@molthub/gateway-client` | Moltbot Gateway WebSocket client |
+| `@molthub/cli` | CLI for bootstrap, auth, and dev workflows |
 
 ## Quick Start
 
@@ -381,6 +408,17 @@ apps/web/                # E2E tests with Playwright
 | @molthub/core | 85% | 88% | 78% |
 | @molthub/api | 82% | 85% | 75% |
 | **Total** | **83%** | **86%** | **76%** |
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to get started.
+
+Please note that this project is released with a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to abide by its terms.
+
+## Community
+
+- [GitHub Issues](https://github.com/tomer-shavit/molthub/issues) -- Bug reports and feature requests
+- [GitHub Discussions](https://github.com/tomer-shavit/molthub/discussions) -- Questions, ideas, show and tell
 
 ## License
 

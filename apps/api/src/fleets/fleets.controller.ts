@@ -34,12 +34,12 @@ export class FleetController {
   }
 
   @Get(":id")
-  findOne(@Param("id") id: string): Promise<any> {
+  findOne(@Param("id") id: string): Promise<Fleet> {
     return this.fleetService.findOne(id);
   }
 
   @Get(":id/health")
-  getHealth(@Param("id") id: string): Promise<any> {
+  getHealth(@Param("id") id: string): Promise<Record<string, unknown>> {
     return this.fleetService.getHealth(id);
   }
 

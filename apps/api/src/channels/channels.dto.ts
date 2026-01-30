@@ -87,7 +87,7 @@ export class CreateChannelDto {
 
   @IsObject()
   @IsOptional()
-  typeConfig?: Record<string, any>;
+  typeConfig?: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()
@@ -99,7 +99,7 @@ export class CreateChannelDto {
 
   @IsObject()
   @IsOptional()
-  tags?: Record<string, any>;
+  tags?: Record<string, unknown>;
 
   @IsString()
   @IsOptional()
@@ -126,7 +126,7 @@ export class UpdateChannelDto {
 
   @IsObject()
   @IsOptional()
-  typeConfig?: Record<string, any>;
+  typeConfig?: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()
@@ -142,7 +142,7 @@ export class UpdateChannelDto {
 
   @IsObject()
   @IsOptional()
-  tags?: Record<string, any>;
+  tags?: Record<string, unknown>;
 }
 
 export class ListChannelsQueryDto {
@@ -201,7 +201,7 @@ export class GenerateConfigDto {
 export class TestChannelDto {
   @IsObject()
   @IsOptional()
-  config?: Record<string, any>;
+  config?: Record<string, unknown>;
 }
 
 export class SendTestMessageDto {
@@ -210,7 +210,7 @@ export class SendTestMessageDto {
 
   @IsObject()
   @IsOptional()
-  targetDestination?: Record<string, any>;
+  targetDestination?: Record<string, unknown>;
 }
 
 // ============================================
@@ -226,11 +226,11 @@ export class BindChannelToBotDto {
 
   @IsObject()
   @IsOptional()
-  settings?: Record<string, any>;
+  settings?: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()
-  targetDestination?: Record<string, any>;
+  targetDestination?: Record<string, unknown>;
 
   @IsBoolean()
   @IsOptional()
@@ -240,11 +240,11 @@ export class BindChannelToBotDto {
 export class UpdateBindingDto {
   @IsObject()
   @IsOptional()
-  settings?: Record<string, any>;
+  settings?: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()
-  targetDestination?: Record<string, any>;
+  targetDestination?: Record<string, unknown>;
 
   @IsBoolean()
   @IsOptional()

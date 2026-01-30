@@ -1,30 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import {
-  Loader2,
-  CheckCircle2,
-  Circle,
-  XCircle,
-  Rocket,
-  AlertTriangle,
-} from "lucide-react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-
-interface DeployProgressProps {
-  instanceId: string;
-}
 
 interface DeployStep {
   name: string;
-  status: string;
+  status: "pending" | "in_progress" | "completed" | "failed";
 }
 
-interface DeployStatusResponse {
+interface DeployStatus {
   instanceId: string;
   status: string;
   health: string;
@@ -32,151 +16,68 @@ interface DeployStatusResponse {
   steps: DeployStep[];
 }
 
-const DEFAULT_STEPS: DeployStep[] = [
-  { name: "Creating infrastructure", status: "pending" },
-  { name: "Installing Moltbot", status: "pending" },
-  { name: "Applying configuration", status: "pending" },
-  { name: "Starting gateway", status: "pending" },
-  { name: "Running health check", status: "pending" },
-];
-
-function StepIcon({ status }: { status: string }) {
-  switch (status) {
-    case "in_progress":
-      return <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />;
-    case "completed":
-      return <CheckCircle2 className="w-5 h-5 text-green-500" />;
-    case "error":
-      return <XCircle className="w-5 h-5 text-red-500" />;
-    default:
-      return <Circle className="w-5 h-5 text-gray-300" />;
-  }
+interface DeployProgressProps {
+  instanceId: string;
 }
 
 export function DeployProgress({ instanceId }: DeployProgressProps) {
-  const [status, setStatus] = useState<DeployStatusResponse | null>(null);
-  const [steps, setSteps] = useState<DeployStep[]>(DEFAULT_STEPS);
-  const [error, setError] = useState<string | null>(null);
-  const [polling, setPolling] = useState(true);
-
-  const fetchStatus = useCallback(async () => {
-    try {
-      const data = await api.getDeployStatus(instanceId);
-      setStatus(data);
-      if (data.steps && data.steps.length > 0) {
-        setSteps(data.steps);
-      }
-      if (data.error) {
-        setError(data.error);
-      }
-      if (data.status === "completed" || data.status === "error" || data.status === "failed") {
-        setPolling(false);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch deployment status");
-      setPolling(false);
-    }
-  }, [instanceId]);
+  const [status, setStatus] = useState<DeployStatus | null>(null);
 
   useEffect(() => {
-    fetchStatus();
+    const poll = async () => {
+      try {
+        const res = await api.getDeployStatus(instanceId);
+        setStatus(res as DeployStatus);
+      } catch {
+        // ignore polling errors
+      }
+    };
 
-    if (!polling) return;
-
-    const interval = setInterval(() => {
-      fetchStatus();
-    }, 3000);
-
+    poll();
+    const interval = setInterval(poll, 3000);
     return () => clearInterval(interval);
-  }, [fetchStatus, polling]);
+  }, [instanceId]);
 
-  const isComplete = status?.status === "completed";
-  const isError = status?.status === "error" || status?.status === "failed";
-
-  const handleRetry = () => {
-    setError(null);
-    setPolling(true);
-    setSteps(DEFAULT_STEPS);
-    setStatus(null);
-    fetchStatus();
-  };
+  if (!status) {
+    return <div className="text-center py-8 text-muted-foreground">Loading deployment status...</div>;
+  }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Rocket className="w-5 h-5" />
-            Deploying Your Moltbot
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-1">
-            {steps.map((step, index) => (
-              <div key={step.name} className="flex items-center gap-3 py-3">
-                <StepIcon status={step.status} />
-                <div className="flex-1">
-                  <p
-                    className={cn(
-                      "text-sm font-medium",
-                      step.status === "pending" && "text-muted-foreground",
-                      step.status === "in_progress" && "text-blue-600",
-                      step.status === "completed" && "text-foreground",
-                      step.status === "error" && "text-red-600"
-                    )}
-                  >
-                    {step.name}
-                  </p>
-                </div>
-                {index < steps.length - 1 && (
-                  <div className="hidden" />
-                )}
-              </div>
-            ))}
+    <div className="space-y-4">
+      <div className="space-y-3">
+        {status.steps.map((step, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                step.status === "completed"
+                  ? "bg-green-100 text-green-700"
+                  : step.status === "in_progress"
+                  ? "bg-blue-100 text-blue-700 animate-pulse"
+                  : step.status === "failed"
+                  ? "bg-red-100 text-red-700"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {step.status === "completed" ? "\u2713" : i + 1}
+            </div>
+            <span
+              className={
+                step.status === "completed"
+                  ? "text-foreground"
+                  : step.status === "in_progress"
+                  ? "text-foreground font-medium"
+                  : "text-muted-foreground"
+              }
+            >
+              {step.name}
+            </span>
           </div>
-        </CardContent>
-      </Card>
-
-      {isComplete && (
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center text-center gap-4">
-              <CheckCircle2 className="w-12 h-12 text-green-500" />
-              <div>
-                <h3 className="text-lg font-semibold text-green-800">
-                  Deployment Successful
-                </h3>
-                <p className="text-sm text-green-700 mt-1">
-                  Your Moltbot instance is running and ready to use.
-                </p>
-              </div>
-              <Link href="/">
-                <Button>Go to Dashboard</Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {isError && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center text-center gap-4">
-              <AlertTriangle className="w-12 h-12 text-red-500" />
-              <div>
-                <h3 className="text-lg font-semibold text-red-800">
-                  Deployment Failed
-                </h3>
-                <p className="text-sm text-red-700 mt-1">
-                  {error || "An unexpected error occurred during deployment."}
-                </p>
-              </div>
-              <Button variant="outline" onClick={handleRetry}>
-                Retry
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        ))}
+      </div>
+      {status.error && (
+        <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+          {status.error}
+        </div>
       )}
     </div>
   );

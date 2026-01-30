@@ -10,9 +10,9 @@ import {
   HttpCode,
   HttpStatus,
 } from "@nestjs/common";
+import { IntegrationConnector } from "@molthub/database";
 import { ConnectorsService } from "./connectors.service";
 import { CreateConnectorDto, UpdateConnectorDto, ListConnectorsQueryDto, TestConnectionDto } from "./connectors.dto";
-import { IntegrationConnector } from "@molthub/database";
 
 @Controller("connectors")
 export class ConnectorsController {
@@ -29,7 +29,7 @@ export class ConnectorsController {
   }
 
   @Get(":id")
-  findOne(@Param("id") id: string): Promise<any> {
+  findOne(@Param("id") id: string): Promise<IntegrationConnector> {
     return this.connectorsService.findOne(id);
   }
 
@@ -39,7 +39,7 @@ export class ConnectorsController {
   }
 
   @Post(":id/test")
-  testConnection(@Param("id") id: string, @Body() dto: TestConnectionDto): Promise<any> {
+  testConnection(@Param("id") id: string, @Body() dto: TestConnectionDto): Promise<Record<string, unknown>> {
     return this.connectorsService.testConnection(id, dto);
   }
 

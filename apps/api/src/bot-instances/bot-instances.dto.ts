@@ -35,7 +35,7 @@ export class CreateBotInstanceDto {
   overlayIds?: string[];
 
   @IsObject()
-  desiredManifest: Record<string, any>;
+  desiredManifest: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()
@@ -43,7 +43,7 @@ export class CreateBotInstanceDto {
 
   @IsObject()
   @IsOptional()
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 
   @IsString()
   @IsOptional()
@@ -61,7 +61,7 @@ export class UpdateBotInstanceDto {
 
   @IsObject()
   @IsOptional()
-  desiredManifest?: Record<string, any>;
+  desiredManifest?: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()
@@ -69,7 +69,7 @@ export class UpdateBotInstanceDto {
 
   @IsObject()
   @IsOptional()
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 
   @IsArray()
   @IsString({ each: true })

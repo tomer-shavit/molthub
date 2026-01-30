@@ -58,9 +58,9 @@ export class BotInstancesService {
         overlayIds: dto.overlayIds || [],
         status: BotStatus.CREATING,
         health: BotHealth.UNKNOWN,
-        desiredManifest: dto.desiredManifest as any,
-        tags: dto.tags || {},
-        metadata: dto.metadata || {},
+        desiredManifest: dto.desiredManifest as Prisma.InputJsonValue,
+        tags: (dto.tags || {}) as Prisma.InputJsonValue,
+        metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
         createdBy: dto.createdBy || "system",
       },
     });
@@ -93,7 +93,7 @@ export class BotInstancesService {
     });
   }
 
-  async findOne(id: string): Promise<BotInstance & { resolvedConfig?: any }> {
+  async findOne(id: string): Promise<BotInstance & { resolvedConfig?: Record<string, unknown> }> {
     const instance = await prisma.botInstance.findUnique({
       where: { id },
       include: {
@@ -140,9 +140,9 @@ export class BotInstancesService {
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.fleetId && { fleetId: dto.fleetId }),
-        ...(dto.desiredManifest && { desiredManifest: dto.desiredManifest as any }),
-        ...(dto.tags && { tags: dto.tags }),
-        ...(dto.metadata && { metadata: dto.metadata }),
+        ...(dto.desiredManifest && { desiredManifest: dto.desiredManifest as Prisma.InputJsonValue }),
+        ...(dto.tags && { tags: dto.tags as Prisma.InputJsonValue }),
+        ...(dto.metadata && { metadata: dto.metadata as Prisma.InputJsonValue }),
         ...(dto.overlayIds && { overlayIds: dto.overlayIds }),
         ...(dto.profileId !== undefined && { profileId: dto.profileId }),
       },

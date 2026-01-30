@@ -63,7 +63,7 @@ const Cell = dynamic(
 );
 
 interface ChartProps {
-  data: any[];
+  data: Record<string, unknown>[];
   className?: string;
   height?: number;
 }

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import {
+  Prisma,
   prisma,
   BotHealth,
   BotStatus,
@@ -95,7 +96,7 @@ export class MoltbotHealthService {
       const record = await prisma.healthSnapshot.create({
         data: {
           instanceId,
-          data: snapshot as unknown as Record<string, unknown>,
+          data: snapshot as unknown as Prisma.InputJsonValue,
           isHealthy,
           channelsLinked: linkedChannels,
           channelsDegraded: degradedChannels,
@@ -268,7 +269,7 @@ export class MoltbotHealthService {
       await prisma.healthSnapshot.create({
         data: {
           instanceId,
-          data: snapshot as unknown as Record<string, unknown>,
+          data: snapshot as unknown as Prisma.InputJsonValue,
           isHealthy: snapshot.ok,
           channelsLinked: snapshot.channels.length,
           channelsDegraded: snapshot.channels.filter((ch) => !ch.ok).length,
@@ -328,7 +329,7 @@ export class MoltbotHealthService {
  * Local type alias so we don't need a separate import for the deep-health
  * return shape — matches GatewayStatusSummary from the protocol.
  */
-interface GatewayStatusSummaryCompat {
+export interface GatewayStatusSummaryCompat {
   state: string;
   version: string;
   configHash: string;

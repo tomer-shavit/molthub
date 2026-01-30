@@ -11,7 +11,7 @@ import {
   Body,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiParam, ApiQuery } from "@nestjs/swagger";
-import { HealthService } from "./health.service";
+import { HealthService, HealthCheckResult } from "./health.service";
 import { MoltbotHealthService } from "./moltbot-health.service";
 import { HealthAggregatorService } from "./health-aggregator.service";
 import { DiagnosticsService } from "./diagnostics.service";
@@ -34,7 +34,7 @@ export class HealthController {
   @Public()
   @Get("health")
   @ApiOperation({ summary: "System health check endpoint" })
-  async check(): Promise<any> {
+  async check(): Promise<HealthCheckResult> {
     return this.healthService.check();
   }
 

@@ -12,8 +12,8 @@ import {
   StartAuthDto,
   GenerateConfigDto,
 } from "./channels.dto";
-import { CommunicationChannel, BotChannelBinding } from "@molthub/database";
 import { ChannelTypeMeta } from "./channel-types";
+import { CommunicationChannel, BotChannelBinding } from "@molthub/database";
 
 @Controller("channels")
 export class ChannelsController {
@@ -42,7 +42,7 @@ export class ChannelsController {
   }
 
   @Get(":id")
-  findOne(@Param("id") id: string): Promise<any> {
+  findOne(@Param("id") id: string): Promise<CommunicationChannel> {
     return this.channelsService.findOne(id);
   }
 
@@ -52,12 +52,12 @@ export class ChannelsController {
   }
 
   @Post(":id/test")
-  testConnection(@Param("id") id: string, @Body() dto: TestChannelDto): Promise<any> {
+  testConnection(@Param("id") id: string, @Body() dto: TestChannelDto): Promise<Record<string, unknown>> {
     return this.channelsService.testConnection(id, dto);
   }
 
   @Post(":id/test-message")
-  sendTestMessage(@Param("id") id: string, @Body() dto: SendTestMessageDto): Promise<any> {
+  sendTestMessage(@Param("id") id: string, @Body() dto: SendTestMessageDto): Promise<Record<string, unknown>> {
     return this.channelsService.sendTestMessage(id, dto);
   }
 
@@ -75,12 +75,12 @@ export class ChannelsController {
   startAuth(
     @Param("id") id: string,
     @Body() dto: StartAuthDto,
-  ): Promise<any> {
+  ) {
     return this.authService.startAuth(id, dto.botInstanceId);
   }
 
   @Get(":id/auth/status")
-  getAuthStatus(@Param("id") id: string): Promise<any> {
+  getAuthStatus(@Param("id") id: string) {
     return this.authService.getAuthStatus(id);
   }
 
@@ -127,22 +127,22 @@ export class ChannelsController {
   // ==========================================
 
   @Get(":id/stats")
-  getChannelStats(@Param("id") id: string): Promise<any> {
+  getChannelStats(@Param("id") id: string): Promise<Record<string, unknown>> {
     return this.channelsService.getChannelStats(id);
   }
 
   @Get(":id/bots")
-  getBoundBots(@Param("id") id: string): Promise<any[]> {
+  getBoundBots(@Param("id") id: string): Promise<Record<string, unknown>[]> {
     return this.channelsService.getBoundBots(id);
   }
 
   @Get("bot/:botId/channels")
-  getBotChannels(@Param("botId") botId: string): Promise<any[]> {
+  getBotChannels(@Param("botId") botId: string): Promise<Record<string, unknown>[]> {
     return this.channelsService.getBotChannels(botId);
   }
 
   @Post("bot/:botId/health-check")
-  async checkBotChannelsHealth(@Param("botId") botId: string): Promise<any> {
+  async checkBotChannelsHealth(@Param("botId") botId: string): Promise<Record<string, unknown>> {
     return this.channelsService.checkBotChannelsHealth(botId);
   }
 }

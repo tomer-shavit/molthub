@@ -10,11 +10,11 @@ export class CreateSkillPackDto {
 
   @IsOptional()
   @IsArray()
-  skills?: any[];
+  skills?: Record<string, unknown>[];
 
   @IsOptional()
   @IsArray()
-  mcps?: any[];
+  mcps?: Record<string, unknown>[];
 
   @IsOptional()
   @IsObject()
@@ -32,11 +32,11 @@ export class UpdateSkillPackDto {
 
   @IsOptional()
   @IsArray()
-  skills?: any[];
+  skills?: Record<string, unknown>[];
 
   @IsOptional()
   @IsArray()
-  mcps?: any[];
+  mcps?: Record<string, unknown>[];
 
   @IsOptional()
   @IsObject()

@@ -29,7 +29,7 @@ export class CreateOverlayDto {
   };
 
   @IsObject()
-  overrides: Record<string, any>;
+  overrides: Record<string, unknown>;
 
   @IsNumber()
   @IsOptional()
@@ -84,7 +84,7 @@ export class UpdateOverlayDto {
 
   @IsObject()
   @IsOptional()
-  overrides?: Record<string, any>;
+  overrides?: Record<string, unknown>;
 
   @IsNumber()
   @IsOptional()

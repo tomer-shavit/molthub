@@ -12,6 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { InstancesService } from "./instances.service";
 import { CreateInstanceDto, InstanceResponseDto, ListInstancesQueryDto } from "./instances.dto";
+import { Instance } from "@molthub/database";
 
 @ApiTags("instances")
 @Controller("instances")
@@ -22,14 +23,14 @@ export class InstancesController {
   @ApiOperation({ summary: "Create a new Moltbot instance" })
   @ApiResponse({ status: 201, description: "Instance created", type: InstanceResponseDto })
   @ApiResponse({ status: 400, description: "Invalid manifest" })
-  async create(@Body() dto: CreateInstanceDto): Promise<InstanceResponseDto> {
+  async create(@Body() dto: CreateInstanceDto): Promise<Instance> {
     return this.instancesService.create(dto);
   }
 
   @Get()
   @ApiOperation({ summary: "List all instances" })
   @ApiResponse({ status: 200, description: "List of instances", type: [InstanceResponseDto] })
-  async findAll(@Query() query: ListInstancesQueryDto): Promise<InstanceResponseDto[]> {
+  async findAll(@Query() query: ListInstancesQueryDto): Promise<Instance[]> {
     return this.instancesService.findAll(query);
   }
 
@@ -37,7 +38,7 @@ export class InstancesController {
   @ApiOperation({ summary: "Get instance details" })
   @ApiResponse({ status: 200, description: "Instance details", type: InstanceResponseDto })
   @ApiResponse({ status: 404, description: "Instance not found" })
-  async findOne(@Param("id") id: string): Promise<InstanceResponseDto> {
+  async findOne(@Param("id") id: string): Promise<Instance> {
     return this.instancesService.findOne(id);
   }
 

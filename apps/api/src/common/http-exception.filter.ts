@@ -25,7 +25,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       message =
         typeof exceptionResponse === "string"
           ? exceptionResponse
-          : (exceptionResponse as any).message || exception.message;
+          : (exceptionResponse as { message?: string | string[] }).message || exception.message;
     } else {
       this.logger.error(
         "Unhandled exception",

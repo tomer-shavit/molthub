@@ -13,14 +13,6 @@ export interface MoltbotConfig {
       password?: string;
     };
   };
-  sandbox?: {
-    mode?: string;
-    docker?: {
-      readOnlyRootfs?: boolean;
-      noNewPrivileges?: boolean;
-      dropCapabilities?: string[];
-    };
-  };
   channels?: Array<{
     name?: string;
     dmPolicy?: string;
@@ -29,10 +21,20 @@ export interface MoltbotConfig {
   }>;
   tools?: {
     profile?: string;
+    allow?: string[];
     elevated?: {
       enabled?: boolean;
       allowFrom?: string[];
     };
+  };
+  tokenRotation?: {
+    enabled?: boolean;
+    [key: string]: unknown;
+  };
+  skills?: {
+    entries?: Record<string, { source?: string; integrity?: { sha256?: string } }>;
+    allowUnverified?: boolean;
+    [key: string]: unknown;
   };
   agents?: {
     defaults?: {
@@ -50,6 +52,16 @@ export interface MoltbotConfig {
   filePermissions?: {
     configFileMode?: string;
     stateDirMode?: string;
+  };
+  sandbox?: {
+    mode?: string;
+    docker?: {
+      readOnlyRootfs?: boolean;
+      noNewPrivileges?: boolean;
+      dropCapabilities?: string[];
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
   };
   [key: string]: unknown;
 }
@@ -487,7 +499,7 @@ export function evaluateForbidDangerousTools(
     return { passed: true };
   }
 
-  const allowList = (config.tools as any)?.allow as string[] | undefined;
+  const allowList = config.tools?.allow;
   if (!allowList) {
     return { passed: true };
   }
@@ -828,7 +840,7 @@ export function evaluateRequireTokenRotation(
     return { passed: true };
   }
 
-  const tokenRotation = (config as any).tokenRotation;
+  const tokenRotation = config.tokenRotation;
 
   // If token rotation is explicitly disabled, warn
   if (tokenRotation?.enabled === false) {
@@ -857,7 +869,7 @@ export function evaluateRequireSkillVerification(
     return { passed: true };
   }
 
-  const skills = (config as any).skills;
+  const skills = config.skills;
   if (!skills?.entries) {
     return { passed: true };
   }
@@ -966,39 +978,40 @@ export function evaluateMoltbotRule(
   ruleConfig: Record<string, unknown>,
   context?: MoltbotEvaluationContext,
 ): MoltbotRuleResult {
+  const rc = ruleConfig as Record<string, unknown>;
   switch (ruleType) {
     case "require_gateway_auth":
-      return evaluateRequireGatewayAuth(config, ruleConfig as any);
+      return evaluateRequireGatewayAuth(config, rc as { enabled?: boolean; message?: string });
     case "require_dm_policy":
-      return evaluateRequireDmPolicy(config, ruleConfig as any);
+      return evaluateRequireDmPolicy(config, rc as { forbiddenValues?: string[]; allowedValues?: string[]; message?: string });
     case "require_config_permissions":
-      return evaluateRequireConfigPermissions(config, ruleConfig as any);
+      return evaluateRequireConfigPermissions(config, rc as { configFileMode?: string; stateDirMode?: string; message?: string });
     case "forbid_elevated_tools":
-      return evaluateForbidElevatedTools(config, ruleConfig as any);
+      return evaluateForbidElevatedTools(config, rc as { enabled?: boolean; message?: string });
     case "require_sandbox":
-      return evaluateRequireSandbox(config, ruleConfig as any);
+      return evaluateRequireSandbox(config, rc as { enabled?: boolean; allowedModes?: string[]; message?: string });
     case "limit_tool_profile":
-      return evaluateLimitToolProfile(config, ruleConfig as any);
+      return evaluateLimitToolProfile(config, rc as { forbiddenProfiles?: string[]; message?: string });
     case "require_model_guardrails":
-      return evaluateRequireModelGuardrails(config, ruleConfig as any);
+      return evaluateRequireModelGuardrails(config, rc as { enabled?: boolean; requireMaxTokens?: boolean; requireTemperatureLimit?: boolean; maxTemperature?: number; message?: string });
     case "require_workspace_isolation":
-      return evaluateRequireWorkspaceIsolation(config, ruleConfig as any, context);
+      return evaluateRequireWorkspaceIsolation(config, rc as { enabled?: boolean; message?: string }, context);
     case "require_port_spacing":
-      return evaluateRequirePortSpacing(config, ruleConfig as any, context);
+      return evaluateRequirePortSpacing(config, rc as { minimumGap?: number; message?: string }, context);
     case "forbid_open_group_policy":
-      return evaluateForbidOpenGroupPolicy(config, ruleConfig as any);
+      return evaluateForbidOpenGroupPolicy(config, rc as { forbiddenValues?: string[]; message?: string });
     case "forbid_dangerous_tools":
-      return evaluateForbidDangerousTools(config, ruleConfig as any);
+      return evaluateForbidDangerousTools(config, rc as { enabled?: boolean; message?: string });
     case "require_gateway_host_binding":
-      return evaluateRequireGatewayHostBinding(config, ruleConfig as any);
+      return evaluateRequireGatewayHostBinding(config, rc as { enabled?: boolean; message?: string });
     case "require_sandbox_security_options":
-      return evaluateRequireSandboxSecurityOptions(config, ruleConfig as any);
+      return evaluateRequireSandboxSecurityOptions(config, rc as { enabled?: boolean; message?: string });
     case "require_channel_allowlist":
-      return evaluateRequireChannelAllowlist(config, ruleConfig as any);
+      return evaluateRequireChannelAllowlist(config, rc as { enabled?: boolean; message?: string });
     case "require_token_rotation":
-      return evaluateRequireTokenRotation(config, ruleConfig as any);
+      return evaluateRequireTokenRotation(config, rc as { enabled?: boolean; maxAgeDays?: number; message?: string });
     case "require_skill_verification":
-      return evaluateRequireSkillVerification(config, ruleConfig as any);
+      return evaluateRequireSkillVerification(config, rc as { enabled?: boolean; message?: string });
     default:
       return { passed: true };
   }

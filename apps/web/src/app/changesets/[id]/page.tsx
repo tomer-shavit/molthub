@@ -627,7 +627,7 @@ export default function ChangeSetDetailPage({ params }: { params: { id: string }
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {changeSet.auditEvents.map((event: any) => (
+                  {changeSet.auditEvents.map((event: { id: string; action: string; actor: string; timestamp: string; diffSummary?: string | null }) => (
                     <div key={event.id} className="flex items-start gap-3 pb-4 border-b last:border-0">
                       <div className="mt-0.5">
                         {event.action.includes('CREATE') ? (

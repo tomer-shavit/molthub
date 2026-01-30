@@ -707,7 +707,7 @@ class ApiClient {
   async deployOnboarding(data: {
     templateId: string;
     botName: string;
-    deploymentTarget: { type: string; [key: string]: any };
+    deploymentTarget: { type: string; [key: string]: unknown };
     channels?: Array<{ type: string; config?: Record<string, unknown> }>;
     environment?: string;
   }): Promise<{ instanceId: string; fleetId: string; status: string }> {

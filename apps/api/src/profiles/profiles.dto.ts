@@ -27,7 +27,7 @@ export class CreateProfileDto {
   fleetIds?: string[];
 
   @IsObject()
-  defaults: Record<string, any>;
+  defaults: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()
@@ -67,7 +67,7 @@ export class UpdateProfileDto {
 
   @IsObject()
   @IsOptional()
-  defaults?: Record<string, any>;
+  defaults?: Record<string, unknown>;
 
   @IsObject()
   @IsOptional()

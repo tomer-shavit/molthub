@@ -22,7 +22,7 @@ import {
 interface ReviewStepProps {
   templateName: string;
   deploymentTarget: { type: string; region?: string };
-  channels: Array<{ type: string; config: Record<string, any> }>;
+  channels: Array<{ type: string; config: Record<string, unknown> }>;
   configPreview?: Record<string, unknown>;
 }
 
@@ -108,7 +108,7 @@ export function ReviewStep({
                     {ch.type}
                   </span>
                   <Badge variant="outline" className="ml-auto text-xs">
-                    {ch.config.dmPolicy || "pairing"}
+                    {(ch.config.dmPolicy as string) || "pairing"}
                   </Badge>
                 </div>
               ))}

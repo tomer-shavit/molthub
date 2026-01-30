@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, ManifestVersion } from "@molthub/database";
+import { prisma, Prisma, ManifestVersion } from "@molthub/database";
 import { PolicyEngine, InstanceManifest } from "@molthub/core";
 import { CreateManifestDto } from "./manifests.dto";
 
@@ -61,7 +61,7 @@ export class ManifestsService {
       data: {
         instanceId,
         version: nextVersion,
-        content: dto.content as any,
+        content: dto.content as Prisma.InputJsonValue,
         createdBy: "system", // TODO: Get from auth context
       },
     });

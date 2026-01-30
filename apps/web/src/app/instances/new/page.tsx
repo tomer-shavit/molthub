@@ -80,7 +80,7 @@ export default async function CreateInstancePage() {
         <section className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold mb-4">1. Choose Template</h2>
           <div className="grid grid-cols-1 gap-4">
-            {templates.map((template: any) => (
+            {templates.map((template: { id: string; name: string; description: string; category: string; isBuiltin: boolean }) => (
               <label 
                 key={template.id}
                 className="border rounded-lg p-4 cursor-pointer hover:border-blue-500 transition-colors"

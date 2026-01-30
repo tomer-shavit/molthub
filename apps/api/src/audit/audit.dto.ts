@@ -46,5 +46,5 @@ export class AuditEventResponseDto {
   timestamp: Date;
 
   @ApiProperty()
-  metadata: any;
+  metadata: Record<string, unknown>;
 }

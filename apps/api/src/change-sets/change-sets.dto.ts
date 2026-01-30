@@ -31,10 +31,10 @@ export class CreateChangeSetDto {
 
   @IsObject()
   @IsOptional()
-  fromManifest?: Record<string, any>;
+  fromManifest?: Record<string, unknown>;
 
   @IsObject()
-  toManifest: Record<string, any>;
+  toManifest: Record<string, unknown>;
 
   @IsEnum(RolloutStrategy)
   @IsOptional()

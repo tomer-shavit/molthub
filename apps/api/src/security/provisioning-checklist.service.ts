@@ -26,12 +26,13 @@ export class ProvisioningChecklistService {
     const items: ChecklistItem[] = [];
 
     // 1. Gateway Auth (Hack #2)
-    const gateway = config.gateway as any;
+    const gateway = config.gateway as Record<string, unknown> | undefined;
+    const gatewayAuth = gateway?.auth as Record<string, unknown> | undefined;
     items.push({
       id: "gateway-auth",
       category: "Authentication",
       description: "Gateway has authentication configured",
-      status: gateway?.auth?.token || gateway?.auth?.password ? "pass" : "fail",
+      status: gatewayAuth?.token || gatewayAuth?.password ? "pass" : "fail",
       remediation: "Add gateway.auth.token to your config",
       attackVector: "Hack #2: Exposed control gateway",
     });
@@ -47,9 +48,9 @@ export class ProvisioningChecklistService {
     });
 
     // 3. DM Policy (Hack #3)
-    const channels = config.channels as any;
+    const channels = config.channels as Record<string, Record<string, unknown>> | undefined;
     const channelKeys = channels ? Object.keys(channels).filter(k => channels[k]?.enabled) : [];
-    const hasOpenDm = channelKeys.some(k => channels[k]?.dmPolicy === "open");
+    const hasOpenDm = channelKeys.some(k => channels![k]?.dmPolicy === "open");
     items.push({
       id: "dm-policy",
       category: "Access Control",
@@ -60,7 +61,7 @@ export class ProvisioningChecklistService {
     });
 
     // 4. Group Policy (Hack #3)
-    const hasOpenGroup = channelKeys.some(k => channels[k]?.groupPolicy === "open");
+    const hasOpenGroup = channelKeys.some(k => channels![k]?.groupPolicy === "open");
     items.push({
       id: "group-policy",
       category: "Access Control",
@@ -71,7 +72,8 @@ export class ProvisioningChecklistService {
     });
 
     // 5. Sandbox Mode (Hack #7)
-    const sandbox = config.sandbox as any;
+    const sandbox = config.sandbox as Record<string, unknown> | undefined;
+    const sandboxDocker = sandbox?.docker as Record<string, unknown> | undefined;
     items.push({
       id: "sandbox-mode",
       category: "Isolation",
@@ -86,13 +88,14 @@ export class ProvisioningChecklistService {
       id: "docker-security",
       category: "Isolation",
       description: "Docker containers have security hardening",
-      status: sandbox?.docker?.readOnlyRootfs && sandbox?.docker?.noNewPrivileges ? "pass" : sandbox?.mode === "off" ? "skip" : "warn",
+      status: sandboxDocker?.readOnlyRootfs && sandboxDocker?.noNewPrivileges ? "pass" : sandbox?.mode === "off" ? "skip" : "warn",
       remediation: "Set sandbox.docker.readOnlyRootfs and noNewPrivileges to true",
       attackVector: "Hack #7: No sandbox",
     });
 
     // 7. Tool Profile (Hack #5, #6)
-    const tools = config.tools as any;
+    const tools = config.tools as Record<string, unknown> | undefined;
+    const toolsElevated = tools?.elevated as Record<string, unknown> | undefined;
     items.push({
       id: "tool-profile",
       category: "Access Control",
@@ -107,13 +110,13 @@ export class ProvisioningChecklistService {
       id: "elevated-tools",
       category: "Access Control",
       description: "Elevated tools have allowFrom restrictions",
-      status: tools?.elevated?.enabled && (!tools.elevated.allowFrom || tools.elevated.allowFrom.length === 0) ? "fail" : "pass",
+      status: toolsElevated?.enabled && (!toolsElevated.allowFrom || (toolsElevated.allowFrom as unknown[]).length === 0) ? "fail" : "pass",
       remediation: "Add user IDs to tools.elevated.allowFrom or disable elevated tools",
       attackVector: "Hack #5: Unrestricted tool access",
     });
 
     // 9. Sensitive Redaction (General)
-    const logging = config.logging as any;
+    const logging = config.logging as Record<string, unknown> | undefined;
     items.push({
       id: "redact-sensitive",
       category: "Data Protection",
@@ -124,7 +127,7 @@ export class ProvisioningChecklistService {
     });
 
     // 10. Skills Verification (Hack #9)
-    const skills = config.skills as any;
+    const skills = config.skills as Record<string, unknown> | undefined;
     items.push({
       id: "skill-verification",
       category: "Supply Chain",

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { prisma, AuditEvent } from "@molthub/database";
+import { prisma, Prisma, AuditEvent } from "@molthub/database";
 import { ListAuditEventsQueryDto } from "./audit.dto";
 
 @Injectable()
@@ -34,7 +34,7 @@ export class AuditService {
         resourceId,
         workspaceId,
         diffSummary,
-        metadata: (metadata || {}) as any,
+        metadata: (metadata || {}) as Prisma.InputJsonValue,
       },
     });
   }

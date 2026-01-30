@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
-import { prisma } from '@molthub/database';
+import { prisma, Prisma } from '@molthub/database';
 import { CreateSkillPackDto, UpdateSkillPackDto, AttachSkillPackDto, BulkAttachSkillPackDto } from './skill-packs.dto';
 import { SkillPackResponse, SkillPackWithBots, BotAttachmentResponse, BulkAttachResult, SyncResult } from './skill-packs.types';
 import { SkillVerificationService } from '../security/skill-verification.service';
@@ -26,8 +26,8 @@ export class SkillPacksService {
         ...dto,
         workspaceId,
         createdBy: userId,
-        skills: dto.skills || [],
-        mcps: dto.mcps || [],
+        skills: (dto.skills || []) as Prisma.InputJsonValue,
+        mcps: (dto.mcps || []) as Prisma.InputJsonValue,
         envVars: dto.envVars || {},
       },
     });
@@ -100,10 +100,14 @@ export class SkillPacksService {
     // Increment version when content changes
     const versionIncrement = dto.skills || dto.mcps || dto.envVars ? 1 : 0;
 
+    const { skills, mcps, envVars, ...restDto } = dto;
     return prisma.skillPack.update({
       where: { id },
       data: {
-        ...dto,
+        ...restDto,
+        ...(skills && { skills: skills as Prisma.InputJsonValue }),
+        ...(mcps && { mcps: mcps as Prisma.InputJsonValue }),
+        ...(envVars && { envVars: envVars as Prisma.InputJsonValue }),
         version: { increment: versionIncrement },
         updatedAt: new Date(),
       },

@@ -92,9 +92,10 @@ export function SingleBotDashboard({ bot }: SingleBotDashboardProps) {
   const health = healthConfig[bot.health] || healthConfig.UNKNOWN;
 
   const manifest = bot.desiredManifest || {};
-  const gatewayConfig = (manifest as any)?.gateway || {};
+  const manifestObj = manifest as Record<string, unknown>;
+  const gatewayConfig = (manifestObj?.gateway as Record<string, unknown>) || {};
   const channelsConfig: Array<{ type: string; enabled?: boolean; status?: string }> =
-    (manifest as any)?.channels || [];
+    (manifestObj?.channels as Array<{ type: string; enabled?: boolean; status?: string }>) || [];
 
   const isGatewayConnected = bot.status === "RUNNING" && bot.health !== "UNHEALTHY";
 
@@ -165,10 +166,10 @@ export function SingleBotDashboard({ bot }: SingleBotDashboardProps) {
                   <span className="font-mono font-medium">{bot.gatewayPort}</span>
                 </div>
               )}
-              {gatewayConfig.authMode && (
+              {!!gatewayConfig.authMode && (
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Auth Mode</span>
-                  <span className="font-medium capitalize">{gatewayConfig.authMode}</span>
+                  <span className="font-medium capitalize">{String(gatewayConfig.authMode)}</span>
                 </div>
               )}
             </div>

@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Param, Request } from "@nestjs/common";
+import { Controller, Get, Post, Body, Param, Req } from "@nestjs/common";
+import { Request as ExpressRequest } from "express";
 import { Public } from "../auth/public.decorator";
 import { OnboardingService } from "./onboarding.service";
 import { OnboardingDeployDto, OnboardingPreviewDto } from "./onboarding.dto";
@@ -25,8 +26,9 @@ export class OnboardingController {
   }
 
   @Post("deploy")
-  async deploy(@Body() dto: OnboardingDeployDto, @Request() req: any) {
-    const userId = req.user?.sub ?? req.user?.id ?? "system";
+  async deploy(@Body() dto: OnboardingDeployDto, @Req() req: ExpressRequest) {
+    const user = (req as unknown as Record<string, unknown>).user as Record<string, string> | undefined;
+    const userId = user?.sub ?? user?.id ?? "system";
     return this.onboardingService.deploy(dto, userId);
   }
 

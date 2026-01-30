@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, Fleet, FleetStatus, BotStatus } from "@molthub/database";
+import { prisma, Fleet, FleetStatus, BotStatus, BotInstance } from "@molthub/database";
 import { CreateFleetDto, UpdateFleetDto, ListFleetsQueryDto } from "./fleets.dto";
 
 @Injectable()
@@ -50,7 +50,7 @@ export class FleetService {
     });
   }
 
-  async findOne(id: string): Promise<Fleet & { instances: any[] }> {
+  async findOne(id: string): Promise<Fleet & { instances: Pick<BotInstance, 'id' | 'name' | 'status' | 'health' | 'createdAt'>[] }> {
     const fleet = await prisma.fleet.findUnique({
       where: { id },
       include: {

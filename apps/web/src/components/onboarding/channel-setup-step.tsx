@@ -21,7 +21,7 @@ export interface TemplateChannelPreset {
 
 export interface ChannelConfig {
   type: string;
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 }
 
 interface ChannelSetupStepProps {
@@ -55,7 +55,7 @@ export function ChannelSetupStep({
     );
   };
 
-  const updateChannel = (type: string, updates: Record<string, any>) => {
+  const updateChannel = (type: string, updates: Record<string, unknown>) => {
     const existing = getConfigForChannel(type);
     const updated: ChannelConfig = {
       ...existing,
@@ -121,7 +121,7 @@ export function ChannelSetupStep({
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium">DM Policy</label>
                     <Select
-                      value={channelConfig.config.dmPolicy || "pairing"}
+                      value={(channelConfig.config.dmPolicy as string) || "pairing"}
                       onChange={(e) =>
                         updateChannel(preset.type, { dmPolicy: e.target.value })
                       }
@@ -154,8 +154,8 @@ function ChannelFields({
   onUpdate,
 }: {
   type: string;
-  config: Record<string, any>;
-  onUpdate: (updates: Record<string, any>) => void;
+  config: Record<string, unknown>;
+  onUpdate: (updates: Record<string, unknown>) => void;
 }) {
   const lowerType = type.toLowerCase();
 
@@ -178,7 +178,7 @@ function ChannelFields({
         <Input
           type="password"
           placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-          value={config.botToken || ""}
+          value={(config.botToken as string) || ""}
           onChange={(e) => onUpdate({ botToken: e.target.value })}
         />
         <p className="text-xs text-muted-foreground">
@@ -195,7 +195,7 @@ function ChannelFields({
         <Input
           type="password"
           placeholder="Discord bot token"
-          value={config.botToken || ""}
+          value={(config.botToken as string) || ""}
           onChange={(e) => onUpdate({ botToken: e.target.value })}
         />
         <p className="text-xs text-muted-foreground">
@@ -213,7 +213,7 @@ function ChannelFields({
           <Input
             type="password"
             placeholder="xoxb-..."
-            value={config.botToken || ""}
+            value={(config.botToken as string) || ""}
             onChange={(e) => onUpdate({ botToken: e.target.value })}
           />
           <p className="text-xs text-muted-foreground">
@@ -225,7 +225,7 @@ function ChannelFields({
           <Input
             type="password"
             placeholder="xapp-..."
-            value={config.appToken || ""}
+            value={(config.appToken as string) || ""}
             onChange={(e) => onUpdate({ appToken: e.target.value })}
           />
           <p className="text-xs text-muted-foreground">

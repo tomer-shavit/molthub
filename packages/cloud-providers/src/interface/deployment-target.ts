@@ -245,9 +245,6 @@ export interface KubernetesTargetConfig {
 import type { EcsFargateConfig } from "../targets/ecs-fargate/ecs-fargate-config";
 export type { EcsFargateConfig } from "../targets/ecs-fargate/ecs-fargate-config";
 
-/**
- * Union type for all deployment target configurations
- */
 export type DeploymentTargetConfig =
   | { type: "local" }
   | { type: "remote-vm"; ssh: RemoteVMConfig }

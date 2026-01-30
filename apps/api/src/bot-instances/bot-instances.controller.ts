@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
 } from "@nestjs/common";
+import { BotInstance } from "@molthub/database";
 import { BotInstancesService } from "./bot-instances.service";
 import { 
   CreateBotInstanceDto, 
@@ -18,7 +19,6 @@ import {
   UpdateBotHealthDto,
   ListBotInstancesQueryDto 
 } from "./bot-instances.dto";
-import { BotInstance } from "@molthub/database";
 
 @Controller("bot-instances")
 export class BotInstancesController {
@@ -35,12 +35,12 @@ export class BotInstancesController {
   }
 
   @Get("dashboard")
-  getDashboardData(@Query('workspaceId') workspaceId: string): Promise<any> {
+  getDashboardData(@Query('workspaceId') workspaceId: string): Promise<Record<string, unknown>> {
     return this.botInstancesService.getDashboardData(workspaceId);
   }
 
   @Get(":id")
-  findOne(@Param("id") id: string): Promise<any> {
+  findOne(@Param("id") id: string): Promise<BotInstance> {
     return this.botInstancesService.findOne(id);
   }
 

@@ -45,6 +45,7 @@ const BaseChannelFields = {
   mediaMaxMb: z.number().min(0).default(25),
 };
 
+
 /**
  * Refine helper: validates that allowFrom / groupAllowFrom are non-empty
  * when the corresponding policy is set to "allowlist".
@@ -52,7 +53,7 @@ const BaseChannelFields = {
 function refineChannelAllowlists<T extends z.ZodTypeAny>(schema: T) {
   return schema
     .refine(
-      (data: any) =>
+      (data: Record<string, unknown>) =>
         data.dmPolicy !== "allowlist" ||
         (Array.isArray(data.allowFrom) && data.allowFrom.length > 0),
       {
@@ -62,7 +63,7 @@ function refineChannelAllowlists<T extends z.ZodTypeAny>(schema: T) {
       },
     )
     .refine(
-      (data: any) =>
+      (data: Record<string, unknown>) =>
         data.groupPolicy !== "allowlist" ||
         (Array.isArray(data.groupAllowFrom) && data.groupAllowFrom.length > 0),
       {

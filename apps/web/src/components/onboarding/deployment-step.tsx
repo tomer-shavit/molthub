@@ -8,9 +8,9 @@ import { Container, Cloud } from "lucide-react";
 
 interface DeploymentStepProps {
   selectedTarget: "docker" | "ecs-fargate" | null;
-  targetConfig: Record<string, any>;
+  targetConfig: Record<string, unknown>;
   onTargetSelect: (type: string) => void;
-  onConfigChange: (config: Record<string, any>) => void;
+  onConfigChange: (config: Record<string, unknown>) => void;
 }
 
 const AWS_REGIONS = [
@@ -79,7 +79,7 @@ export function DeploymentStep({
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">AWS Region</label>
                 <Select
-                  value={targetConfig.region || ""}
+                  value={(targetConfig.region as string) || ""}
                   onChange={(e) => updateConfig("region", e.target.value)}
                 >
                   <option value="" disabled>
@@ -98,7 +98,7 @@ export function DeploymentStep({
                 <Input
                   type="text"
                   placeholder="AKIA..."
-                  value={targetConfig.accessKeyId || ""}
+                  value={(targetConfig.accessKeyId as string) || ""}
                   onChange={(e) => updateConfig("accessKeyId", e.target.value)}
                 />
               </div>
@@ -108,7 +108,7 @@ export function DeploymentStep({
                 <Input
                   type="password"
                   placeholder="Secret access key"
-                  value={targetConfig.secretAccessKey || ""}
+                  value={(targetConfig.secretAccessKey as string) || ""}
                   onChange={(e) => updateConfig("secretAccessKey", e.target.value)}
                 />
               </div>
@@ -118,7 +118,7 @@ export function DeploymentStep({
                 <Input
                   type="text"
                   placeholder="subnet-abc123, subnet-def456"
-                  value={targetConfig.subnetIds || ""}
+                  value={(targetConfig.subnetIds as string) || ""}
                   onChange={(e) => updateConfig("subnetIds", e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -131,7 +131,7 @@ export function DeploymentStep({
                 <Input
                   type="text"
                   placeholder="sg-abc123"
-                  value={targetConfig.securityGroupId || ""}
+                  value={(targetConfig.securityGroupId as string) || ""}
                   onChange={(e) => updateConfig("securityGroupId", e.target.value)}
                 />
               </div>

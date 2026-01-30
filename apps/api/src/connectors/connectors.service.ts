@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, IntegrationConnector, ConnectorStatus } from "@molthub/database";
+import { prisma, Prisma, IntegrationConnector, ConnectorStatus } from "@molthub/database";
 import { CreateConnectorDto, UpdateConnectorDto, ListConnectorsQueryDto, TestConnectionDto } from "./connectors.dto";
 
 @Injectable()
@@ -11,10 +11,10 @@ export class ConnectorsService {
         name: dto.name,
         description: dto.description,
         type: dto.type,
-        config: dto.config as any,
+        config: dto.config as Prisma.InputJsonValue,
         isShared: dto.isShared ?? true,
-        allowedInstanceIds: dto.allowedInstanceIds as any,
-        tags: dto.tags || {},
+        allowedInstanceIds: dto.allowedInstanceIds as Prisma.InputJsonValue,
+        tags: (dto.tags || {}) as Prisma.InputJsonValue,
         createdBy: dto.createdBy || "system",
       },
     });
@@ -67,11 +67,11 @@ export class ConnectorsService {
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.config && { config: dto.config as any }),
+        ...(dto.config && { config: dto.config as Prisma.InputJsonValue }),
         ...(dto.isShared !== undefined && { isShared: dto.isShared }),
-        ...(dto.allowedInstanceIds && { allowedInstanceIds: dto.allowedInstanceIds as any }),
-        ...(dto.tags && { tags: dto.tags }),
-        ...(dto.rotationSchedule && { rotationSchedule: dto.rotationSchedule as any }),
+        ...(dto.allowedInstanceIds && { allowedInstanceIds: dto.allowedInstanceIds as Prisma.InputJsonValue }),
+        ...(dto.tags && { tags: dto.tags as Prisma.InputJsonValue }),
+        ...(dto.rotationSchedule && { rotationSchedule: dto.rotationSchedule as Prisma.InputJsonValue }),
       },
     });
   }
@@ -105,7 +105,7 @@ export class ConnectorsService {
     await prisma.integrationConnector.delete({ where: { id } });
   }
 
-  async testConnection(id: string, dto: TestConnectionDto): Promise<any> {
+  async testConnection(id: string, dto: TestConnectionDto): Promise<Record<string, unknown>> {
     const connector = await this.findOne(id);
     const startTime = Date.now();
 
@@ -143,7 +143,7 @@ export class ConnectorsService {
     }
   }
 
-  private async performConnectionTest(connector: IntegrationConnector): Promise<{ success: boolean; message: string; checks?: any[] }> {
+  private async performConnectionTest(connector: IntegrationConnector): Promise<{ success: boolean; message: string; checks?: Record<string, unknown>[] }> {
     // Placeholder for actual connection testing
     // In production, this would test actual API connectivity
     switch (connector.type) {

@@ -178,36 +178,36 @@ export interface ConfigLayer {
   type: "template" | "profile" | "overlay" | "instance";
   id: string;
   priority: number;
-  config: any;
+  config: Record<string, unknown>;
 }
 
 export function resolveConfig(
   layers: ConfigLayer[],
   mergeStrategies: Record<string, "override" | "merge" | "prepend" | "append">
-): any {
+): Record<string, unknown> {
   // Sort by priority (lower first)
   const sorted = [...layers].sort((a, b) => a.priority - b.priority);
-  
+
   // Start with empty object
-  let result: any = {};
-  
+  let result: Record<string, unknown> = {};
+
   for (const layer of sorted) {
-    result = deepMerge(result, layer.config, mergeStrategies);
+    result = deepMerge(result, layer.config, mergeStrategies) as Record<string, unknown>;
   }
-  
+
   return result;
 }
 
 function deepMerge(
-  target: any,
-  source: any,
+  target: unknown,
+  source: unknown,
   strategies: Record<string, "override" | "merge" | "prepend" | "append">,
   path = ""
-): any {
+): unknown {
   if (source === null || source === undefined) {
     return target;
   }
-  
+
   // Handle arrays - check strategy first
   if (Array.isArray(source)) {
     const strategy = strategies[path] || "override";
@@ -220,38 +220,39 @@ function deepMerge(
     }
     return source;
   }
-  
+
   if (typeof source !== "object") {
     return source;
   }
-  
-  const result = { ...target };
-  
-  for (const key of Object.keys(source)) {
+
+  const src = source as Record<string, unknown>;
+  const tgt = (typeof target === "object" && target !== null ? target : {}) as Record<string, unknown>;
+  const result: Record<string, unknown> = { ...tgt };
+
+  for (const key of Object.keys(src)) {
     const currentPath = path ? `${path}.${key}` : key;
     const strategy = strategies[currentPath] || "override";
-    
-    if (Array.isArray(source[key])) {
-      // Handle arrays at this level
+
+    if (Array.isArray(src[key])) {
       if (strategy === "append" && Array.isArray(result[key])) {
-        result[key] = [...result[key], ...source[key]];
+        result[key] = [...(result[key] as unknown[]), ...(src[key] as unknown[])];
       } else if (strategy === "prepend" && Array.isArray(result[key])) {
-        result[key] = [...source[key], ...result[key]];
+        result[key] = [...(src[key] as unknown[]), ...(result[key] as unknown[])];
       } else if (strategy === "merge" && Array.isArray(result[key])) {
-        result[key] = [...result[key], ...source[key]];
+        result[key] = [...(result[key] as unknown[]), ...(src[key] as unknown[])];
       } else {
-        result[key] = source[key];
+        result[key] = src[key];
       }
-    } else if (strategy === "merge" && 
-        typeof result[key] === "object" && 
-        typeof source[key] === "object" &&
-        !Array.isArray(source[key])) {
-      result[key] = deepMerge(result[key] || {}, source[key], strategies, currentPath);
+    } else if (strategy === "merge" &&
+        typeof result[key] === "object" &&
+        typeof src[key] === "object" &&
+        !Array.isArray(src[key])) {
+      result[key] = deepMerge(result[key] || {}, src[key], strategies, currentPath);
     } else {
-      result[key] = deepMerge(result[key], source[key], strategies, currentPath);
+      result[key] = deepMerge(result[key], src[key], strategies, currentPath);
     }
   }
-  
+
   return result;
 }
 

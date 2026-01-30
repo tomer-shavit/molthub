@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma, Trace } from "@molthub/database";
+import { prisma, Prisma, Trace } from "@molthub/database";
 import { CreateTraceDto, ListTracesQueryDto } from "./traces.dto";
 
 @Injectable()
@@ -16,11 +16,11 @@ export class TracesService {
         startedAt: dto.startedAt || new Date(),
         endedAt: dto.endedAt,
         durationMs: dto.durationMs,
-        input: dto.input as any,
-        output: dto.output as any,
-        error: dto.error as any,
-        metadata: dto.metadata || {},
-        tags: dto.tags || {},
+        input: dto.input as Prisma.InputJsonValue,
+        output: dto.output as Prisma.InputJsonValue,
+        error: dto.error as Prisma.InputJsonValue,
+        metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+        tags: (dto.tags || {}) as Prisma.InputJsonValue,
       },
     });
 
@@ -85,7 +85,7 @@ export class TracesService {
     return { ...trace, children };
   }
 
-  async complete(id: string, output?: Record<string, any>): Promise<Trace> {
+  async complete(id: string, output?: Record<string, unknown>): Promise<Trace> {
     const trace = await this.findOne(id);
     const endedAt = new Date();
     const durationMs = endedAt.getTime() - trace.startedAt.getTime();
@@ -96,12 +96,12 @@ export class TracesService {
         status: "SUCCESS",
         endedAt,
         durationMs,
-        ...(output && { output: output as any }),
+        ...(output && { output: output as Prisma.InputJsonValue }),
       },
     });
   }
 
-  async fail(id: string, error: Record<string, any>): Promise<Trace> {
+  async fail(id: string, error: Record<string, unknown>): Promise<Trace> {
     const trace = await this.findOne(id);
     const endedAt = new Date();
     const durationMs = endedAt.getTime() - trace.startedAt.getTime();
@@ -112,15 +112,15 @@ export class TracesService {
         status: "ERROR",
         endedAt,
         durationMs,
-        error: error as any,
+        error: error as Prisma.InputJsonValue,
       },
     });
   }
 
-  async getTraceTree(traceId: string): Promise<any> {
+  async getTraceTree(traceId: string): Promise<Record<string, unknown>> {
     const root = await this.findByTraceId(traceId);
-    
-    async function buildTree(parentId: string): Promise<any[]> {
+
+    async function buildTree(parentId: string): Promise<Record<string, unknown>[]> {
       const children = await prisma.trace.findMany({
         where: { parentTraceId: parentId },
         orderBy: { startedAt: "asc" },

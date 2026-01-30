@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { ManifestsService } from "./manifests.service";
 import { CreateManifestDto, ManifestResponseDto } from "./manifests.dto";
+import { ManifestVersion } from "@molthub/database";
 
 @ApiTags("manifests")
 @Controller("instances/:instanceId/manifests")
@@ -11,7 +12,7 @@ export class ManifestsController {
   @Get()
   @ApiOperation({ summary: "List manifest versions for an instance" })
   @ApiResponse({ status: 200, type: [ManifestResponseDto] })
-  async findAll(@Param("instanceId") instanceId: string): Promise<ManifestResponseDto[]> {
+  async findAll(@Param("instanceId") instanceId: string): Promise<ManifestVersion[]> {
     return this.manifestsService.findAll(instanceId);
   }
 
@@ -22,14 +23,14 @@ export class ManifestsController {
   async create(
     @Param("instanceId") instanceId: string,
     @Body() dto: CreateManifestDto,
-  ): Promise<ManifestResponseDto> {
+  ): Promise<ManifestVersion> {
     return this.manifestsService.create(instanceId, dto);
   }
 
   @Get("latest")
   @ApiOperation({ summary: "Get latest manifest version" })
   @ApiResponse({ status: 200, type: ManifestResponseDto })
-  async getLatest(@Param("instanceId") instanceId: string): Promise<ManifestResponseDto> {
+  async getLatest(@Param("instanceId") instanceId: string): Promise<ManifestVersion> {
     return this.manifestsService.getLatest(instanceId);
   }
 

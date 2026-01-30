@@ -18,7 +18,7 @@ export interface ChannelData {
   moltbotType: MoltbotChannelType;
   enabled: boolean;
   policies: Partial<CommonChannelConfig>;
-  typeConfig: Record<string, any>;
+  typeConfig: Record<string, unknown>;
   secrets: Record<string, string>;
 }
 
@@ -40,7 +40,7 @@ export class ChannelConfigGenerator {
     const config: Record<string, unknown> = {};
 
     for (const channel of channels) {
-      if (!MOLTBOT_CHANNEL_TYPES.includes(channel.moltbotType as any)) {
+      if (!(MOLTBOT_CHANNEL_TYPES as readonly string[]).includes(channel.moltbotType)) {
         continue;
       }
 

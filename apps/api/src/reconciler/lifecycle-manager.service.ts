@@ -403,6 +403,7 @@ export class LifecycleManagerService {
 
     // Fallback: derive from deploymentType enum
     const typeStr = instance.deploymentType ?? "LOCAL";
+    const instanceMeta = instance.metadata as Record<string, unknown> | null;
     const configMap: Record<string, DeploymentTargetConfig> = {
       LOCAL: { type: "local" },
       DOCKER: {
@@ -424,11 +425,11 @@ export class LifecycleManagerService {
       ECS_FARGATE: {
         type: "ecs-fargate",
         ecs: {
-          region: (instance as any).metadata?.awsRegion ?? "us-east-1",
-          accessKeyId: (instance as any).metadata?.awsAccessKeyId ?? "",
-          secretAccessKey: (instance as any).metadata?.awsSecretAccessKey ?? "",
-          subnetIds: ((instance as any).metadata?.subnetIds as string[]) ?? [],
-          securityGroupId: (instance as any).metadata?.securityGroupId ?? "",
+          region: (instanceMeta?.awsRegion as string) ?? "us-east-1",
+          accessKeyId: (instanceMeta?.awsAccessKeyId as string) ?? "",
+          secretAccessKey: (instanceMeta?.awsSecretAccessKey as string) ?? "",
+          subnetIds: (instanceMeta?.subnetIds as string[]) ?? [],
+          securityGroupId: (instanceMeta?.securityGroupId as string) ?? "",
           clusterName: `moltbot-${instance.name}`,
         },
       },

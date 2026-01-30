@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, ChangeSet, BotInstance } from "@molthub/database";
+import { prisma, Prisma, ChangeSet, BotInstance } from "@molthub/database";
 import { CreateChangeSetDto, RollbackChangeSetDto, ListChangeSetsQueryDto } from "./change-sets.dto";
 
 @Injectable()
@@ -19,11 +19,11 @@ export class ChangeSetsService {
         botInstanceId: dto.botInstanceId,
         changeType: dto.changeType,
         description: dto.description,
-        fromManifest: dto.fromManifest as any,
-        toManifest: dto.toManifest as any,
+        fromManifest: dto.fromManifest as Prisma.InputJsonValue,
+        toManifest: dto.toManifest as Prisma.InputJsonValue,
         rolloutStrategy: dto.rolloutStrategy || "ALL",
         rolloutPercentage: dto.rolloutPercentage,
-        canaryInstances: dto.canaryInstances as any,
+        canaryInstances: dto.canaryInstances as Prisma.InputJsonValue,
         status: "PENDING",
         totalInstances: dto.totalInstances || 1,
         createdBy: dto.createdBy || "system",

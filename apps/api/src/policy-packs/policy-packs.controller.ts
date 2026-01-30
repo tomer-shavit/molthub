@@ -45,7 +45,7 @@ export class PolicyPacksController {
   }
 
   @Post("evaluate")
-  evaluate(@Body() dto: EvaluatePolicyDto): Promise<any> {
+  evaluate(@Body() dto: EvaluatePolicyDto): Promise<Record<string, unknown>> {
     return this.policyPacksService.evaluate(dto);
   }
 }

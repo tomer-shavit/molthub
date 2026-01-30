@@ -86,7 +86,8 @@ export async function withRetry<T>(
       return await operation();
     } catch (error) {
       lastError = error as Error;
-      const errorName = (error as any).name || (error as any).code || "";
+      const errorObj = error as { name?: string; code?: string };
+      const errorName = errorObj.name || errorObj.code || "";
       
       // Check if error is retryable
       const isRetryable = retryConfig.retryableErrors.some(e => 
@@ -315,13 +316,14 @@ export function sanitizeResourceName(name: string, maxLength: number = 63): stri
 /**
  * Parse error from cloud SDK and return standardized error info
  */
-export function parseCloudError(error: any, providerName: string): {
+export function parseCloudError(error: unknown, providerName: string): {
   type: ProviderErrorType;
   message: string;
   suggestions: string[];
 } {
-  const errorName = error?.name || error?.code || "";
-  const errorMessage = error?.message || String(error);
+  const errorObj = error as { name?: string; code?: string; message?: string } | null | undefined;
+  const errorName = errorObj?.name || errorObj?.code || "";
+  const errorMessage = errorObj?.message || String(error);
 
   // AWS errors
   if (errorName.includes("CredentialsProviderError") || 
