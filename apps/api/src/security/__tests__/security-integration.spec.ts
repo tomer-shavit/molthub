@@ -1,6 +1,6 @@
 /**
  * Security Integration Tests — validates that all 10 attack vectors from
- * "10 ways to hack into a vibecoder's clawdbot" are covered by default.
+ * "10 ways to hack into a vibecoder's openclaw" are covered by default.
  *
  * These tests verify schema defaults, config generator enforcement,
  * channel security, tool/browser isolation, skill verification,

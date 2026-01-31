@@ -44,7 +44,7 @@ import {
 const realisticConfig = {
   agents: {
     defaults: {
-      workspace: "~/clawd",
+      workspace: "~/openclaw",
       model: {
         primary: "anthropic/claude-sonnet-4-20250514",
         fallbacks: ["openai/gpt-4o"],
@@ -73,7 +73,7 @@ const realisticConfig = {
       {
         id: "coder",
         workspace: "~/projects",
-        agentDir: "~/.clawdbot/agents/coder",
+        agentDir: "~/.openclaw/agents/coder",
         model: { primary: "anthropic/claude-sonnet-4-20250514" },
         tools: {
           allow: ["group:fs", "group:runtime"],
@@ -142,7 +142,7 @@ const realisticConfig = {
   },
   skills: {
     allowBundled: ["web-search", "image-gen"],
-    load: { extraDirs: ["~/.clawdbot/skills"] },
+    load: { extraDirs: ["~/.openclaw/skills"] },
     entries: {
       "web-search": { enabled: true, apiKey: "${SEARCH_API_KEY}" },
       "custom-skill": {
@@ -199,7 +199,7 @@ describe("OpenClawConfigSchema", () => {
 
   it("validates via helper function", () => {
     const parsed = validateOpenClawConfig(realisticConfig);
-    expect(parsed.agents?.defaults?.workspace).toBe("~/clawd");
+    expect(parsed.agents?.defaults?.workspace).toBe("~/openclaw");
     expect(parsed.gateway?.port).toBe(18789);
   });
 
@@ -404,14 +404,14 @@ describe("OpenClawProfileRegistry", () => {
           port: 18789,
           configPath: "/etc/openclaw/main.json",
           stateDir: "/var/openclaw/main",
-          workspace: "~/clawd-main",
+          workspace: "~/openclaw-main",
         },
         {
           name: "secondary",
           port: 18809,
           configPath: "/etc/openclaw/secondary.json",
           stateDir: "/var/openclaw/secondary",
-          workspace: "~/clawd-secondary",
+          workspace: "~/openclaw-secondary",
         },
       ],
     });
@@ -509,11 +509,11 @@ describe("Profile utility functions", () => {
       port: 18789,
       configPath: "/etc/openclaw/test.json",
       stateDir: "/var/openclaw/test",
-      workspace: "~/clawd-test",
+      workspace: "~/openclaw-test",
       enabled: true,
     });
-    expect(env.CLAWDBOT_CONFIG_PATH).toBe("/etc/openclaw/test.json");
-    expect(env.CLAWDBOT_STATE_DIR).toBe("/var/openclaw/test");
+    expect(env.OPENCLAW_CONFIG_PATH).toBe("/etc/openclaw/test.json");
+    expect(env.OPENCLAW_STATE_DIR).toBe("/var/openclaw/test");
   });
 });
 

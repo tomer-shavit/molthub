@@ -14,7 +14,7 @@ describe("OpenClawProfileSchema", () => {
       port: 18789,
       configPath: "/etc/openclaw/main.json",
       stateDir: "/var/openclaw/main",
-      workspace: "~/clawd-main",
+      workspace: "~/openclaw-main",
       ...overrides,
     };
   }
@@ -272,13 +272,13 @@ describe("profileEnvVars", () => {
       port: 18789,
       configPath: "/etc/openclaw/main.json",
       stateDir: "/var/openclaw/main",
-      workspace: "~/clawd-main",
+      workspace: "~/openclaw-main",
       enabled: true,
     });
 
     expect(env).toEqual({
-      CLAWDBOT_CONFIG_PATH: "/etc/openclaw/main.json",
-      CLAWDBOT_STATE_DIR: "/var/openclaw/main",
+      OPENCLAW_CONFIG_PATH: "/etc/openclaw/main.json",
+      OPENCLAW_STATE_DIR: "/var/openclaw/main",
     });
   });
 
@@ -292,7 +292,7 @@ describe("profileEnvVars", () => {
       enabled: true,
     });
 
-    expect(env.CLAWDBOT_CONFIG_PATH).toBe("/custom/config.json");
-    expect(env.CLAWDBOT_STATE_DIR).toBe("/custom/state");
+    expect(env.OPENCLAW_CONFIG_PATH).toBe("/custom/config.json");
+    expect(env.OPENCLAW_STATE_DIR).toBe("/custom/state");
   });
 });

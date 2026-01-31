@@ -225,16 +225,16 @@ describe('Manifest - Edge Cases and Boundary Conditions', () => {
         ];
 
         for (const tag of validTags) {
-          manifest.spec.runtime.image = `ghcr.io/clawdbot/clawdbot:${tag}`;
+          manifest.spec.runtime.image = `ghcr.io/openclaw/openclaw:${tag}`;
           expect(() => validateManifest(deepClone(manifest))).not.toThrow();
         }
       });
 
       it('accepts SHA-based tags', () => {
         const manifest = createValidManifest();
-        manifest.spec.runtime.image = 'ghcr.io/clawdbot/clawdbot:sha-abc123';
+        manifest.spec.runtime.image = 'ghcr.io/openclaw/openclaw:sha-abc123';
         const result = validateManifest(manifest);
-        expect(result.spec.runtime.image).toBe('ghcr.io/clawdbot/clawdbot:sha-abc123');
+        expect(result.spec.runtime.image).toBe('ghcr.io/openclaw/openclaw:sha-abc123');
       });
 
       it('accepts various registry formats', () => {
@@ -637,7 +637,7 @@ describe('Manifest - Edge Cases and Boundary Conditions', () => {
         },
         spec: {
           runtime: {
-            image: 'ghcr.io/clawdbot/clawdbot:v2.1.0',
+            image: 'ghcr.io/openclaw/openclaw:v2.1.0',
             cpu: 2,
             memory: 4096,
             replicas: 3,
@@ -689,7 +689,7 @@ describe('Manifest - Edge Cases and Boundary Conditions', () => {
         },
         spec: {
           runtime: {
-            image: 'ghcr.io/clawdbot/clawdbot:v0.1.0',
+            image: 'ghcr.io/openclaw/openclaw:v0.1.0',
             cpu: 0.25,
             memory: 512,
           },

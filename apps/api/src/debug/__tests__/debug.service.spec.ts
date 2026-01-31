@@ -114,9 +114,9 @@ describe("DebugService", () => {
   const mockProfile = {
     instanceId: "inst-1",
     profileName: "main",
-    configPath: "~/.clawdbot/profiles/main/openclaw.json",
-    stateDir: "~/.clawdbot/profiles/main/state/",
-    workspace: "~/clawd/main/",
+    configPath: "~/.openclaw/profiles/main/openclaw.json",
+    stateDir: "~/.openclaw/profiles/main/state/",
+    workspace: "~/openclaw/main/",
     basePort: 18789,
     serviceName: "openclaw-gateway-main",
     serviceType: "systemd",
@@ -201,10 +201,10 @@ describe("DebugService", () => {
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBeGreaterThan(0);
 
-      const configPath = result.find((v) => v.name === "CLAWDBOT_CONFIG_PATH");
+      const configPath = result.find((v) => v.name === "OPENCLAW_CONFIG_PATH");
       expect(configPath?.isSet).toBe(true);
 
-      const profileVar = result.find((v) => v.name === "CLAWDBOT_PROFILE");
+      const profileVar = result.find((v) => v.name === "OPENCLAW_PROFILE");
       expect(profileVar?.isSet).toBe(true);
     });
 
@@ -227,7 +227,7 @@ describe("DebugService", () => {
       mockPrisma.openClawProfile.findUnique.mockResolvedValue(null);
       const result = await service.getStateFiles("inst-1");
       expect(result.length).toBe(3);
-      expect(result.map((f) => f.path)).toContain("~/.clawdbot/openclaw.json");
+      expect(result.map((f) => f.path)).toContain("~/.openclaw/openclaw.json");
     });
   });
 

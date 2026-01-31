@@ -72,7 +72,7 @@ export class BotInstancesService {
   async findAll(query: ListBotInstancesQueryDto): Promise<BotInstance[]> {
     const instances = await prisma.botInstance.findMany({
       where: {
-        workspaceId: query.workspaceId,
+        ...(query.workspaceId && { workspaceId: query.workspaceId }),
         ...(query.fleetId && { fleetId: query.fleetId }),
         ...(query.status && { status: query.status }),
         ...(query.health && { health: query.health }),

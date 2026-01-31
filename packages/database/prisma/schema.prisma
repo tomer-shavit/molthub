@@ -873,9 +873,9 @@ model OpenClawProfile {
   instance   BotInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
 
   profileName String
-  configPath  String // e.g., ~/.clawdbot/profiles/<name>/openclaw.json
-  stateDir    String // e.g., ~/.clawdbot/profiles/<name>/state/
-  workspace   String // e.g., ~/clawd/<name>/
+  configPath  String // e.g., ~/.openclaw/profiles/<name>/openclaw.json
+  stateDir    String // e.g., ~/.openclaw/profiles/<name>/state/
+  workspace   String // e.g., ~/openclaw/<name>/
   basePort    Int    @default(18789)
 
   // Service management

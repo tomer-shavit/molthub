@@ -23,7 +23,7 @@ Before starting any work on this plan, read these docs **in order**. They provid
 - Gateway WS methods and their request/response shapes
 - Config sections: `channels`, `tools`, `skills`, `sandbox`, `session`, `gateway`, `agents`
 - DM policies: `pairing` (default), `allowlist`, `open`, `disabled`
-- Profile isolation: `CLAWDBOT_CONFIG_PATH`, `CLAWDBOT_STATE_DIR`, port spacing 20+
+- Profile isolation: `OPENCLAW_CONFIG_PATH`, `OPENCLAW_STATE_DIR`, port spacing 20+
 
 ### 3. Current Codebase Analysis
 **File**: `.claude/docs/current-codebase-analysis.md`

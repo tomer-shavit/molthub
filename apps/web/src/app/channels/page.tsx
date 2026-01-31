@@ -11,6 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Radio, MessageSquare } from "lucide-react";
+import { DashboardLayout } from "@/components/layout/dashboard-layout";
 
 const CHANNEL_TYPES = [
   "whatsapp",
@@ -107,13 +108,16 @@ export default function ChannelsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24 text-muted-foreground">
-        Loading channel data...
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-24 text-muted-foreground">
+          Loading channel data...
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
+    <DashboardLayout>
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -151,5 +155,6 @@ export default function ChannelsPage() {
         </Card>
       )}
     </div>
+    </DashboardLayout>
   );
 }

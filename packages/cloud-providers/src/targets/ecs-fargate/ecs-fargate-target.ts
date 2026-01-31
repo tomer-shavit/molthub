@@ -12,7 +12,7 @@ import {
 } from "../../interface/deployment-target";
 import type { EcsFargateConfig } from "./ecs-fargate-config";
 
-const DEFAULT_IMAGE = "ghcr.io/clawdbot/clawdbot:latest";
+const DEFAULT_IMAGE = "ghcr.io/openclaw/openclaw:latest";
 const DEFAULT_CLUSTER = "openclaw-cluster";
 const DEFAULT_CPU = 256;
 const DEFAULT_MEMORY = 512;
@@ -142,7 +142,7 @@ export class EcsFargateTarget implements DeploymentTarget {
           ],
           environment: [
             {
-              name: "CLAWDBOT_CONFIG_PATH",
+              name: "OPENCLAW_CONFIG_PATH",
               value: "/tmp/openclaw-config.json",
             },
           ],

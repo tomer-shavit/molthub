@@ -14,8 +14,8 @@ export const MIN_PORT_SPACING = 20;
  * Represents a single OpenClaw profile for multi-instance isolation.
  *
  * Each profile gets:
- *   - Dedicated config file   (CLAWDBOT_CONFIG_PATH)
- *   - Isolated state directory (CLAWDBOT_STATE_DIR)
+ *   - Dedicated config file   (OPENCLAW_CONFIG_PATH)
+ *   - Isolated state directory (OPENCLAW_STATE_DIR)
  *   - Separate workspace
  *   - Unique gateway port (spaced 20+ apart)
  *
@@ -107,7 +107,7 @@ export function serviceName(
  */
 export function profileEnvVars(profile: OpenClawProfile): Record<string, string> {
   return {
-    CLAWDBOT_CONFIG_PATH: profile.configPath,
-    CLAWDBOT_STATE_DIR: profile.stateDir,
+    OPENCLAW_CONFIG_PATH: profile.configPath,
+    OPENCLAW_STATE_DIR: profile.stateDir,
   };
 }

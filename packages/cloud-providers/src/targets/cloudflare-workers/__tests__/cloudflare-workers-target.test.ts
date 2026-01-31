@@ -52,8 +52,8 @@ describe("env-mapper", () => {
       // Container env
       expect(result.containerEnv.OPENCLAW_GATEWAY_TOKEN).toBe("test-gateway-token-abc");
       expect(result.containerEnv.OPENCLAW_GATEWAY_PORT).toBe("18789");
-      expect(result.containerEnv.CLAWDBOT_CONFIG_PATH).toBe("/app/config/openclaw.json");
-      expect(result.containerEnv.CLAWDBOT_STATE_DIR).toBe("/app/state");
+      expect(result.containerEnv.OPENCLAW_CONFIG_PATH).toBe("/app/config/openclaw.json");
+      expect(result.containerEnv.OPENCLAW_STATE_DIR).toBe("/app/state");
 
       // Worker secrets
       expect(result.workerSecrets.OPENCLAW_GATEWAY_TOKEN).toBe("test-gateway-token-abc");
@@ -238,11 +238,11 @@ describe("wrangler-generator", () => {
       const vars = {};
       const output = generateWranglerConfig(config, vars);
 
-      expect(output.dockerfile).toContain("FROM ghcr.io/clawdbot/clawdbot:latest");
+      expect(output.dockerfile).toContain("FROM ghcr.io/openclaw/openclaw:latest");
       expect(output.dockerfile).toContain("EXPOSE 18789");
       expect(output.dockerfile).toContain("start-openclaw.sh");
-      expect(output.dockerfile).toContain("CLAWDBOT_CONFIG_PATH");
-      expect(output.dockerfile).toContain("CLAWDBOT_STATE_DIR");
+      expect(output.dockerfile).toContain("OPENCLAW_CONFIG_PATH");
+      expect(output.dockerfile).toContain("OPENCLAW_STATE_DIR");
     });
 
     it("generates a valid start script", () => {

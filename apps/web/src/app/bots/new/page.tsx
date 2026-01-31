@@ -13,11 +13,10 @@ export default async function AddBotPage({ searchParams }: AddBotPageProps) {
   // Fetch templates and fleets
   let templates: TemplateOption[] = [];
   let fleets: Fleet[] = [];
+
+  // Fetch independently so a failure in one doesn't blank out the other
   try {
-    const [rawTemplates, rawFleets] = await Promise.all([
-      api.getOnboardingTemplates(),
-      api.listFleets(),
-    ]);
+    const rawTemplates = await api.getOnboardingTemplates();
     templates = rawTemplates.map((t) => ({
       id: t.id,
       name: t.name,
@@ -26,9 +25,14 @@ export default async function AddBotPage({ searchParams }: AddBotPageProps) {
       channels: t.channels,
       requiredInputs: t.requiredInputs,
     }));
-    fleets = rawFleets;
   } catch {
-    // Continue with empty data
+    // Continue with empty templates
+  }
+
+  try {
+    fleets = await api.listFleets();
+  } catch {
+    // Continue with empty fleets
   }
 
   return (

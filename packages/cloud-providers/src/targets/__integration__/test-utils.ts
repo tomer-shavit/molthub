@@ -33,7 +33,7 @@ export function buildTestConfig(
     profileName,
     gatewayPort: port,
     environment: {
-      CLAWDBOT_PROFILE: profileName,
+      OPENCLAW_PROFILE: profileName,
     },
     config: {
       gateway: {

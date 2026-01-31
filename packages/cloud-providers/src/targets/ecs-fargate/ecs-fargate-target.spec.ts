@@ -180,7 +180,7 @@ describe("EcsFargateTarget", () => {
       // register-task-definition is the 3rd call (index 2)
       const taskDefArgs = mockedExecFile.mock.calls[2][1] as string[];
       const containerDefStr = taskDefArgs[taskDefArgs.indexOf("--container-definitions") + 1];
-      expect(containerDefStr).toContain("ghcr.io/clawdbot/clawdbot:v1.2.3");
+      expect(containerDefStr).toContain("ghcr.io/openclaw/openclaw:v1.2.3");
     });
 
     it("ignores log group creation failure and continues", async () => {

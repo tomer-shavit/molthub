@@ -63,7 +63,7 @@ describe('BotInstancesService', () => {
     },
     spec: {
       runtime: {
-        image: 'ghcr.io/clawdbot/clawdbot:v0.1.0',
+        image: 'ghcr.io/openclaw/openclaw:v0.1.0',
         cpu: 0.5,
         memory: 1024,
       },

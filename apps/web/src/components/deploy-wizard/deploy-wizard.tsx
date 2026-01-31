@@ -111,6 +111,8 @@ export function DeployWizard({ isFirstTime, templates, fleets, initialTemplateId
               const isActive = index === currentStep;
               const isCompleted = index < currentStep;
 
+              const isClickable = isCompleted;
+
               return (
                 <li
                   key={step.name}
@@ -119,7 +121,16 @@ export function DeployWizard({ isFirstTime, templates, fleets, initialTemplateId
                     index < 2 && "flex-1 max-w-[200px]"
                   )}
                 >
-                  <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex items-center gap-2",
+                      isClickable && "cursor-pointer hover:opacity-80",
+                      !isClickable && "cursor-default"
+                    )}
+                    onClick={() => isClickable && setCurrentStep(index)}
+                    disabled={!isClickable}
+                  >
                     <div
                       className={cn(
                         "flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors",
@@ -138,7 +149,7 @@ export function DeployWizard({ isFirstTime, templates, fleets, initialTemplateId
                     >
                       {step.name}
                     </span>
-                  </div>
+                  </button>
                   {index < 2 && (
                     <div
                       className={cn(

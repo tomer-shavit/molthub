@@ -615,7 +615,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
       },
       agents: {
         defaults: {
-          workspace: "~/clawd",
+          workspace: "~/openclaw",
           thinkingDefault: "high",
           timeoutSeconds: 1800,
         },

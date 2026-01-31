@@ -65,7 +65,7 @@ Gateway responds with either success (snapshot of presence, health, state versio
 
 Gateway binds WebSocket control plane + HTTP server to single port (default 18789). Optional Canvas file server on derived port (default 18793).
 
-**Precedence**: CLI flag `--port` > env `CLAWDBOT_GATEWAY_PORT` > config `gateway.port`
+**Precedence**: CLI flag `--port` > env `OPENCLAW_GATEWAY_PORT` > config `gateway.port`
 
 **Auth**: `gateway.auth.token` or password required. Clients include credentials in `connect.params`.
 
@@ -74,8 +74,8 @@ Gateway binds WebSocket control plane + HTTP server to single port (default 1878
 ## 2. Multiple Gateways / Instance Isolation
 
 Each Gateway instance requires:
-- **Dedicated config file** via `CLAWDBOT_CONFIG_PATH`
-- **Isolated state directory** via `CLAWDBOT_STATE_DIR`
+- **Dedicated config file** via `OPENCLAW_CONFIG_PATH`
+- **Isolated state directory** via `OPENCLAW_STATE_DIR`
 - **Separate workspace root** via `agents.defaults.workspace`
 - **Unique base port** via `gateway.port` or `--port`
 - **Non-overlapping derived ports** (browser, canvas, CDP)
@@ -104,7 +104,7 @@ openclaw --profile rescue gateway --port 19001
 
 ### File & Format
 
-- JSON5 config at `~/.clawdbot/openclaw.json` (comments and trailing commas allowed)
+- JSON5 config at `~/.openclaw/openclaw.json` (comments and trailing commas allowed)
 - If missing, safe defaults apply
 - Strict schema validation at startup — unknown keys, malformed types, or invalid values prevent startup
 - When validation fails, only diagnostic commands work (`openclaw doctor`, `openclaw logs`, `openclaw health`)
@@ -112,7 +112,7 @@ openclaw --profile rescue gateway --port 19001
 ### Config Sections
 
 #### agents.defaults
-- `workspace`: default `~/clawd`
+- `workspace`: default `~/openclaw`
 - `model.primary`: main LLM (`provider/model` format)
 - `model.fallbacks`: backup models
 - `thinkingDefault`: `"low" | "high" | "off"`
@@ -243,7 +243,7 @@ openclaw --profile rescue gateway --port 19001
 ### Environment Variable Substitution
 - `${VAR_NAME}` in config strings resolves at load time
 - Missing vars cause errors unless escaped as `$${VAR}`
-- Load order: process env > `.env` in CWD > `~/.clawdbot/.env` > inline `env` config
+- Load order: process env > `.env` in CWD > `~/.openclaw/.env` > inline `env` config
 
 ---
 
@@ -397,7 +397,7 @@ pnpm install && pnpm build
 ### Bonjour/mDNS (LAN-only)
 - Service type: `_openclaw-gw._tcp`
 - TXT records: `lanHost`, `gatewayPort`, `gatewayTls`, `tailnetDns`
-- Disable: `CLAWDBOT_DISABLE_BONJOUR=1`
+- Disable: `OPENCLAW_DISABLE_BONJOUR=1`
 
 ### Transport Priority
 1. Paired direct endpoint
@@ -474,7 +474,7 @@ Base URL: `https://docs.openclaw.ai`
 | [/start/wizard](https://docs.openclaw.ai/start/wizard) | Interactive & non-interactive onboarding wizard for Gateway, channels, skills, and daemon setup |
 | [/start/pairing](https://docs.openclaw.ai/start/pairing) | DM sender approval via short codes and device node authorization for the gateway network |
 | [/start/hubs](https://docs.openclaw.ai/start/hubs) | Documentation index — links to every section organized by category |
-| [/start/clawd](https://docs.openclaw.ai/start/clawd) | Setting up a personal always-on WhatsApp assistant with two-phone architecture |
+| [/start/openclaw](https://docs.openclaw.ai/start/openclaw) | Setting up a personal always-on WhatsApp assistant with two-phone architecture |
 
 ### Gateway
 
@@ -514,7 +514,7 @@ Base URL: `https://docs.openclaw.ai`
 | Path | Description |
 |------|-------------|
 | [/tools/slash-commands](https://docs.openclaw.ai/tools/slash-commands) | Slash commands and directives across platforms: model selection, debugging, admin functions |
-| [/tools/skills](https://docs.openclaw.ai/tools/skills) | Skills system: YAML-defined tool packages, loading precedence, gating, ClawdHub registry |
+| [/tools/skills](https://docs.openclaw.ai/tools/skills) | Skills system: YAML-defined tool packages, loading precedence, gating, OpenClawHub registry |
 | [/tools/skills-config](https://docs.openclaw.ai/tools/skills-config) | Skills configuration: enable/disable, extra directories, install preferences, per-skill API keys and env vars |
 
 ### Platforms
@@ -568,4 +568,4 @@ Base URL: `https://docs.openclaw.ai`
 | [llms.txt](https://docs.openclaw.ai/llms.txt) | Complete documentation index in machine-readable format |
 | [GitHub](https://github.com/openclaw/openclaw) | Source repository |
 | [Releases](https://github.com/openclaw/openclaw/releases) | Release notes and downloads |
-| [Clawd](https://clawd.me) | Clawd assistant companion site |
+| [OpenClaw](https://openclaw.ai) | OpenClaw assistant companion site |

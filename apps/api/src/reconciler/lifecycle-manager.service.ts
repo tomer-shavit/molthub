@@ -605,9 +605,9 @@ export class LifecycleManagerService {
     profileName: string,
     basePort: number,
   ): Promise<void> {
-    const configPath = `~/.clawdbot/profiles/${profileName}/openclaw.json`;
-    const stateDir = `~/.clawdbot/profiles/${profileName}/state/`;
-    const workspace = `~/clawd/${profileName}/`;
+    const configPath = `~/.openclaw/profiles/${profileName}/openclaw.json`;
+    const stateDir = `~/.openclaw/profiles/${profileName}/state/`;
+    const workspace = `~/openclaw/${profileName}/`;
 
     await prisma.openClawProfile.upsert({
       where: { instanceId },

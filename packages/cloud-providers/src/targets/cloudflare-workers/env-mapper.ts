@@ -16,9 +16,9 @@ export interface OpenClawContainerEnv {
   /** Gateway port inside the container */
   OPENCLAW_GATEWAY_PORT: string;
   /** Config file path inside the container */
-  CLAWDBOT_CONFIG_PATH: string;
+  OPENCLAW_CONFIG_PATH: string;
   /** State directory path inside the container */
-  CLAWDBOT_STATE_DIR: string;
+  OPENCLAW_STATE_DIR: string;
   /** Additional environment variables (model API keys, etc.) */
   [key: string]: string;
 }
@@ -66,8 +66,8 @@ export function mapEnvironment(
   const containerEnv: OpenClawContainerEnv = {
     OPENCLAW_GATEWAY_TOKEN: config.gatewayToken,
     OPENCLAW_GATEWAY_PORT: String(config.gatewayPort),
-    CLAWDBOT_CONFIG_PATH: "/app/config/openclaw.json",
-    CLAWDBOT_STATE_DIR: "/app/state",
+    OPENCLAW_CONFIG_PATH: "/app/config/openclaw.json",
+    OPENCLAW_STATE_DIR: "/app/state",
   };
 
   const workerSecrets: WorkerSecrets = {

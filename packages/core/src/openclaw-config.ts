@@ -104,7 +104,7 @@ export const ThinkingDefaultSchema = z.enum(["low", "high", "off"]);
 export type ThinkingDefault = z.infer<typeof ThinkingDefaultSchema>;
 
 export const AgentDefaultsSchema = z.object({
-  workspace: z.string().default("~/clawd"),
+  workspace: z.string().default("~/openclaw"),
   model: ModelConfigSchema.optional(),
   thinkingDefault: ThinkingDefaultSchema.default("off"),
   timeoutSeconds: z.number().int().positive().default(600),

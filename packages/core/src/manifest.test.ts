@@ -13,7 +13,7 @@ describe('validateManifest', () => {
     },
     spec: {
       runtime: {
-        image: 'ghcr.io/clawdbot/clawdbot:v0.1.0',
+        image: 'ghcr.io/openclaw/openclaw:v0.1.0',
         cpu: 0.5,
         memory: 1024,
         replicas: 1,
@@ -84,7 +84,7 @@ describe('validateManifest', () => {
       ...validManifest,
       spec: {
         ...validManifest.spec,
-        runtime: { ...validManifest.spec.runtime, image: 'ghcr.io/clawdbot/clawdbot:latest' },
+        runtime: { ...validManifest.spec.runtime, image: 'ghcr.io/openclaw/openclaw:latest' },
       },
     };
     expect(() => validateManifest(invalid)).toThrow();
@@ -95,11 +95,11 @@ describe('validateManifest', () => {
       ...validManifest,
       spec: {
         ...validManifest.spec,
-        runtime: { ...validManifest.spec.runtime, image: 'ghcr.io/clawdbot/clawdbot:v1.2.3' },
+        runtime: { ...validManifest.spec.runtime, image: 'ghcr.io/openclaw/openclaw:v1.2.3' },
       },
     };
     const result = validateManifest(valid);
-    expect(result.spec.runtime.image).toBe('ghcr.io/clawdbot/clawdbot:v1.2.3');
+    expect(result.spec.runtime.image).toBe('ghcr.io/openclaw/openclaw:v1.2.3');
   });
 
   it('rejects cpu below minimum', () => {

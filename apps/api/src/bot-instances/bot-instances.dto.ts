@@ -114,7 +114,8 @@ export class UpdateAiGatewaySettingsDto {
 
 export class ListBotInstancesQueryDto {
   @IsString()
-  workspaceId: string;
+  @IsOptional()
+  workspaceId?: string;
 
   @IsString()
   @IsOptional()

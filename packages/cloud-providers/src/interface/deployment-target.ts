@@ -213,7 +213,7 @@ export interface RemoteVMConfig {
  * Configuration for Docker container targets
  */
 export interface DockerTargetConfig {
-  /** Docker image name (default: "ghcr.io/clawdbot/clawdbot:latest") */
+  /** Docker image name (default: "ghcr.io/openclaw/openclaw:latest") */
   imageName?: string;
   /** Name for the container */
   containerName: string;
@@ -233,7 +233,7 @@ export interface KubernetesTargetConfig {
   namespace: string;
   /** Name for the Deployment resource */
   deploymentName: string;
-  /** Container image (default: "ghcr.io/clawdbot/clawdbot:latest") */
+  /** Container image (default: "ghcr.io/openclaw/openclaw:latest") */
   image?: string;
   /** Gateway port */
   gatewayPort: number;

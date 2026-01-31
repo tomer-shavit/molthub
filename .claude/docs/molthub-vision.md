@@ -134,7 +134,7 @@ Molthub is not a generic orchestrator. It integrates tightly with OpenClaw's act
 - **Health and diagnostics**: `openclaw status`, `openclaw health --json`, `openclaw doctor` — Molthub wraps these for monitoring and automated repair.
 - **Onboarding and daemon model**: Molthub replicates OpenClaw's onboarding outcomes (gateway auth, daemon installation, profile isolation) in a reproducible, cloud-native way.
 - **Runtime constraints**: WhatsApp and Telegram require Node. Molthub enforces this in templates and validation.
-- **Profile isolation**: Each bot instance gets isolated state via `CLAWDBOT_PROFILE`, `CLAWDBOT_STATE_DIR`, and `CLAWDBOT_CONFIG_PATH`.
+- **Profile isolation**: Each bot instance gets isolated state via `OPENCLAW_PROFILE`, `OPENCLAW_STATE_DIR`, and `OPENCLAW_CONFIG_PATH`.
 
 ---
 

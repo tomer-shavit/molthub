@@ -56,7 +56,7 @@ Configuration layering: Template → Profile → Overlay → manifest (deepMerge
 ## OpenClaw Integration Essentials
 
 - **Gateway WebSocket** on default port 18789 is the canonical transport for control and telemetry
-- **Config model**: JSON5 at `~/.clawdbot/openclaw.json`, schema-validated at startup. Sections: agents, sessions, messages, channels (11 types), tools, sandbox, skills, plugins, gateway, logging, bindings
+- **Config model**: JSON5 at `~/.openclaw/openclaw.json`, schema-validated at startup. Sections: agents, sessions, messages, channels (11 types), tools, sandbox, skills, plugins, gateway, logging, bindings
 - **Config RPC**: `config.get` (returns config + hash), `config.apply` (validate + write + restart, requires baseHash), `config.patch` (JSON merge-patch)
 - **Health**: `health` method returns structured snapshot, `status` returns summary, `openclaw doctor` for diagnostics
 - **Multi-instance isolation**: Use `--profile` to scope config/state/workspace. Port spacing must be 20+ apart

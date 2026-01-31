@@ -25,7 +25,7 @@ export interface EcsFargateConfig {
   cpu?: number;
   /** Memory in MiB for the Fargate task (default: 512) */
   memory?: number;
-  /** Container image (default: "ghcr.io/clawdbot/clawdbot:latest") */
+  /** Container image (default: "ghcr.io/openclaw/openclaw:latest") */
   image?: string;
   /** Whether to assign a public IP to the task (default: true) */
   assignPublicIp?: boolean;

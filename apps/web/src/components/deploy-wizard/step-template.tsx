@@ -27,12 +27,6 @@ export function StepTemplate({
         </p>
       </div>
 
-      <TemplatePicker
-        templates={templates}
-        selected={selectedTemplateId}
-        onSelect={onTemplateSelect}
-      />
-
       <div className="space-y-1.5 max-w-sm">
         <label className="text-sm font-medium">Name your bot</label>
         <Input
@@ -56,6 +50,12 @@ export function StepTemplate({
           A unique name for this OpenClaw agent
         </p>
       </div>
+
+      <TemplatePicker
+        templates={templates}
+        selected={selectedTemplateId}
+        onSelect={onTemplateSelect}
+      />
     </div>
   );
 }

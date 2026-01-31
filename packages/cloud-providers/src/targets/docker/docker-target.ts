@@ -12,7 +12,7 @@ import {
   DockerTargetConfig,
 } from "../../interface/deployment-target";
 
-const DEFAULT_IMAGE = "ghcr.io/clawdbot/clawdbot:latest";
+const DEFAULT_IMAGE = "ghcr.io/openclaw/openclaw:latest";
 
 /**
  * Executes a command using child_process.execFile and returns stdout.
@@ -151,7 +151,7 @@ export class DockerContainerTarget implements DeploymentTarget {
       "-v",
       `${this.config.configPath}:/app/config:ro`,
       "-e",
-      `CLAWDBOT_CONFIG_PATH=/app/config/config.json`,
+      `OPENCLAW_CONFIG_PATH=/app/config/config.json`,
     ];
 
     if (this.config.networkName) {

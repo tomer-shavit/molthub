@@ -12,7 +12,7 @@ import {
   KubernetesTargetConfig,
 } from "../../interface/deployment-target";
 
-const DEFAULT_IMAGE = "ghcr.io/clawdbot/clawdbot:latest";
+const DEFAULT_IMAGE = "ghcr.io/openclaw/openclaw:latest";
 
 /**
  * Executes a command using child_process.execFile and returns stdout.
@@ -147,7 +147,7 @@ export class KubernetesTarget implements DeploymentTarget {
                 ],
                 env: [
                   {
-                    name: "CLAWDBOT_CONFIG_PATH",
+                    name: "OPENCLAW_CONFIG_PATH",
                     value: "/app/config/config.json",
                   },
                 ],

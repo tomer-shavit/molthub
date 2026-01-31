@@ -10,7 +10,7 @@
 import { CloudflareWorkersConfig } from "../../interface/deployment-target";
 
 /** Default OpenClaw container image */
-const DEFAULT_IMAGE = "ghcr.io/clawdbot/clawdbot:latest";
+const DEFAULT_IMAGE = "ghcr.io/openclaw/openclaw:latest";
 
 /** Default sandbox instance type */
 const DEFAULT_SANDBOX_INSTANCE_TYPE = "standard-4";
@@ -137,8 +137,8 @@ function generateDockerfile(config: CloudflareWorkersConfig): string {
     "",
     "# Set environment defaults",
     `ENV OPENCLAW_GATEWAY_PORT=${config.gatewayPort}`,
-    'ENV CLAWDBOT_CONFIG_PATH="/app/config/openclaw.json"',
-    'ENV CLAWDBOT_STATE_DIR="/app/state"',
+    'ENV OPENCLAW_CONFIG_PATH="/app/config/openclaw.json"',
+    'ENV OPENCLAW_STATE_DIR="/app/state"',
     "",
     `EXPOSE ${config.gatewayPort}`,
     "",

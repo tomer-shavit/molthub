@@ -133,6 +133,15 @@ export class OnboardingService {
       }
     }
 
+    // Ensure agents.defaults.workspace is set (required by security policy)
+    if (!config.agents) config.agents = {};
+    const agents = config.agents as Record<string, unknown>;
+    if (!agents.defaults) agents.defaults = {};
+    const defaults = agents.defaults as Record<string, unknown>;
+    if (!defaults.workspace) {
+      defaults.workspace = `~/openclaw/${dto.botName}`;
+    }
+
     // Apply overrides
     if (dto.configOverrides) {
       Object.assign(config, dto.configOverrides);

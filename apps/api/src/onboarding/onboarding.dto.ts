@@ -1,24 +1,95 @@
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+  IsNotEmpty,
+} from "class-validator";
+import { Type } from "class-transformer";
+
+class ChannelConfigDto {
+  @IsString()
+  type: string;
+
+  @IsOptional()
+  config?: Record<string, unknown>;
+}
+
+class DeploymentTargetDto {
+  @IsString()
+  type: string;
+
+  @IsOptional()
+  @IsString()
+  region?: string;
+
+  @IsOptional()
+  @IsString()
+  accessKeyId?: string;
+
+  @IsOptional()
+  @IsString()
+  secretAccessKey?: string;
+
+  @IsOptional()
+  @IsArray()
+  subnetIds?: string[];
+
+  @IsOptional()
+  @IsString()
+  securityGroupId?: string;
+
+  @IsOptional()
+  @IsString()
+  executionRoleArn?: string;
+
+  @IsOptional()
+  @IsString()
+  containerName?: string;
+
+  @IsOptional()
+  @IsString()
+  configPath?: string;
+}
+
 export class OnboardingPreviewDto {
+  @IsString()
+  @IsNotEmpty()
   templateId: string;
-  channels?: Array<{ type: string; config: Record<string, unknown> }>;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChannelConfigDto)
+  channels?: ChannelConfigDto[];
+
+  @IsOptional()
   configOverrides?: Record<string, unknown>;
 }
 
 export class OnboardingDeployDto {
+  @IsString()
+  @IsNotEmpty()
   botName: string;
+
+  @IsString()
+  @IsNotEmpty()
   templateId: string;
+
+  @IsOptional()
+  @IsString()
   environment?: string;
-  channels?: Array<{ type: string; config: Record<string, unknown> }>;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChannelConfigDto)
+  channels?: ChannelConfigDto[];
+
+  @IsOptional()
   configOverrides?: Record<string, unknown>;
-  deploymentTarget: {
-    type: string;
-    region?: string;
-    accessKeyId?: string;
-    secretAccessKey?: string;
-    subnetIds?: string[];
-    securityGroupId?: string;
-    executionRoleArn?: string;
-    containerName?: string;
-    configPath?: string;
-  };
+
+  @ValidateNested()
+  @Type(() => DeploymentTargetDto)
+  deploymentTarget: DeploymentTargetDto;
 }

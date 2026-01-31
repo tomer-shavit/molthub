@@ -15,7 +15,7 @@ describe('PolicyEngine', () => {
     },
     spec: {
       runtime: {
-        image: 'ghcr.io/clawdbot/clawdbot:v0.1.0',
+        image: 'ghcr.io/openclaw/openclaw:v0.1.0',
         cpu: 0.5,
         memory: 1024,
         replicas: 1,
@@ -52,7 +52,7 @@ describe('PolicyEngine', () => {
       ...validManifest,
       spec: {
         ...validManifest.spec,
-        runtime: { ...validManifest.spec.runtime, image: 'ghcr.io/clawdbot/clawdbot:latest' },
+        runtime: { ...validManifest.spec.runtime, image: 'ghcr.io/openclaw/openclaw:latest' },
       },
     };
     const result = policyEngine.validate(invalid);

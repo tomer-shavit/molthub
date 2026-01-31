@@ -109,7 +109,7 @@ export function createValidManifest(options: { name?: string; environment?: 'dev
     },
     spec: {
       runtime: {
-        image: 'ghcr.io/clawdbot/clawdbot:v0.1.0',
+        image: 'ghcr.io/openclaw/openclaw:v0.1.0',
         cpu: 0.5,
         memory: 1024,
         replicas: 1,
@@ -289,7 +289,7 @@ export function createTemplate(options: TemplateOptions = {}) {
       kind: 'OpenClawInstance',
       spec: {
         runtime: {
-          image: 'ghcr.io/clawdbot/clawdbot:v0.1.0',
+          image: 'ghcr.io/openclaw/openclaw:v0.1.0',
           cpu: 0.5,
           memory: 1024,
         },

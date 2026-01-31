@@ -237,10 +237,23 @@ export class OpenClawSecurityAuditService {
     warnings: Array<{ ruleId: string; message: string; field?: string }>;
   }> {
     // Extract the openclaw config from the manifest
-    const config = manifest.spec.openclawConfig;
+    const rawConfig = manifest.spec.openclawConfig;
     const rawEnv = manifest.metadata.environment ?? "dev";
     // Map "local" to "dev" for policy evaluation (OpenClawEvaluationContext only accepts dev/staging/prod)
     const environment: "dev" | "staging" | "prod" = rawEnv === "local" ? "dev" : rawEnv as "dev" | "staging" | "prod";
+
+    // Normalize channels from object format (template default) to array format (policy evaluator expects)
+    // Templates store channels as { whatsapp: {...}, telegram: {...} }
+    // Policy evaluator expects [{ name: "whatsapp", ... }, { name: "telegram", ... }]
+    const config = { ...rawConfig } as Record<string, unknown>;
+    if (config.channels && !Array.isArray(config.channels) && typeof config.channels === "object") {
+      config.channels = Object.entries(config.channels as Record<string, unknown>).map(
+        ([key, value]) => ({
+          name: key,
+          ...(typeof value === "object" && value !== null ? value : {}),
+        }),
+      );
+    }
 
     const context: OpenClawEvaluationContext = { environment };
 

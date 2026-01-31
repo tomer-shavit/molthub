@@ -42,12 +42,12 @@ const SECRET_KEYS = new Set([
 
 /** Known environment variable categories for OpenClaw. */
 const ENV_VAR_CATALOG: Array<{ name: string; category: EnvVarStatus["category"] }> = [
-  { name: "CLAWDBOT_CONFIG_PATH", category: "required" },
-  { name: "CLAWDBOT_STATE_DIR", category: "required" },
-  { name: "CLAWDBOT_PROFILE", category: "required" },
-  { name: "CLAWDBOT_GATEWAY_PORT", category: "required" },
-  { name: "CLAWDBOT_DISABLE_BONJOUR", category: "optional" },
-  { name: "CLAWDBOT_LOG_LEVEL", category: "optional" },
+  { name: "OPENCLAW_CONFIG_PATH", category: "required" },
+  { name: "OPENCLAW_STATE_DIR", category: "required" },
+  { name: "OPENCLAW_PROFILE", category: "required" },
+  { name: "OPENCLAW_GATEWAY_PORT", category: "required" },
+  { name: "OPENCLAW_DISABLE_BONJOUR", category: "optional" },
+  { name: "OPENCLAW_LOG_LEVEL", category: "optional" },
   { name: "NODE_ENV", category: "optional" },
   { name: "TELEGRAM_BOT_TOKEN", category: "channel" },
   { name: "DISCORD_BOT_TOKEN", category: "channel" },
@@ -228,16 +228,16 @@ export class DebugService {
       let isSet = false;
 
       switch (envVar.name) {
-        case "CLAWDBOT_CONFIG_PATH":
+        case "OPENCLAW_CONFIG_PATH":
           isSet = !!profile?.configPath;
           break;
-        case "CLAWDBOT_STATE_DIR":
+        case "OPENCLAW_STATE_DIR":
           isSet = !!profile?.stateDir;
           break;
-        case "CLAWDBOT_PROFILE":
+        case "OPENCLAW_PROFILE":
           isSet = !!instance.profileName;
           break;
-        case "CLAWDBOT_GATEWAY_PORT":
+        case "OPENCLAW_GATEWAY_PORT":
           isSet = !!instance.gatewayPort || !!connection?.port;
           break;
         case "TELEGRAM_BOT_TOKEN":
@@ -288,9 +288,9 @@ export class DebugService {
       }
     } else {
       files.push(
-        { path: "~/.clawdbot/openclaw.json", size: 0, lastModified: new Date(), isDirectory: false },
-        { path: "~/.clawdbot/state/", size: 0, lastModified: new Date(), isDirectory: true },
-        { path: "~/clawd/", size: 0, lastModified: new Date(), isDirectory: true },
+        { path: "~/.openclaw/openclaw.json", size: 0, lastModified: new Date(), isDirectory: false },
+        { path: "~/.openclaw/state/", size: 0, lastModified: new Date(), isDirectory: true },
+        { path: "~/openclaw/", size: 0, lastModified: new Date(), isDirectory: true },
       );
     }
 
