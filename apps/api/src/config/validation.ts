@@ -25,4 +25,9 @@ export const configValidationSchema = Joi.object({
 
   // Features
   AUTO_RECONCILE_ON_DRIFT: Joi.boolean().default(false),
+
+  // Default deployment target
+  DEFAULT_DEPLOYMENT_TARGET: Joi.string()
+    .valid("docker", "local", "kubernetes", "ecs-fargate")
+    .default("docker"),
 });

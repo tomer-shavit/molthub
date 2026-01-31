@@ -25,7 +25,9 @@ jest.mock('@molthub/database', () => ({
   prisma: {
     botInstance: {
       count: jest.fn(),
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
+      findMany: jest.fn(),
       create: jest.fn(),
     },
     workspace: {
@@ -257,6 +259,8 @@ describe('OnboardingService', () => {
     beforeEach(() => {
       (mockPrisma.workspace.findFirst as jest.Mock).mockResolvedValue(mockWorkspace);
       (mockPrisma.fleet.findFirst as jest.Mock).mockResolvedValue(mockFleet);
+      (mockPrisma.botInstance.findFirst as jest.Mock).mockResolvedValue(null); // no duplicate
+      (mockPrisma.botInstance.findMany as jest.Mock).mockResolvedValue([]); // no existing ports
       (mockPrisma.deploymentTarget.create as jest.Mock).mockResolvedValue(mockDeploymentTarget);
       (mockPrisma.botInstance.create as jest.Mock).mockResolvedValue(mockBotInstance);
       mockReconciler.reconcile.mockResolvedValue(undefined);
@@ -592,11 +596,158 @@ describe('OnboardingService', () => {
         lastError: 'Container failed to start',
         configHash: null,
         gatewayConnection: null,
+        updatedAt: new Date(),
       });
 
       const result = await service.getDeployStatus('bot-1');
 
       expect(result.error).toBe('Container failed to start');
+    });
+
+    it('should detect stale CREATING instance as ERROR after 3 minutes', async () => {
+      const staleDate = new Date(Date.now() - 4 * 60 * 1000); // 4 minutes ago
+      (mockPrisma.botInstance.findUnique as jest.Mock).mockResolvedValue({
+        id: 'bot-1',
+        status: 'CREATING',
+        health: 'UNKNOWN',
+        lastError: null,
+        configHash: null,
+        gatewayConnection: null,
+        updatedAt: staleDate,
+      });
+
+      const result = await service.getDeployStatus('bot-1');
+
+      expect(result.status).toBe('ERROR');
+      expect(result.error).toBe('Deployment timed out. Check API logs.');
+    });
+
+    it('should detect stale RECONCILING instance as ERROR after 3 minutes', async () => {
+      const staleDate = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
+      (mockPrisma.botInstance.findUnique as jest.Mock).mockResolvedValue({
+        id: 'bot-1',
+        status: 'RECONCILING',
+        health: 'UNKNOWN',
+        lastError: null,
+        configHash: null,
+        gatewayConnection: null,
+        updatedAt: staleDate,
+      });
+
+      const result = await service.getDeployStatus('bot-1');
+
+      expect(result.status).toBe('ERROR');
+      expect(result.error).toBe('Deployment timed out. Check API logs.');
+    });
+
+    it('should NOT detect as stale if CREATING for less than 3 minutes', async () => {
+      const recentDate = new Date(Date.now() - 1 * 60 * 1000); // 1 minute ago
+      (mockPrisma.botInstance.findUnique as jest.Mock).mockResolvedValue({
+        id: 'bot-1',
+        status: 'CREATING',
+        health: 'UNKNOWN',
+        lastError: null,
+        configHash: null,
+        gatewayConnection: null,
+        updatedAt: recentDate,
+      });
+
+      const result = await service.getDeployStatus('bot-1');
+
+      expect(result.status).toBe('CREATING');
+      expect(result.error).toBeNull();
+    });
+
+    it('should NOT detect RUNNING instance as stale regardless of age', async () => {
+      const staleDate = new Date(Date.now() - 10 * 60 * 1000); // 10 minutes ago
+      (mockPrisma.botInstance.findUnique as jest.Mock).mockResolvedValue({
+        id: 'bot-1',
+        status: 'RUNNING',
+        health: 'HEALTHY',
+        lastError: null,
+        configHash: 'abc123',
+        gatewayConnection: { id: 'gw-1' },
+        updatedAt: staleDate,
+      });
+
+      const result = await service.getDeployStatus('bot-1');
+
+      expect(result.status).toBe('RUNNING');
+    });
+  });
+
+  // ===========================================================================
+  // Port allocation (via deploy)
+  // ===========================================================================
+  describe('port allocation', () => {
+    const mockWorkspace = { id: 'ws-1', name: 'Default Workspace', slug: 'default' };
+    const mockFleet = { id: 'fleet-1', name: 'Default Fleet' };
+    const mockDeploymentTarget = { id: 'dt-1' };
+
+    const baseDeployDto = {
+      templateId: 'builtin-minimal-gateway',
+      botName: 'port-test-bot',
+      deploymentTarget: { type: 'docker' as const },
+    };
+
+    beforeEach(() => {
+      (mockPrisma.workspace.findFirst as jest.Mock).mockResolvedValue(mockWorkspace);
+      (mockPrisma.fleet.findFirst as jest.Mock).mockResolvedValue(mockFleet);
+      (mockPrisma.botInstance.findFirst as jest.Mock).mockResolvedValue(null);
+      (mockPrisma.deploymentTarget.create as jest.Mock).mockResolvedValue(mockDeploymentTarget);
+      (mockPrisma.botInstance.create as jest.Mock).mockResolvedValue({
+        id: 'bot-port',
+        name: 'port-test-bot',
+        status: 'CREATING',
+      });
+      mockReconciler.reconcile.mockResolvedValue(undefined);
+    });
+
+    it('should allocate base port 18789 when no instances exist', async () => {
+      (mockPrisma.botInstance.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.deploy(baseDeployDto, 'user-1');
+
+      expect(mockPrisma.botInstance.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            gatewayPort: 18789,
+          }),
+        }),
+      );
+    });
+
+    it('should allocate port 18809 when 18789 is already used', async () => {
+      (mockPrisma.botInstance.findMany as jest.Mock).mockResolvedValue([
+        { gatewayPort: 18789 },
+      ]);
+
+      await service.deploy(baseDeployDto, 'user-1');
+
+      expect(mockPrisma.botInstance.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            gatewayPort: 18809,
+          }),
+        }),
+      );
+    });
+
+    it('should fill gaps in port allocation', async () => {
+      (mockPrisma.botInstance.findMany as jest.Mock).mockResolvedValue([
+        { gatewayPort: 18789 },
+        { gatewayPort: 18849 }, // gap at 18809 and 18829
+      ]);
+
+      await service.deploy(baseDeployDto, 'user-1');
+
+      expect(mockPrisma.botInstance.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            gatewayPort: 18809,
+          }),
+        }),
+      );
     });
   });
 });

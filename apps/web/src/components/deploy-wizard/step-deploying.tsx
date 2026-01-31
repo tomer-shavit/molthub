@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useProvisioningEvents } from "@/hooks/use-provisioning-events";
 import { ProvisioningScreen } from "@/components/provisioning/provisioning-screen";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,10 @@ import {
   Plus,
   XCircle,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
+import { api } from "@/lib/api";
 
 interface StepDeployingProps {
   instanceId: string;
@@ -23,9 +25,49 @@ interface StepDeployingProps {
 
 export function StepDeploying({ instanceId, botName, onRetryDeploy }: StepDeployingProps) {
   const { progress } = useProvisioningEvents(instanceId);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const [pollStatus, setPollStatus] = useState<string | null>(null);
+  const [isSlow, setIsSlow] = useState(false);
+  const startTimeRef = useRef(Date.now());
 
-  const isComplete = progress?.status === "completed";
-  const isError = progress?.status === "error";
+  // Reset state when instanceId changes (e.g., retry creates a new instance)
+  useEffect(() => {
+    startTimeRef.current = Date.now();
+    setIsSlow(false);
+    setPollError(null);
+    setPollStatus(null);
+  }, [instanceId]);
+
+  // Polling fallback: poll deploy status endpoint every 5s for error detection
+  useEffect(() => {
+    const SLOW_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+
+    const interval = setInterval(async () => {
+      // Check if deployment is taking too long
+      if (Date.now() - startTimeRef.current > SLOW_THRESHOLD_MS) {
+        setIsSlow(true);
+      }
+
+      try {
+        const status = await api.getDeployStatus(instanceId);
+        if (status.status === "ERROR" || status.error) {
+          setPollError(status.error || "Deployment failed. Check API logs for details.");
+          setPollStatus("ERROR");
+          clearInterval(interval);
+        } else if (status.status === "RUNNING") {
+          setPollStatus("RUNNING");
+          clearInterval(interval);
+        }
+      } catch {
+        // Polling error — continue silently
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [instanceId]);
+
+  const isComplete = progress?.status === "completed" || pollStatus === "RUNNING";
+  const isError = progress?.status === "error" || pollStatus === "ERROR";
   const isTimeout = progress?.status === "timeout";
 
   if (isComplete) {
@@ -77,6 +119,10 @@ export function StepDeploying({ instanceId, botName, onRetryDeploy }: StepDeploy
   }
 
   if (isError || isTimeout) {
+    const errorMessage = pollError || progress?.error || (isTimeout
+      ? "The deployment is taking longer than expected. Your bot may still be starting up."
+      : "Something went wrong while deploying your agent.");
+
     return (
       <div className="space-y-6 text-center">
         <div className="space-y-4">
@@ -89,10 +135,16 @@ export function StepDeploying({ instanceId, botName, onRetryDeploy }: StepDeploy
             {isTimeout ? "Deployment timed out" : "Deployment failed"}
           </h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            {progress?.error || (isTimeout
-              ? "The deployment is taking longer than expected. Your bot may still be starting up."
-              : "Something went wrong while deploying your agent.")}
+            {errorMessage}
           </p>
+        </div>
+        <div className="rounded-md bg-muted p-4 text-left max-w-md mx-auto">
+          <p className="text-sm font-medium mb-2">Troubleshooting</p>
+          <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+            <li>Check API logs: <code className="text-xs">bash scripts/setup.sh logs</code></li>
+            <li>Run diagnostics: <code className="text-xs">bash scripts/setup.sh doctor</code></li>
+            <li>Verify gateway: <code className="text-xs">curl http://localhost:18789</code></li>
+          </ul>
         </div>
         <div className="flex justify-center gap-3">
           {onRetryDeploy && (
@@ -111,6 +163,12 @@ export function StepDeploying({ instanceId, botName, onRetryDeploy }: StepDeploy
 
   return (
     <div className="space-y-6">
+      {isSlow && (
+        <div className="flex items-center gap-2 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span>Taking longer than expected. Your bot may still be starting up&hellip;</span>
+        </div>
+      )}
       <ProvisioningScreen instanceId={instanceId} instanceName={botName} />
     </div>
   );

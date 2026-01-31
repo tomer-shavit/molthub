@@ -24,6 +24,22 @@ services:
     volumes:
       - redis_data:/data
 
+  gateway:
+    image: ghcr.io/openclaw/openclaw:latest
+    ports:
+      - "18789:18789"
+    environment:
+      - OPENCLAW_CONFIG_PATH=/app/config/config.json
+    volumes:
+      - gateway-config:/app/config
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const http=require('http');const r=http.get('http://localhost:18789',res=>{process.exit(res.statusCode<500?0:1)});r.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 volumes:
   postgres_data:
   redis_data:
+  gateway-config:

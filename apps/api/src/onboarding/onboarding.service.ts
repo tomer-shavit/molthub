@@ -90,6 +90,16 @@ export class OnboardingService {
       });
     }
 
+    // 2b. Check for duplicate bot name
+    const existing = await prisma.botInstance.findFirst({
+      where: { workspaceId: workspace.id, name: dto.botName },
+    });
+    if (existing) {
+      throw new BadRequestException(
+        `A bot named "${dto.botName}" already exists in this workspace`,
+      );
+    }
+
     // 3. Get or create fleet
     const env = dto.environment || "dev";
     let fleet = await prisma.fleet.findFirst({
@@ -162,25 +172,37 @@ export class OnboardingService {
     };
 
     // 6. Create DeploymentTarget record
-    const deploymentType =
-      dto.deploymentTarget.type === "ecs-fargate" ? "ECS_FARGATE" : "DOCKER";
+    const defaultTarget = process.env.DEFAULT_DEPLOYMENT_TARGET || "docker";
+    const targetType = dto.deploymentTarget?.type || defaultTarget;
+    const deploymentTypeMap: Record<string, string> = {
+      "ecs-fargate": "ECS_FARGATE",
+      docker: "DOCKER",
+      local: "LOCAL",
+      kubernetes: "KUBERNETES",
+    };
+    const deploymentType = deploymentTypeMap[targetType] || "DOCKER";
+
+    // Auto-assign gateway port (spaced 20 apart for OpenClaw derived ports)
+    const assignedPort = await this.allocateGatewayPort();
+
     const targetConfig =
-      dto.deploymentTarget.type === "ecs-fargate"
+      targetType === "ecs-fargate"
         ? {
-            region: dto.deploymentTarget.region,
-            accessKeyId: dto.deploymentTarget.accessKeyId,
-            secretAccessKey: dto.deploymentTarget.secretAccessKey,
-            subnetIds: dto.deploymentTarget.subnetIds,
-            securityGroupId: dto.deploymentTarget.securityGroupId,
-            executionRoleArn: dto.deploymentTarget.executionRoleArn,
+            region: dto.deploymentTarget?.region,
+            accessKeyId: dto.deploymentTarget?.accessKeyId,
+            secretAccessKey: dto.deploymentTarget?.secretAccessKey,
+            subnetIds: dto.deploymentTarget?.subnetIds,
+            securityGroupId: dto.deploymentTarget?.securityGroupId,
+            executionRoleArn: dto.deploymentTarget?.executionRoleArn,
             clusterName: `openclaw-${dto.botName}`,
           }
         : {
             containerName:
-              dto.deploymentTarget.containerName || `openclaw-${dto.botName}`,
+              dto.deploymentTarget?.containerName || `openclaw-${dto.botName}`,
+            imageName: "ghcr.io/openclaw/openclaw:latest",
             configPath:
-              dto.deploymentTarget.configPath || `/var/openclaw/${dto.botName}`,
-            gatewayPort: 18789,
+              dto.deploymentTarget?.configPath || `/var/molthub/gateways/${dto.botName}`,
+            gatewayPort: assignedPort,
           };
 
     const deploymentTarget = await prisma.deploymentTarget.create({
@@ -202,7 +224,7 @@ export class OnboardingService {
         desiredManifest: manifest as Prisma.InputJsonValue,
         deploymentType: deploymentType as DeploymentType,
         deploymentTargetId: deploymentTarget.id,
-        gatewayPort: 18789,
+        gatewayPort: assignedPort,
         templateId: dto.templateId,
         tags: {},
         metadata: {
@@ -253,7 +275,7 @@ export class OnboardingService {
     };
   }
 
-  /** Get deployment status */
+  /** Get deployment status with staleness detection */
   async getDeployStatus(instanceId: string) {
     const instance = await prisma.botInstance.findUnique({
       where: { id: instanceId },
@@ -266,28 +288,40 @@ export class OnboardingService {
       throw new BadRequestException("Instance not found");
     }
 
+    // Staleness detection: if stuck in CREATING or RECONCILING for >3 minutes
+    const STALE_THRESHOLD_MS = 3 * 60 * 1000;
+    const updatedAt = new Date(instance.updatedAt).getTime();
+    const isStale =
+      (instance.status === "CREATING" || instance.status === "RECONCILING") &&
+      Date.now() - updatedAt > STALE_THRESHOLD_MS;
+
+    const effectiveStatus = isStale ? "ERROR" : instance.status;
+    const effectiveError = isStale
+      ? "Deployment timed out. Check API logs."
+      : instance.lastError;
+
     const steps = [
       {
         name: "Creating infrastructure",
         status:
-          instance.status === "CREATING" ? "in_progress" : "completed",
+          effectiveStatus === "CREATING" ? "in_progress" : "completed",
       },
       {
         name: "Installing OpenClaw",
         status:
-          instance.status === "CREATING"
+          effectiveStatus === "CREATING"
             ? "pending"
-            : instance.status === "RECONCILING"
+            : effectiveStatus === "RECONCILING"
               ? "in_progress"
               : "completed",
       },
       {
         name: "Applying configuration",
         status:
-          ["CREATING", "RECONCILING"].includes(instance.status) &&
+          ["CREATING", "RECONCILING"].includes(effectiveStatus) &&
           !instance.configHash
             ? "pending"
-            : instance.status === "RECONCILING"
+            : effectiveStatus === "RECONCILING"
               ? "in_progress"
               : instance.configHash
                 ? "completed"
@@ -297,7 +331,7 @@ export class OnboardingService {
         name: "Starting gateway",
         status: instance.gatewayConnection
           ? "completed"
-          : instance.status === "RECONCILING"
+          : effectiveStatus === "RECONCILING"
             ? "in_progress"
             : "pending",
       },
@@ -306,7 +340,7 @@ export class OnboardingService {
         status:
           instance.health === "HEALTHY" || instance.health === "DEGRADED"
             ? "completed"
-            : instance.status === "RUNNING"
+            : effectiveStatus === "RUNNING"
               ? "in_progress"
               : "pending",
       },
@@ -314,10 +348,43 @@ export class OnboardingService {
 
     return {
       instanceId: instance.id,
-      status: instance.status,
+      status: effectiveStatus,
       health: instance.health,
-      error: instance.lastError,
+      error: effectiveError,
       steps,
     };
+  }
+
+  /**
+   * Allocate the next available gateway port for a new instance.
+   * Ports are spaced 20 apart starting from 18789 (OpenClaw reserves derived ports).
+   * Max port is 65500 to stay within the valid TCP range.
+   */
+  private async allocateGatewayPort(): Promise<number> {
+    const BASE_PORT = 18789;
+    const PORT_SPACING = 20;
+    const MAX_PORT = 65500;
+
+    const instances = await prisma.botInstance.findMany({
+      where: { gatewayPort: { not: null } },
+      select: { gatewayPort: true },
+      orderBy: { gatewayPort: "desc" },
+    });
+
+    const usedPorts = new Set(
+      instances.map((i) => i.gatewayPort).filter((p): p is number => p !== null),
+    );
+
+    let port = BASE_PORT;
+    while (usedPorts.has(port)) {
+      port += PORT_SPACING;
+      if (port > MAX_PORT) {
+        throw new BadRequestException(
+          "No available gateway ports. Delete unused bot instances to free ports.",
+        );
+      }
+    }
+
+    return port;
   }
 }
