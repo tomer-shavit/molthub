@@ -20,10 +20,12 @@ import {
   Target,
   MessageSquare,
   Plus,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useUserStage } from "@/lib/user-stage-context";
+import { useAuth } from "@/lib/auth-context";
 
 interface NavItem {
   label: string;
@@ -64,6 +66,7 @@ export function Sidebar() {
   const [expanded, setExpanded] = useState<string[]>([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { stage, isLoading } = useUserStage();
+  const { user, logout } = useAuth();
 
   const navItems = useMemo(() => {
     if (stage === "fleet") {
@@ -178,7 +181,24 @@ export function Sidebar() {
           </nav>
 
           {/* Footer */}
-          <div className="border-t p-4">
+          <div className="border-t p-4 space-y-3">
+            {user && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground truncate">
+                  {user.username}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={logout}
+                  aria-label="Sign out"
+                  title="Sign out"
+                  className="h-8 w-8 shrink-0"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground text-center">
               Molthub v0.1.0
             </p>

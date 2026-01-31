@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthProviderWrapper } from "./auth-provider-wrapper";
 import { WebSocketProviderWrapper } from "./websocket-provider-wrapper";
 import { UserStageProviderWrapper } from "./user-stage-provider-wrapper";
 
@@ -16,9 +17,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-background font-sans antialiased">
-        <WebSocketProviderWrapper>
-          <UserStageProviderWrapper>{children}</UserStageProviderWrapper>
-        </WebSocketProviderWrapper>
+        <AuthProviderWrapper>
+          <WebSocketProviderWrapper>
+            <UserStageProviderWrapper>{children}</UserStageProviderWrapper>
+          </WebSocketProviderWrapper>
+        </AuthProviderWrapper>
       </body>
     </html>
   );

@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { api } from "./api";
+import { useAuth } from "./auth-context";
 
 type UserStage = "empty" | "getting-started" | "fleet";
 
@@ -16,12 +17,17 @@ interface UserStageContextValue {
 const UserStageContext = createContext<UserStageContextValue | null>(null);
 
 export function UserStageProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated } = useAuth();
   const [stage, setStage] = useState<UserStage>("getting-started");
   const [agentCount, setAgentCount] = useState(0);
   const [hasFleets, setHasFleets] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    if (!isAuthenticated) {
+      setIsLoading(false);
+      return;
+    }
     try {
       const ctx = await api.getUserContext();
       setStage(ctx.stage);
@@ -32,7 +38,7 @@ export function UserStageProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     refresh();
