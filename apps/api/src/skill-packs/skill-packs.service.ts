@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
-import { prisma, Prisma } from '@molthub/database';
+import { prisma } from '@molthub/database';
 import { CreateSkillPackDto, UpdateSkillPackDto, AttachSkillPackDto, BulkAttachSkillPackDto } from './skill-packs.dto';
 import { SkillPackResponse, SkillPackWithBots, BotAttachmentResponse, BulkAttachResult, SyncResult } from './skill-packs.types';
 import { SkillVerificationService } from '../security/skill-verification.service';
@@ -26,9 +26,9 @@ export class SkillPacksService {
         ...dto,
         workspaceId,
         createdBy: userId,
-        skills: (dto.skills || []) as Prisma.InputJsonValue,
-        mcps: (dto.mcps || []) as Prisma.InputJsonValue,
-        envVars: dto.envVars || {},
+        skills: JSON.stringify(dto.skills || []),
+        mcps: JSON.stringify(dto.mcps || []),
+        envVars: JSON.stringify(dto.envVars || {}),
       },
     });
 
@@ -43,7 +43,7 @@ export class SkillPacksService {
       );
     }
 
-    return skillPack as SkillPackResponse;
+    return skillPack as unknown as SkillPackResponse;
   }
 
   async findAll(workspaceId: string): Promise<SkillPackResponse[]> {
@@ -55,7 +55,7 @@ export class SkillPacksService {
         },
       },
       orderBy: { createdAt: 'desc' },
-    }) as Promise<SkillPackResponse[]>;
+    }) as unknown as Promise<SkillPackResponse[]>;
   }
 
   async findOne(workspaceId: string, id: string): Promise<SkillPackWithBots> {
@@ -81,7 +81,7 @@ export class SkillPacksService {
       throw new NotFoundException(`SkillPack ${id} not found`);
     }
 
-    return skillPack as SkillPackWithBots;
+    return skillPack as unknown as SkillPackWithBots;
   }
 
   async update(workspaceId: string, id: string, dto: UpdateSkillPackDto): Promise<SkillPackResponse> {
@@ -105,13 +105,13 @@ export class SkillPacksService {
       where: { id },
       data: {
         ...restDto,
-        ...(skills && { skills: skills as Prisma.InputJsonValue }),
-        ...(mcps && { mcps: mcps as Prisma.InputJsonValue }),
-        ...(envVars && { envVars: envVars as Prisma.InputJsonValue }),
+        ...(skills && { skills: JSON.stringify(skills) }),
+        ...(mcps && { mcps: JSON.stringify(mcps) }),
+        ...(envVars && { envVars: JSON.stringify(envVars) }),
         version: { increment: versionIncrement },
         updatedAt: new Date(),
       },
-    }) as Promise<SkillPackResponse>;
+    }) as unknown as Promise<SkillPackResponse>;
   }
 
   async remove(workspaceId: string, id: string): Promise<SkillPackResponse> {
@@ -119,7 +119,7 @@ export class SkillPacksService {
 
     return prisma.skillPack.delete({
       where: { id },
-    }) as Promise<SkillPackResponse>;
+    }) as unknown as Promise<SkillPackResponse>;
   }
 
   async attachToBot(workspaceId: string, skillPackId: string, dto: AttachSkillPackDto): Promise<BotAttachmentResponse> {
@@ -153,9 +153,9 @@ export class SkillPacksService {
       data: {
         botInstanceId: dto.botInstanceId,
         skillPackId,
-        envOverrides: dto.envOverrides || {},
+        envOverrides: JSON.stringify(dto.envOverrides || {}),
       },
-    }) as Promise<BotAttachmentResponse>;
+    }) as unknown as Promise<BotAttachmentResponse>;
   }
 
   async bulkAttach(workspaceId: string, skillPackId: string, dto: BulkAttachSkillPackDto): Promise<BulkAttachResult> {
@@ -198,7 +198,7 @@ export class SkillPacksService {
           data: {
             botInstanceId,
             skillPackId,
-            envOverrides: dto.envOverrides || {},
+            envOverrides: JSON.stringify(dto.envOverrides || {}),
           },
         });
 
@@ -230,7 +230,7 @@ export class SkillPacksService {
 
     return prisma.botInstanceSkillPack.delete({
       where: { id: attachment.id },
-    }) as Promise<BotAttachmentResponse>;
+    }) as unknown as Promise<BotAttachmentResponse>;
   }
 
   async getBotsWithPack(workspaceId: string, skillPackId: string): Promise<Array<{ id: string; name: string; status: string; health: string; envOverrides: Record<string, string>; attachedAt: Date }>> {
@@ -252,7 +252,7 @@ export class SkillPacksService {
 
     return attachments.map(a => ({
       ...a.botInstance,
-      envOverrides: a.envOverrides as Record<string, string>,
+      envOverrides: (typeof a.envOverrides === "string" ? JSON.parse(a.envOverrides) : a.envOverrides) as Record<string, string>,
       attachedAt: a.attachedAt,
     }));
   }

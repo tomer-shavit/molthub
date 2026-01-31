@@ -1,7 +1,6 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   prisma,
-  GatewayConnectionStatus,
 } from "@molthub/database";
 import {
   GatewayClient,
@@ -200,7 +199,7 @@ export class DebugService {
       }
     }
 
-    const config = (instance.desiredManifest as Record<string, unknown>) ?? {};
+    const config = (typeof instance.desiredManifest === "string" ? JSON.parse(instance.desiredManifest) : instance.desiredManifest) as Record<string, unknown> ?? {};
     return {
       config: this.redactSecrets(config),
       configHash: instance.configHash ?? "unknown",
@@ -219,7 +218,7 @@ export class DebugService {
       where: { instanceId },
     });
 
-    const manifest = instance.desiredManifest as Record<string, unknown> | null;
+    const manifest = (typeof instance.desiredManifest === "string" ? JSON.parse(instance.desiredManifest) : instance.desiredManifest) as Record<string, unknown> | null;
     const spec = (manifest?.spec as Record<string, unknown>) ?? manifest ?? {};
     const openclawConfig = (spec?.openclawConfig as Record<string, unknown>) ?? spec;
     const channels = (openclawConfig?.channels as Record<string, unknown>) ?? {};

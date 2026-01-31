@@ -1,7 +1,9 @@
 import { Injectable, UnauthorizedException, BadRequestException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
-import { prisma, UserRole } from "@molthub/database";
+import { prisma } from "@molthub/database";
+
+type UserRole = string;
 
 export interface AuthUser {
   id: string;
@@ -96,7 +98,7 @@ export class AuthService {
       data: {
         username: credentials.username,
         passwordHash,
-        role: credentials.role || UserRole.OPERATOR,
+        role: credentials.role || "OPERATOR",
         isActive: true,
       },
     });

@@ -3,7 +3,6 @@ import {
   IsObject,
   IsOptional,
   IsBoolean,
-  IsEnum,
   IsIn,
   IsArray,
   IsNumber,
@@ -12,7 +11,7 @@ import {
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
-import { ChannelType, ChannelStatus } from "@molthub/database";
+// ChannelType, ChannelStatus were enums, now plain strings after SQLite migration
 import {
   OPENCLAW_CHANNEL_TYPES,
   OpenClawChannelType,
@@ -72,9 +71,9 @@ export class CreateChannelDto {
   @IsIn([...OPENCLAW_CHANNEL_TYPES])
   openclawType: OpenClawChannelType;
 
-  @IsEnum(ChannelType)
+  @IsString()
   @IsOptional()
-  type?: ChannelType;
+  type?: string;
 
   @IsBoolean()
   @IsOptional()
@@ -136,9 +135,9 @@ export class UpdateChannelDto {
   @IsOptional()
   isShared?: boolean;
 
-  @IsEnum(ChannelStatus)
+  @IsString()
   @IsOptional()
-  status?: ChannelStatus;
+  status?: string;
 
   @IsObject()
   @IsOptional()
@@ -153,13 +152,13 @@ export class ListChannelsQueryDto {
   @IsOptional()
   openclawType?: OpenClawChannelType;
 
-  @IsEnum(ChannelType)
+  @IsString()
   @IsOptional()
-  type?: ChannelType;
+  type?: string;
 
-  @IsEnum(ChannelStatus)
+  @IsString()
   @IsOptional()
-  status?: ChannelStatus;
+  status?: string;
 }
 
 // ============================================

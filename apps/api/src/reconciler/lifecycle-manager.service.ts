@@ -2,9 +2,6 @@ import { Injectable, Logger } from "@nestjs/common";
 import {
   prisma,
   BotInstance,
-  BotStatus,
-  BotHealth,
-  GatewayConnectionStatus,
 } from "@molthub/database";
 import type { OpenClawManifest, OpenClawFullConfig } from "@molthub/core";
 import {
@@ -147,8 +144,8 @@ export class LifecycleManagerService {
       await prisma.botInstance.update({
         where: { id: instance.id },
         data: {
-          status: BotStatus.RUNNING,
-          health: health.ok ? BotHealth.HEALTHY : BotHealth.DEGRADED,
+          status: "RUNNING",
+          health: health.ok ? "HEALTHY" : "DEGRADED",
           gatewayPort,
           profileName,
           configHash,
@@ -182,8 +179,8 @@ export class LifecycleManagerService {
       await prisma.botInstance.update({
         where: { id: instance.id },
         data: {
-          status: BotStatus.ERROR,
-          health: BotHealth.UNKNOWN,
+          status: "ERROR",
+          health: "UNKNOWN",
           lastError: message,
           errorCount: { increment: 1 },
         },
@@ -289,7 +286,7 @@ export class LifecycleManagerService {
     await prisma.botInstance.update({
       where: { id: instance.id },
       data: {
-        status: BotStatus.RUNNING,
+        status: "RUNNING",
         restartCount: { increment: 1 },
         lastReconcileAt: new Date(),
       },
@@ -357,8 +354,8 @@ export class LifecycleManagerService {
     await prisma.botInstance.update({
       where: { id: instance.id },
       data: {
-        status: BotStatus.DELETING,
-        health: BotHealth.UNKNOWN,
+        status: "DELETING",
+        health: "UNKNOWN",
       },
     });
   }
@@ -438,7 +435,7 @@ export class LifecycleManagerService {
 
     // Fallback: derive from deploymentType enum
     const typeStr = instance.deploymentType ?? "LOCAL";
-    const instanceMeta = instance.metadata as Record<string, unknown> | null;
+    const instanceMeta = (typeof instance.metadata === "string" ? JSON.parse(instance.metadata) : instance.metadata) as Record<string, unknown> | null;
     const configMap: Record<string, DeploymentTargetConfig> = {
       LOCAL: { type: "local" },
       DOCKER: {
@@ -481,7 +478,7 @@ export class LifecycleManagerService {
   private mapDbTargetToConfig(
     dbTarget: { type: string; config: unknown },
   ): DeploymentTargetConfig {
-    const cfg = (dbTarget.config ?? {}) as Record<string, unknown>;
+    const cfg = (typeof dbTarget.config === "string" ? JSON.parse(dbTarget.config) : dbTarget.config ?? {}) as Record<string, unknown>;
 
     switch (dbTarget.type) {
       case "LOCAL":
@@ -586,14 +583,14 @@ export class LifecycleManagerService {
         instanceId,
         host: endpoint.host,
         port: endpoint.port,
-        status: GatewayConnectionStatus.CONNECTED,
+        status: "CONNECTED",
         configHash,
         lastHeartbeat: new Date(),
       },
       update: {
         host: endpoint.host,
         port: endpoint.port,
-        status: GatewayConnectionStatus.CONNECTED,
+        status: "CONNECTED",
         configHash,
         lastHeartbeat: new Date(),
       },

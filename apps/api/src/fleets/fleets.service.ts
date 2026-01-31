@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, Fleet, FleetStatus, BotStatus, BotInstance } from "@molthub/database";
+import { prisma, Fleet, BotInstance } from "@molthub/database";
 import { CreateFleetDto, UpdateFleetDto, ListFleetsQueryDto } from "./fleets.dto";
 
 @Injectable()
@@ -24,10 +24,10 @@ export class FleetService {
         name: dto.name,
         environment: dto.environment,
         description: dto.description,
-        status: FleetStatus.ACTIVE,
-        tags: dto.tags || {},
-        privateSubnetIds: dto.privateSubnetIds || [],
-        enforcedPolicyPackIds: dto.enforcedPolicyPackIds || [],
+        status: "ACTIVE",
+        tags: JSON.stringify(dto.tags || {}),
+        privateSubnetIds: JSON.stringify(dto.privateSubnetIds || []),
+        enforcedPolicyPackIds: JSON.stringify(dto.enforcedPolicyPackIds || []),
       },
     });
 
@@ -83,18 +83,18 @@ export class FleetService {
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.tags && { tags: dto.tags }),
+        ...(dto.tags && { tags: JSON.stringify(dto.tags) }),
         ...(dto.defaultProfileId !== undefined && { defaultProfileId: dto.defaultProfileId }),
-        ...(dto.enforcedPolicyPackIds && { enforcedPolicyPackIds: dto.enforcedPolicyPackIds }),
+        ...(dto.enforcedPolicyPackIds && { enforcedPolicyPackIds: JSON.stringify(dto.enforcedPolicyPackIds) }),
       },
     });
   }
 
-  async updateStatus(id: string, status: FleetStatus): Promise<Fleet> {
+  async updateStatus(id: string, status: string): Promise<Fleet> {
     const fleet = await this.findOne(id);
 
     // Validate status transitions
-    if (fleet.status === FleetStatus.DRAINING && status !== FleetStatus.ACTIVE) {
+    if (fleet.status === "DRAINING" && status !== "ACTIVE") {
       throw new BadRequestException("Cannot transition from DRAINING to any status except ACTIVE");
     }
 
@@ -111,7 +111,7 @@ export class FleetService {
     degradedCount: number;
     unhealthyCount: number;
     unknownCount: number;
-    status: FleetStatus;
+    status: string;
   }> {
     const fleet = await this.findOne(id);
     

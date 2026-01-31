@@ -1,8 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
   prisma,
-  AlertSeverity,
-  AlertStatus,
   Prisma,
 } from "@molthub/database";
 import type { AlertQueryDto, AlertSummaryResponse } from "./alerts.dto";
@@ -15,7 +13,7 @@ export interface UpsertAlertData {
   rule: string;
   instanceId?: string;
   fleetId?: string;
-  severity: AlertSeverity;
+  severity: string;
   title: string;
   message: string;
   detail?: string;
@@ -96,7 +94,7 @@ export class AlertsService {
     return prisma.healthAlert.update({
       where: { id },
       data: {
-        status: AlertStatus.ACKNOWLEDGED,
+        status: "ACKNOWLEDGED",
         acknowledgedAt: new Date(),
         acknowledgedBy: acknowledgedBy ?? "system",
       },
@@ -110,7 +108,7 @@ export class AlertsService {
     return prisma.healthAlert.update({
       where: { id },
       data: {
-        status: AlertStatus.RESOLVED,
+        status: "RESOLVED",
         resolvedAt: new Date(),
       },
     });
@@ -123,7 +121,7 @@ export class AlertsService {
     return prisma.healthAlert.update({
       where: { id },
       data: {
-        status: AlertStatus.SUPPRESSED,
+        status: "SUPPRESSED",
       },
     });
   }
@@ -142,7 +140,7 @@ export class AlertsService {
       where: {
         rule: data.rule,
         instanceId: data.instanceId ?? null,
-        status: { not: AlertStatus.RESOLVED },
+        status: { not: "RESOLVED" },
       },
     });
 
@@ -159,7 +157,7 @@ export class AlertsService {
           lastTriggeredAt: new Date(),
           consecutiveHits: { increment: 1 },
           // Re-activate if it was acknowledged or suppressed
-          status: AlertStatus.ACTIVE,
+          status: "ACTIVE",
           acknowledgedAt: null,
           acknowledgedBy: null,
         },
@@ -173,7 +171,7 @@ export class AlertsService {
         instanceId: data.instanceId,
         fleetId: data.fleetId,
         severity: data.severity,
-        status: AlertStatus.ACTIVE,
+        status: "ACTIVE",
         title: data.title,
         message: data.message,
         detail: data.detail,
@@ -195,7 +193,7 @@ export class AlertsService {
       where: {
         rule,
         instanceId,
-        status: { in: [AlertStatus.ACTIVE, AlertStatus.ACKNOWLEDGED] },
+        status: { in: ["ACTIVE", "ACKNOWLEDGED"] },
       },
     });
 
@@ -204,7 +202,7 @@ export class AlertsService {
     return prisma.healthAlert.update({
       where: { id: existing.id },
       data: {
-        status: AlertStatus.RESOLVED,
+        status: "RESOLVED",
         resolvedAt: new Date(),
       },
     });
@@ -220,13 +218,13 @@ export class AlertsService {
       prisma.healthAlert.groupBy({
         by: ["severity"],
         _count: { id: true },
-        where: { status: { not: AlertStatus.RESOLVED } },
+        where: { status: { not: "RESOLVED" } },
       }),
       prisma.healthAlert.groupBy({
         by: ["status"],
         _count: { id: true },
       }),
-      prisma.healthAlert.count({ where: { status: { not: AlertStatus.RESOLVED } } }),
+      prisma.healthAlert.count({ where: { status: { not: "RESOLVED" } } }),
     ]);
 
     const bySeverity: Record<string, number> = {};
@@ -247,7 +245,7 @@ export class AlertsService {
    */
   async getActiveAlertCount(): Promise<number> {
     return prisma.healthAlert.count({
-      where: { status: AlertStatus.ACTIVE },
+      where: { status: "ACTIVE" },
     });
   }
 }

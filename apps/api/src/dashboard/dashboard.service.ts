@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { prisma, BotHealth, InstanceStatus } from "@molthub/database";
+import { prisma } from "@molthub/database";
 import { HealthAggregatorService } from "../health/health-aggregator.service";
 import { AlertingService } from "../health/alerting.service";
 
@@ -146,9 +146,9 @@ export class DashboardService {
     return {
       totalBots,
       totalFleets,
-      healthyBots: healthCounts[BotHealth.HEALTHY] || 0,
-      degradedBots: healthCounts[BotHealth.DEGRADED] || 0,
-      unhealthyBots: healthCounts[BotHealth.UNHEALTHY] || 0,
+      healthyBots: healthCounts["HEALTHY"] || 0,
+      degradedBots: healthCounts["DEGRADED"] || 0,
+      unhealthyBots: healthCounts["UNHEALTHY"] || 0,
       unreachableBots,
       messageVolume,
       latencyP50: p50 || 0,

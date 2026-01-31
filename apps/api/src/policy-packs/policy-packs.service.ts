@@ -33,9 +33,9 @@ export class PolicyPacksService {
         name: dto.name,
         description: dto.description,
         autoApply: dto.autoApply ?? false,
-        targetEnvironments: dto.targetEnvironments as Prisma.InputJsonValue,
-        targetTags: dto.targetTags as Prisma.InputJsonValue,
-        rules: dto.rules as Prisma.InputJsonValue,
+        targetEnvironments: dto.targetEnvironments ? JSON.stringify(dto.targetEnvironments) : null,
+        targetTags: dto.targetTags ? JSON.stringify(dto.targetTags) : null,
+        rules: JSON.stringify(dto.rules),
         isEnforced: dto.isEnforced ?? false,
         priority: dto.priority || 0,
         version: dto.version || "1.0.0",
@@ -89,9 +89,9 @@ export class PolicyPacksService {
         ...(dto.name && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.autoApply !== undefined && { autoApply: dto.autoApply }),
-        ...(dto.targetEnvironments && { targetEnvironments: dto.targetEnvironments as Prisma.InputJsonValue }),
-        ...(dto.targetTags && { targetTags: dto.targetTags as Prisma.InputJsonValue }),
-        ...(dto.rules && { rules: dto.rules as Prisma.InputJsonValue }),
+        ...(dto.targetEnvironments && { targetEnvironments: JSON.stringify(dto.targetEnvironments) }),
+        ...(dto.targetTags && { targetTags: JSON.stringify(dto.targetTags) }),
+        ...(dto.rules && { rules: JSON.stringify(dto.rules) }),
         ...(dto.isEnforced !== undefined && { isEnforced: dto.isEnforced }),
         ...(dto.priority !== undefined && { priority: dto.priority }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
@@ -115,7 +115,7 @@ export class PolicyPacksService {
     // Evaluate the manifest against the policy pack
     const violations: Array<{ ruleId: string; ruleName: string; severity: string; message: string }> = [];
 
-    for (const rule of (policyPack.rules as Record<string, unknown>[]) || []) {
+    for (const rule of (JSON.parse(policyPack.rules as string) as Record<string, unknown>[]) || []) {
       // Simple rule evaluation - can be expanded
       const result = this.evaluateRule(rule, dto.manifest);
       if (!result.passed) {

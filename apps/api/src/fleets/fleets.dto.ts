@@ -1,5 +1,5 @@
-import { IsString, IsOptional, IsEnum, IsObject, IsArray, IsNumber } from "class-validator";
-import { Environment, FleetStatus } from "@molthub/database";
+import { IsString, IsOptional, IsObject, IsArray, IsNumber } from "class-validator";
+// Environment, FleetStatus were enums, now plain strings after SQLite migration
 
 export class CreateFleetDto {
   @IsString()
@@ -8,8 +8,8 @@ export class CreateFleetDto {
   @IsString()
   name: string;
 
-  @IsEnum(Environment)
-  environment: Environment;
+  @IsString()
+  environment: string;
 
   @IsString()
   @IsOptional()
@@ -58,19 +58,19 @@ export class UpdateFleetDto {
 }
 
 export class UpdateFleetStatusDto {
-  @IsEnum(FleetStatus)
-  status: FleetStatus;
+  @IsString()
+  status: string;
 }
 
 export class ListFleetsQueryDto {
   @IsString()
   workspaceId: string;
 
-  @IsEnum(Environment)
+  @IsString()
   @IsOptional()
-  environment?: Environment;
+  environment?: string;
 
-  @IsEnum(FleetStatus)
+  @IsString()
   @IsOptional()
-  status?: FleetStatus;
+  status?: string;
 }

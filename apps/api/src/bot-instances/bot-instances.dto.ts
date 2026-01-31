@@ -8,7 +8,7 @@ import {
   IsUrl,
   MaxLength
 } from "class-validator";
-import { BotStatus, BotHealth, Environment } from "@molthub/database";
+// BotStatus, BotHealth, Environment were enums, now plain strings after SQLite migration
 
 export class CreateBotInstanceDto {
   @IsString()
@@ -84,13 +84,13 @@ export class UpdateBotInstanceDto {
 }
 
 export class UpdateBotStatusDto {
-  @IsEnum(BotStatus)
-  status: BotStatus;
+  @IsString()
+  status: string;
 }
 
 export class UpdateBotHealthDto {
-  @IsEnum(BotHealth)
-  health: BotHealth;
+  @IsString()
+  health: string;
 }
 
 export class UpdateAiGatewaySettingsDto {
@@ -121,13 +121,13 @@ export class ListBotInstancesQueryDto {
   @IsOptional()
   fleetId?: string;
 
-  @IsEnum(BotStatus)
+  @IsString()
   @IsOptional()
-  status?: BotStatus;
+  status?: string;
 
-  @IsEnum(BotHealth)
+  @IsString()
   @IsOptional()
-  health?: BotHealth;
+  health?: string;
 
   @IsString()
   @IsOptional()

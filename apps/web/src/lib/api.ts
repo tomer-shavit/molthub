@@ -569,15 +569,6 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      if (response.status === 401 && this.token) {
-        this.token = null;
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('molthub_token');
-          window.location.href = '/login';
-        }
-        throw new Error('Session expired. Please log in again.');
-      }
-
       let message = `HTTP ${response.status}`;
       try {
         const body = await response.json();

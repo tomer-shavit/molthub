@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
-import { prisma, Prisma, SloMetric, SloWindow, SloDefinition, AlertSeverity } from "@molthub/database";
+import { prisma, SloDefinition } from "@molthub/database";
 
 @Injectable()
 export class SloEvaluatorService {
@@ -45,7 +45,7 @@ export class SloEvaluatorService {
     const wasBreached = slo.isBreached;
     const isBreached = this.checkBreach(slo.metric, currentValue, slo.targetValue);
 
-    const updateData: Prisma.SloDefinitionUpdateInput = {
+    const updateData: Record<string, unknown> = {
       currentValue,
       isBreached,
       lastEvaluatedAt: new Date(),
@@ -79,24 +79,24 @@ export class SloEvaluatorService {
   }
 
   private checkBreach(
-    metric: SloMetric,
+    metric: string,
     currentValue: number,
     targetValue: number,
   ): boolean {
     switch (metric) {
       // For UPTIME and CHANNEL_HEALTH, current should be >= target (higher is better)
-      case SloMetric.UPTIME:
-      case SloMetric.CHANNEL_HEALTH:
+      case "UPTIME":
+      case "CHANNEL_HEALTH":
         return currentValue < targetValue;
 
       // For latency, current should be <= target (lower is better)
-      case SloMetric.LATENCY_P50:
-      case SloMetric.LATENCY_P95:
-      case SloMetric.LATENCY_P99:
+      case "LATENCY_P50":
+      case "LATENCY_P95":
+      case "LATENCY_P99":
         return currentValue > targetValue;
 
       // For error rate, current should be <= target (lower is better)
-      case SloMetric.ERROR_RATE:
+      case "ERROR_RATE":
         return currentValue > targetValue;
 
       default:
@@ -106,21 +106,21 @@ export class SloEvaluatorService {
 
   private async calculateMetricValue(
     instanceId: string,
-    metric: SloMetric,
+    metric: string,
     windowStart: Date,
   ): Promise<number | null> {
     switch (metric) {
-      case SloMetric.UPTIME:
+      case "UPTIME":
         return this.calculateUptime(instanceId, windowStart);
-      case SloMetric.LATENCY_P50:
+      case "LATENCY_P50":
         return this.calculateLatencyPercentile(instanceId, windowStart, 50);
-      case SloMetric.LATENCY_P95:
+      case "LATENCY_P95":
         return this.calculateLatencyPercentile(instanceId, windowStart, 95);
-      case SloMetric.LATENCY_P99:
+      case "LATENCY_P99":
         return this.calculateLatencyPercentile(instanceId, windowStart, 99);
-      case SloMetric.ERROR_RATE:
+      case "ERROR_RATE":
         return this.calculateErrorRate(instanceId, windowStart);
-      case SloMetric.CHANNEL_HEALTH:
+      case "CHANNEL_HEALTH":
         return this.calculateChannelHealth(instanceId, windowStart);
       default:
         return null;
@@ -228,30 +228,30 @@ export class SloEvaluatorService {
     return totalHealthPercent / validSnapshots;
   }
 
-  private getWindowStart(window: SloWindow): Date {
+  private getWindowStart(window: string): Date {
     const now = new Date();
 
     switch (window) {
-      case SloWindow.ROLLING_1H:
+      case "ROLLING_1H":
         return new Date(now.getTime() - 60 * 60 * 1000);
-      case SloWindow.ROLLING_24H:
+      case "ROLLING_24H":
         return new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      case SloWindow.ROLLING_7D:
+      case "ROLLING_7D":
         return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      case SloWindow.ROLLING_30D:
+      case "ROLLING_30D":
         return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      case SloWindow.CALENDAR_DAY: {
+      case "CALENDAR_DAY": {
         const start = new Date(now);
         start.setHours(0, 0, 0, 0);
         return start;
       }
-      case SloWindow.CALENDAR_WEEK: {
+      case "CALENDAR_WEEK": {
         const start = new Date(now);
         start.setDate(start.getDate() - start.getDay());
         start.setHours(0, 0, 0, 0);
         return start;
       }
-      case SloWindow.CALENDAR_MONTH: {
+      case "CALENDAR_MONTH": {
         const start = new Date(now);
         start.setDate(1);
         start.setHours(0, 0, 0, 0);
@@ -314,10 +314,10 @@ export class SloEvaluatorService {
     return Math.abs((currentValue - target) / target) * 100;
   }
 
-  private getSeverityFromMargin(marginPercent: number): AlertSeverity {
-    if (marginPercent >= 20) return AlertSeverity.CRITICAL;
-    if (marginPercent >= 10) return AlertSeverity.ERROR;
-    if (marginPercent >= 5) return AlertSeverity.WARNING;
-    return AlertSeverity.INFO;
+  private getSeverityFromMargin(marginPercent: number): string {
+    if (marginPercent >= 20) return "CRITICAL";
+    if (marginPercent >= 10) return "ERROR";
+    if (marginPercent >= 5) return "WARNING";
+    return "INFO";
   }
 }

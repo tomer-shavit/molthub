@@ -2,7 +2,7 @@ import * as Joi from "joi";
 
 export const configValidationSchema = Joi.object({
   // Required
-  DATABASE_URL: Joi.string().uri().required(),
+  DATABASE_URL: Joi.string().required(),
   JWT_SECRET: Joi.string().min(32).required(),
   AWS_REGION: Joi.string().default("us-east-1"),
 

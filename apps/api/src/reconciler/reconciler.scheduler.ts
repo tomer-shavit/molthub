@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { prisma, BotStatus } from "@molthub/database";
+import { prisma } from "@molthub/database";
 import { DriftDetectionService } from "./drift-detection.service";
 import { ReconcilerService } from "./reconciler.service";
 
@@ -61,7 +61,7 @@ export class ReconcilerScheduler {
     try {
       const stuckInstances = await prisma.botInstance.findMany({
         where: {
-          status: { in: [BotStatus.CREATING, BotStatus.RECONCILING] },
+          status: { in: ["CREATING", "RECONCILING"] },
           updatedAt: { lt: tenMinutesAgo },
         },
       });
@@ -74,7 +74,7 @@ export class ReconcilerScheduler {
         await prisma.botInstance.update({
           where: { id: instance.id },
           data: {
-            status: BotStatus.ERROR,
+            status: "ERROR",
             lastError: `Instance stuck in ${instance.status} state for too long`,
             errorCount: { increment: 1 },
           },
@@ -102,7 +102,7 @@ export class ReconcilerScheduler {
       // Find all running instances and check their secret age
       const runningInstances = await prisma.botInstance.findMany({
         where: {
-          status: { in: [BotStatus.RUNNING, BotStatus.DEGRADED] },
+          status: { in: ["RUNNING", "DEGRADED"] },
         },
         select: {
           id: true,

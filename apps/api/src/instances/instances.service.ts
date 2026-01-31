@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, Instance, InstanceStatus } from "@molthub/database";
+import { prisma, Instance } from "@molthub/database";
 import { PolicyEngine, validateManifest } from "@molthub/core";
 import { CreateInstanceDto, ListInstancesQueryDto } from "./instances.dto";
 
@@ -26,8 +26,8 @@ export class InstancesService {
         workspaceId: "default", // TODO: Get from auth context
         name: dto.name,
         environment: dto.environment,
-        tags: dto.tags || {},
-        status: InstanceStatus.CREATING,
+        tags: JSON.stringify(dto.tags || {}),
+        status: "CREATING",
       },
     });
 
@@ -69,7 +69,7 @@ export class InstancesService {
     await prisma.instance.update({
       where: { id },
       data: { 
-        status: InstanceStatus.CREATING,
+        status: "CREATING",
         lastReconcileAt: null,
       },
     });
@@ -82,7 +82,7 @@ export class InstancesService {
     
     await prisma.instance.update({
       where: { id },
-      data: { status: InstanceStatus.STOPPED },
+      data: { status: "STOPPED" },
     });
 
     // TODO: Trigger reconciler to scale down
@@ -93,7 +93,7 @@ export class InstancesService {
     
     await prisma.instance.update({
       where: { id },
-      data: { status: InstanceStatus.DELETING },
+      data: { status: "DELETING" },
     });
 
     // TODO: Trigger reconciler for cleanup

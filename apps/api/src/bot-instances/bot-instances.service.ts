@@ -1,10 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { 
-  prisma, 
-  BotInstance, 
-  BotStatus, 
-  BotHealth,
-  Prisma 
+import {
+  prisma,
+  BotInstance,
+  Prisma
 } from "@molthub/database";
 import { 
   PolicyEngine
@@ -56,12 +54,12 @@ export class BotInstancesService {
         name: dto.name,
         templateId: dto.templateId,
         profileId: dto.profileId,
-        overlayIds: dto.overlayIds || [],
-        status: BotStatus.CREATING,
-        health: BotHealth.UNKNOWN,
-        desiredManifest: dto.desiredManifest as Prisma.InputJsonValue,
-        tags: (dto.tags || {}) as Prisma.InputJsonValue,
-        metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+        overlayIds: JSON.stringify(dto.overlayIds || []),
+        status: "CREATING",
+        health: "UNKNOWN",
+        desiredManifest: JSON.stringify(dto.desiredManifest),
+        tags: JSON.stringify(dto.tags || {}),
+        metadata: JSON.stringify(dto.metadata || {}),
         createdBy: dto.createdBy || "system",
       },
     });
@@ -142,30 +140,30 @@ export class BotInstancesService {
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.fleetId && { fleetId: dto.fleetId }),
-        ...(dto.desiredManifest && { desiredManifest: dto.desiredManifest as Prisma.InputJsonValue }),
-        ...(dto.tags && { tags: dto.tags as Prisma.InputJsonValue }),
-        ...(dto.metadata && { metadata: dto.metadata as Prisma.InputJsonValue }),
-        ...(dto.overlayIds && { overlayIds: dto.overlayIds }),
+        ...(dto.desiredManifest && { desiredManifest: JSON.stringify(dto.desiredManifest) }),
+        ...(dto.tags && { tags: JSON.stringify(dto.tags) }),
+        ...(dto.metadata && { metadata: JSON.stringify(dto.metadata) }),
+        ...(dto.overlayIds && { overlayIds: JSON.stringify(dto.overlayIds) }),
         ...(dto.profileId !== undefined && { profileId: dto.profileId }),
       },
     });
   }
 
-  async updateStatus(id: string, status: BotStatus): Promise<BotInstance> {
+  async updateStatus(id: string, status: string): Promise<BotInstance> {
     const instance = await this.findOne(id);
 
     return prisma.botInstance.update({
       where: { id },
-      data: { 
+      data: {
         status,
-        ...(status === BotStatus.ERROR && {
+        ...(status === "ERROR" && {
           errorCount: { increment: 1 }
         }),
       },
     });
   }
 
-  async updateHealth(id: string, health: BotHealth): Promise<BotInstance> {
+  async updateHealth(id: string, health: string): Promise<BotInstance> {
     const instance = await this.findOne(id);
 
     return prisma.botInstance.update({
@@ -183,7 +181,7 @@ export class BotInstancesService {
     await prisma.botInstance.update({
       where: { id },
       data: { 
-        status: BotStatus.RECONCILING,
+        status: "RECONCILING",
         restartCount: { increment: 1 },
         lastReconcileAt: new Date(),
       },
@@ -195,7 +193,7 @@ export class BotInstancesService {
     
     await prisma.botInstance.update({
       where: { id },
-      data: { status: BotStatus.PAUSED },
+      data: { status: "PAUSED" },
     });
   }
 
@@ -204,7 +202,7 @@ export class BotInstancesService {
     
     await prisma.botInstance.update({
       where: { id },
-      data: { status: BotStatus.PENDING },
+      data: { status: "PENDING" },
     });
   }
 
@@ -213,7 +211,7 @@ export class BotInstancesService {
     
     await prisma.botInstance.update({
       where: { id },
-      data: { status: BotStatus.STOPPED },
+      data: { status: "STOPPED" },
     });
   }
 
@@ -222,7 +220,7 @@ export class BotInstancesService {
     
     await prisma.botInstance.update({
       where: { id },
-      data: { status: BotStatus.DELETING },
+      data: { status: "DELETING" },
     });
   }
 

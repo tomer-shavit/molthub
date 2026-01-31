@@ -2,12 +2,6 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import {
   prisma,
-  BotHealth,
-  BotStatus,
-  GatewayConnectionStatus,
-  ChannelAuthState,
-  AlertSeverity,
-  AlertStatus,
 } from "@molthub/database";
 import { AlertsService } from "../alerts/alerts.service";
 
@@ -68,7 +62,7 @@ export class AlertingService {
   async getActiveAlerts(instanceId?: string) {
     const result = await this.alertsService.listAlerts({
       instanceId,
-      status: AlertStatus.ACTIVE,
+      status: "ACTIVE",
     });
     return result.data;
   }
@@ -105,7 +99,7 @@ export class AlertingService {
   async evaluateAlerts(): Promise<void> {
     const instances = await prisma.botInstance.findMany({
       where: {
-        status: { notIn: [BotStatus.DELETING, BotStatus.CREATING] },
+        status: { notIn: ["DELETING", "CREATING"] },
       },
       include: {
         gatewayConnection: true,
@@ -137,8 +131,8 @@ export class AlertingService {
 
     const isUnreachable =
       !conn ||
-      conn.status === GatewayConnectionStatus.ERROR ||
-      conn.status === GatewayConnectionStatus.DISCONNECTED;
+      conn.status === "ERROR" ||
+      conn.status === "DISCONNECTED";
 
     const lastHeartbeat = conn?.lastHeartbeat;
     const minutesSinceHeartbeat = lastHeartbeat
@@ -148,7 +142,7 @@ export class AlertingService {
     if (isUnreachable && minutesSinceHeartbeat >= UNREACHABLE_THRESHOLD_MIN) {
       await this.alertsService.upsertAlert({
         rule: "unreachable_instance",
-        severity: AlertSeverity.CRITICAL,
+        severity: "CRITICAL",
         instanceId: instance.id,
         fleetId: instance.fleetId,
         title: `Instance unreachable: ${instance.name}`,
@@ -168,7 +162,7 @@ export class AlertingService {
     health: string;
     lastHealthCheckAt: Date | null;
   }): Promise<void> {
-    if (instance.health !== BotHealth.DEGRADED) {
+    if (instance.health !== "DEGRADED") {
       await this.alertsService.resolveAlertByKey("degraded_instance", instance.id);
       return;
     }
@@ -181,7 +175,7 @@ export class AlertingService {
     if (minutesDegraded >= DEGRADED_THRESHOLD_MIN) {
       await this.alertsService.upsertAlert({
         rule: "degraded_instance",
-        severity: AlertSeverity.WARNING,
+        severity: "WARNING",
         instanceId: instance.id,
         fleetId: instance.fleetId,
         title: `Instance degraded: ${instance.name}`,
@@ -206,7 +200,7 @@ export class AlertingService {
     if (gwHash && instanceHash && gwHash !== instanceHash) {
       await this.alertsService.upsertAlert({
         rule: "config_drift",
-        severity: AlertSeverity.ERROR,
+        severity: "ERROR",
         instanceId: instance.id,
         fleetId: instance.fleetId,
         title: `Config drift: ${instance.name}`,
@@ -230,15 +224,15 @@ export class AlertingService {
   }): Promise<void> {
     const expiredSessions = instance.channelAuthSessions.filter(
       (s) =>
-        s.state === ChannelAuthState.EXPIRED ||
-        s.state === ChannelAuthState.ERROR,
+        s.state === "EXPIRED" ||
+        s.state === "ERROR",
     );
 
     if (expiredSessions.length > 0) {
       const channels = expiredSessions.map((s) => s.channelType).join(", ");
       await this.alertsService.upsertAlert({
         rule: "channel_auth_expired",
-        severity: AlertSeverity.ERROR,
+        severity: "ERROR",
         instanceId: instance.id,
         fleetId: instance.fleetId,
         title: `Channel auth expired: ${instance.name}`,
@@ -261,7 +255,7 @@ export class AlertingService {
     if (instance.errorCount >= CONSECUTIVE_FAILURE_THRESHOLD) {
       await this.alertsService.upsertAlert({
         rule: "health_check_failed",
-        severity: AlertSeverity.ERROR,
+        severity: "ERROR",
         instanceId: instance.id,
         fleetId: instance.fleetId,
         title: `Health check failed: ${instance.name}`,

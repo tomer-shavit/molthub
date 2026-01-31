@@ -1,7 +1,6 @@
 import {
   IsString,
   IsOptional,
-  IsEnum,
   IsInt,
   IsBoolean,
   IsDateString,
@@ -9,7 +8,7 @@ import {
   Max,
 } from "class-validator";
 import { Type } from "class-transformer";
-import { CostProvider } from "@molthub/database";
+// CostProvider was an enum, now plain string after SQLite migration
 
 // ============================================
 // Cost Event DTOs
@@ -19,8 +18,8 @@ export class CreateCostEventDto {
   @IsString()
   instanceId: string;
 
-  @IsEnum(CostProvider)
-  provider: CostProvider;
+  @IsString()
+  provider: string;
 
   @IsString()
   model: string;
@@ -54,9 +53,9 @@ export class CostQueryDto {
   @IsOptional()
   instanceId?: string;
 
-  @IsEnum(CostProvider)
+  @IsString()
   @IsOptional()
-  provider?: CostProvider;
+  provider?: string;
 
   @IsDateString()
   @IsOptional()

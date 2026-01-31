@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { prisma, BotStatus, GatewayConnectionStatus } from "@molthub/database";
+import { prisma } from "@molthub/database";
 import { GatewayManager } from "@molthub/gateway-client";
 import type { GatewayConnectionOptions } from "@molthub/gateway-client";
 import {
@@ -45,7 +45,7 @@ export class AgentEvolutionService {
       // Store snapshot with gatewayReachable=false, use empty config
     }
 
-    const deployedConfig = this.extractDeployedConfig(instance.desiredManifest as Record<string, unknown>);
+    const deployedConfig = this.extractDeployedConfig(typeof instance.desiredManifest === "string" ? JSON.parse(instance.desiredManifest) : instance.desiredManifest as Record<string, unknown>);
 
     const liveSkills = extractSkills(liveConfig);
     const liveMcpServers = extractMcpServers(liveConfig);
@@ -59,13 +59,13 @@ export class AgentEvolutionService {
     const snapshot = await prisma.agentStateSnapshot.create({
       data: {
         instanceId,
-        liveConfig: liveConfig as any,
+        liveConfig: JSON.stringify(liveConfig),
         liveConfigHash,
-        liveSkills: liveSkills as any,
-        liveMcpServers: liveMcpServers as any,
-        liveChannels: liveChannels as any,
-        liveToolProfile: liveToolProfileData as any,
-        diffFromDeployed: diff as any,
+        liveSkills: JSON.stringify(liveSkills),
+        liveMcpServers: JSON.stringify(liveMcpServers),
+        liveChannels: JSON.stringify(liveChannels),
+        liveToolProfile: JSON.stringify(liveToolProfileData),
+        diffFromDeployed: JSON.stringify(diff),
         hasEvolved: diff.hasEvolved,
         totalChanges: diff.totalChanges,
         gatewayReachable,
@@ -121,7 +121,7 @@ export class AgentEvolutionService {
       ]);
 
       const liveConfig = (configResult?.config as Record<string, unknown>) || {};
-      const deployedConfig = this.extractDeployedConfig(instance.desiredManifest as Record<string, unknown>);
+      const deployedConfig = this.extractDeployedConfig(typeof instance.desiredManifest === "string" ? JSON.parse(instance.desiredManifest) : instance.desiredManifest as Record<string, unknown>);
       const diff = computeEvolutionDiff(deployedConfig, liveConfig);
       const summary = summarizeEvolution(diff);
 
@@ -144,15 +144,15 @@ export class AgentEvolutionService {
       const latest = await this.getLatestSnapshot(instanceId);
       return {
         gatewayReachable: false,
-        config: (latest?.liveConfig as Record<string, unknown>) || null,
+        config: latest?.liveConfig ? (typeof latest.liveConfig === "string" ? JSON.parse(latest.liveConfig) : latest.liveConfig) as Record<string, unknown> : null,
         configHash: latest?.liveConfigHash || null,
         health: null,
-        diff: (latest?.diffFromDeployed as any) || { changes: [], hasEvolved: false, totalChanges: 0 },
-        summary: latest ? summarizeEvolution(latest.diffFromDeployed as any) : { hasEvolved: false, totalChanges: 0, categoryCounts: {}, changedCategories: [] },
-        skills: (latest?.liveSkills as string[]) || [],
-        mcpServers: (latest?.liveMcpServers as string[]) || [],
-        channels: (latest?.liveChannels as string[]) || [],
-        toolProfile: latest?.liveToolProfile || null,
+        diff: latest?.diffFromDeployed ? (typeof latest.diffFromDeployed === "string" ? JSON.parse(latest.diffFromDeployed) : latest.diffFromDeployed) : { changes: [], hasEvolved: false, totalChanges: 0 },
+        summary: latest ? summarizeEvolution(typeof latest.diffFromDeployed === "string" ? JSON.parse(latest.diffFromDeployed) : latest.diffFromDeployed) : { hasEvolved: false, totalChanges: 0, categoryCounts: {}, changedCategories: [] },
+        skills: latest?.liveSkills ? (typeof latest.liveSkills === "string" ? JSON.parse(latest.liveSkills) : latest.liveSkills) as string[] : [],
+        mcpServers: latest?.liveMcpServers ? (typeof latest.liveMcpServers === "string" ? JSON.parse(latest.liveMcpServers) : latest.liveMcpServers) as string[] : [],
+        channels: latest?.liveChannels ? (typeof latest.liveChannels === "string" ? JSON.parse(latest.liveChannels) : latest.liveChannels) as string[] : [],
+        toolProfile: latest?.liveToolProfile ? (typeof latest.liveToolProfile === "string" ? JSON.parse(latest.liveToolProfile) : latest.liveToolProfile) : null,
         lastSnapshotAt: latest?.capturedAt || null,
       };
     }

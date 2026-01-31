@@ -1,5 +1,5 @@
 import { Injectable, Logger, BadRequestException } from "@nestjs/common";
-import { prisma, Prisma, BotStatus, BotHealth, ChannelType, ChannelStatus, DeploymentType } from "@molthub/database";
+import { prisma, Prisma } from "@molthub/database";
 import { ReconcilerService } from "../reconciler/reconciler.service";
 import { ConfigGeneratorService } from "../reconciler/config-generator.service";
 import {
@@ -208,8 +208,8 @@ export class OnboardingService {
     const deploymentTarget = await prisma.deploymentTarget.create({
       data: {
         name: `${dto.botName}-target`,
-        type: deploymentType as DeploymentType,
-        config: targetConfig as Prisma.InputJsonValue,
+        type: deploymentType,
+        config: JSON.stringify(targetConfig),
       },
     });
 
@@ -219,18 +219,18 @@ export class OnboardingService {
         workspaceId: workspace.id,
         fleetId: fleet.id,
         name: dto.botName,
-        status: BotStatus.CREATING,
-        health: BotHealth.UNKNOWN,
-        desiredManifest: manifest as Prisma.InputJsonValue,
-        deploymentType: deploymentType as DeploymentType,
+        status: "CREATING",
+        health: "UNKNOWN",
+        desiredManifest: JSON.stringify(manifest),
+        deploymentType: deploymentType,
         deploymentTargetId: deploymentTarget.id,
         gatewayPort: assignedPort,
         templateId: dto.templateId,
-        tags: {},
-        metadata: {
+        tags: JSON.stringify({}),
+        metadata: JSON.stringify({
           gatewayAuthToken, // stored encrypted in practice
           ...targetConfig,
-        } as Prisma.InputJsonValue,
+        }),
         createdBy: userId,
       },
     });
@@ -252,9 +252,9 @@ export class OnboardingService {
           data: {
             workspaceId: workspace.id,
             name: `${dto.botName}-${ch.type}`,
-            type: channelType as ChannelType,
-            config: (ch.config || {}) as Prisma.InputJsonValue,
-            status: "PENDING" as ChannelStatus,
+            type: channelType,
+            config: JSON.stringify(ch.config || {}),
+            status: "PENDING",
             createdBy: userId,
           },
         });

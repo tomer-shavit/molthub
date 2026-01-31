@@ -14,24 +14,9 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: molthub
-          POSTGRES_PASSWORD: molthub
-          POSTGRES_DB: molthub
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     env:
-      DATABASE_URL: postgresql://molthub:molthub@localhost:5432/molthub
-      JWT_SECRET: test-secret-for-ci
+      DATABASE_URL: file:./dev.db
+      JWT_SECRET: test-secret-for-ci-minimum-32-characters-long
       ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
 
     steps:

@@ -344,137 +344,94 @@ cmd_doctor() {
     STEP_COUNT=0
     local all_ok=true
 
-    # ── Check 1: Docker & PostgreSQL ──
-    log_step "Docker & PostgreSQL"
+    # ── Check 1: SQLite Database ──
+    log_step "SQLite Database"
 
-    local docker_ok=false
-    if docker_ver=$(docker --version 2>/dev/null); then
-        log_ok "Docker installed"
+    # Find the database file — check common locations
+    local db_file=""
+    local db_url=""
+    if [ -f "$PROJECT_ROOT/apps/api/.env" ]; then
+        db_url=$(grep '^DATABASE_URL=' "$PROJECT_ROOT/apps/api/.env" | cut -d'=' -f2-)
+    fi
+    db_url="${db_url:-file:./dev.db}"
 
-        if docker info &>/dev/null; then
-            log_ok "Docker daemon running"
+    # Extract file path from DATABASE_URL (strip "file:" prefix)
+    local db_path="${db_url#file:}"
 
-            # Detect compose command
-            if docker compose version &>/dev/null 2>&1; then
-                COMPOSE_CMD="docker compose"
-            elif docker-compose --version &>/dev/null 2>&1; then
-                COMPOSE_CMD="docker-compose"
-            fi
+    # Resolve relative paths — Prisma resolves relative to schema.prisma location
+    if [[ "$db_path" != /* ]]; then
+        db_file="$PROJECT_ROOT/packages/database/prisma/$db_path"
+    else
+        db_file="$db_path"
+    fi
 
-            if [ -n "$COMPOSE_CMD" ]; then
-                log_ok "Docker Compose available ($COMPOSE_CMD)"
+    if [ -f "$db_file" ]; then
+        local db_size
+        db_size=$(du -h "$db_file" 2>/dev/null | cut -f1)
+        log_ok "Database file exists: $db_file ($db_size)"
 
-                # Check postgres container
-                local pg_container
-                pg_container=$($COMPOSE_CMD -f "$PROJECT_ROOT/docker-compose.yml" ps -q postgres 2>/dev/null || echo "")
-                if [ -n "$pg_container" ]; then
-                    local pg_status
-                    pg_status=$(docker inspect -f '{{.State.Status}}' "$pg_container" 2>/dev/null || echo "unknown")
-                    if [ "$pg_status" = "running" ]; then
-                        if $COMPOSE_CMD -f "$PROJECT_ROOT/docker-compose.yml" exec -T postgres pg_isready -U molthub &>/dev/null; then
-                            log_ok "PostgreSQL container running and healthy"
-                            docker_ok=true
-                        else
-                            log_fail "PostgreSQL container running but not accepting connections"
-                            all_ok=false
-                        fi
-                    else
-                        log_fail "PostgreSQL container exists but status: $pg_status"
-                        printf "         Fix: ${BOLD}$COMPOSE_CMD up -d postgres${RESET}\n"
-                        all_ok=false
-                    fi
-                else
-                    log_fail "PostgreSQL container not found"
-                    printf "         Fix: ${BOLD}$COMPOSE_CMD up -d postgres${RESET}\n"
-                    all_ok=false
-                fi
+        # Check if database has tables using sqlite3 if available
+        if has_cmd sqlite3; then
+            local table_count
+            table_count=$(sqlite3 "$db_file" "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_prisma%';" 2>/dev/null || echo "0")
+            if [ "$table_count" -gt 0 ] 2>/dev/null; then
+                log_ok "Database has $table_count tables"
             else
-                log_fail "Docker Compose not available"
+                log_warn "Database exists but has no tables"
+                printf "         Fix: ${BOLD}bash scripts/setup.sh setup --no-start${RESET}\n"
                 all_ok=false
             fi
         else
-            log_fail "Docker daemon not running"
-            if is_wsl; then
-                printf "         Fix: Open Docker Desktop > Settings > Resources > WSL Integration\n"
-            else
-                printf "         Fix: ${BOLD}sudo systemctl start docker${RESET}\n"
-            fi
-            all_ok=false
+            log_ok "Database file exists (install sqlite3 for deeper checks)"
         fi
     else
-        log_fail "Docker not installed"
+        log_warn "Database file not found at $db_file"
+        printf "         Fix: ${BOLD}bash scripts/setup.sh setup --no-start${RESET}\n"
         all_ok=false
     fi
 
-    # ── Check 1b: OpenClaw Gateway ──
-    log_step "OpenClaw Gateway"
+    # ── Check 1b: Docker & OpenClaw Gateway (optional) ──
+    log_step "Docker & OpenClaw Gateway (optional)"
 
-    if [ -n "$COMPOSE_CMD" ] && $docker_ok; then
-        local gw_container
-        gw_container=$($COMPOSE_CMD -f "$PROJECT_ROOT/docker-compose.yml" ps -q gateway 2>/dev/null || echo "")
-        if [ -n "$gw_container" ]; then
-            local gw_status
-            gw_status=$(docker inspect -f '{{.State.Status}}' "$gw_container" 2>/dev/null || echo "unknown")
-            if [ "$gw_status" = "running" ]; then
-                log_ok "Gateway container running"
-                if curl -sf -o /dev/null --max-time 3 "http://localhost:18789" 2>/dev/null; then
-                    log_ok "Gateway responding on port 18789"
+    local docker_ok=false
+    if docker --version &>/dev/null && docker info &>/dev/null; then
+        docker_ok=true
+        log_ok "Docker daemon running"
+
+        # Detect compose command
+        if docker compose version &>/dev/null 2>&1; then
+            COMPOSE_CMD="docker compose"
+        elif docker-compose --version &>/dev/null 2>&1; then
+            COMPOSE_CMD="docker-compose"
+        fi
+
+        if [ -n "$COMPOSE_CMD" ]; then
+            local gw_container
+            gw_container=$($COMPOSE_CMD -f "$PROJECT_ROOT/docker-compose.yml" ps -q gateway 2>/dev/null || echo "")
+            if [ -n "$gw_container" ]; then
+                local gw_status
+                gw_status=$(docker inspect -f '{{.State.Status}}' "$gw_container" 2>/dev/null || echo "unknown")
+                if [ "$gw_status" = "running" ]; then
+                    log_ok "Gateway container running"
+                    if curl -sf -o /dev/null --max-time 3 "http://localhost:18789" 2>/dev/null; then
+                        log_ok "Gateway responding on port 18789"
+                    else
+                        log_warn "Gateway container running but port 18789 not responding (may still be starting)"
+                    fi
                 else
-                    log_warn "Gateway container running but port 18789 not responding (may still be starting)"
+                    log_warn "Gateway container exists but status: $gw_status"
+                    printf "         Fix: ${BOLD}$COMPOSE_CMD -f $PROJECT_ROOT/docker-compose.yml up -d gateway${RESET}\n"
                 fi
             else
-                log_fail "Gateway container exists but status: $gw_status"
-                printf "         Fix: ${BOLD}$COMPOSE_CMD -f $PROJECT_ROOT/docker-compose.yml up -d gateway${RESET}\n"
-                all_ok=false
+                log_warn "Gateway container not found"
+                printf "         Start: ${BOLD}$COMPOSE_CMD -f $PROJECT_ROOT/docker-compose.yml up -d gateway${RESET}\n"
             fi
-        else
-            log_warn "Gateway container not found"
-            printf "         Fix: ${BOLD}$COMPOSE_CMD -f $PROJECT_ROOT/docker-compose.yml up -d gateway${RESET}\n"
-            all_ok=false
         fi
     elif port_in_use 18789; then
         log_ok "Port 18789 is in use (gateway may be running locally)"
     else
-        log_warn "OpenClaw Gateway not running (port 18789 free)"
-        printf "         Start via Docker: ${BOLD}$COMPOSE_CMD -f $PROJECT_ROOT/docker-compose.yml up -d gateway${RESET}\n"
-        printf "         Or locally:       ${BOLD}openclaw gateway --port 18789${RESET}\n"
-        all_ok=false
-    fi
-
-    # ── Check 2: Database connectivity ──
-    log_step "Database connectivity"
-
-    if $docker_ok; then
-        # Try a direct SQL query via docker exec
-        local db_result
-        db_result=$($COMPOSE_CMD -f "$PROJECT_ROOT/docker-compose.yml" exec -T postgres psql -U molthub -d molthub -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" -t 2>/dev/null | tr -d '[:space:]') || db_result=""
-
-        if [ -n "$db_result" ] && [ "$db_result" -gt 0 ] 2>/dev/null; then
-            log_ok "Database connected ($db_result tables in public schema)"
-        elif [ "$db_result" = "0" ]; then
-            log_warn "Database connected but no tables found"
-            printf "         Fix: ${BOLD}bash scripts/setup.sh setup --no-start${RESET} (runs migrations)\n"
-            all_ok=false
-        else
-            log_fail "Cannot query database"
-            all_ok=false
-        fi
-
-        # Check key tables exist
-        local key_tables=("Workspace" "BotInstance" "Fleet" "DeploymentTarget")
-        for table in "${key_tables[@]}"; do
-            local exists
-            exists=$($COMPOSE_CMD -f "$PROJECT_ROOT/docker-compose.yml" exec -T postgres psql -U molthub -d molthub -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '$table');" -t 2>/dev/null | tr -d '[:space:]') || exists="f"
-            if [ "$exists" = "t" ]; then
-                log_ok "Table \"$table\" exists"
-            else
-                log_fail "Table \"$table\" missing"
-                printf "         Fix: ${BOLD}cd packages/database && DATABASE_URL=postgresql://molthub:molthub@localhost:5432/molthub npx prisma db push${RESET}\n"
-                all_ok=false
-            fi
-        done
-    else
-        log_skip "Skipping database checks (Docker/PostgreSQL not available)"
+        log_warn "Docker not available and Gateway not running on port 18789"
+        printf "         Gateway is optional — needed for deploying OpenClaw bots\n"
     fi
 
     # ── Check 3: API server ──
@@ -1163,8 +1120,6 @@ cmd_setup() {
 
     check_prerequisites
     setup_env_files
-    start_postgres
-    start_gateway
     install_deps
     setup_database
     build_packages
@@ -1223,57 +1178,33 @@ check_prerequisites() {
         PREREQ_FAILED=true
     fi
 
-    # Docker — use `docker --version` as the real check since WSL may have
-    # a shim that makes `command -v docker` succeed but the binary still fails
+    # Docker (optional — only needed for OpenClaw Gateway deployment)
     local docker_ver
     if docker_ver=$(docker --version 2>/dev/null); then
         log_debug "$docker_ver"
 
-        # Check if Docker daemon is running
         if docker info &>/dev/null; then
-            log_ok "docker (daemon running)"
-        else
-            log_fail "docker is installed but the daemon is not running"
-            if is_wsl; then
-                printf "         Open Docker Desktop and enable WSL integration:\n"
-                printf "         ${BOLD}Docker Desktop > Settings > Resources > WSL Integration${RESET}\n"
-            else
-                printf "         Start Docker: ${BOLD}sudo systemctl start docker${RESET}\n"
-                printf "         Or open ${BOLD}Docker Desktop${RESET}\n"
-            fi
-            PREREQ_FAILED=true
-        fi
-    else
-        log_fail "docker is not installed or not working"
-        if is_wsl; then
-            printf "         Install Docker Desktop and enable WSL integration:\n"
-            printf "         ${BOLD}https://docs.docker.com/desktop/wsl/${RESET}\n"
-        else
-            printf "         Install: ${BOLD}https://docs.docker.com/get-docker/${RESET}\n"
-        fi
-        PREREQ_FAILED=true
-    fi
+            log_ok "docker (daemon running) — optional, for Gateway deployment"
 
-    # Docker Compose (only check if Docker itself works)
-    if ! $PREREQ_FAILED || docker --version &>/dev/null; then
-        if docker compose version &>/dev/null 2>&1; then
-            COMPOSE_CMD="docker compose"
-            local compose_ver
-            compose_ver=$(docker compose version --short 2>/dev/null || docker compose version 2>/dev/null)
-            log_ok "docker compose ($compose_ver)"
-        elif docker-compose --version &>/dev/null 2>&1; then
-            COMPOSE_CMD="docker-compose"
-            local compose_ver
-            compose_ver=$(docker-compose --version 2>/dev/null | head -1)
-            log_ok "docker-compose ($compose_ver)"
+            # Docker Compose
+            if docker compose version &>/dev/null 2>&1; then
+                COMPOSE_CMD="docker compose"
+                local compose_ver
+                compose_ver=$(docker compose version --short 2>/dev/null || docker compose version 2>/dev/null)
+                log_ok "docker compose ($compose_ver)"
+            elif docker-compose --version &>/dev/null 2>&1; then
+                COMPOSE_CMD="docker-compose"
+                local compose_ver
+                compose_ver=$(docker-compose --version 2>/dev/null | head -1)
+                log_ok "docker-compose ($compose_ver)"
+            else
+                log_warn "docker compose not available (optional — needed for Gateway deployment)"
+            fi
         else
-            log_fail "docker compose is not available"
-            printf "         Install: ${BOLD}https://docs.docker.com/compose/install/${RESET}\n"
-            PREREQ_FAILED=true
+            log_warn "docker installed but daemon not running (optional — needed for Gateway deployment)"
         fi
     else
-        log_fail "docker compose (skipped — docker not working)"
-        PREREQ_FAILED=true
+        log_warn "docker not installed (optional — needed for Gateway deployment)"
     fi
 
     if $PREREQ_FAILED; then
@@ -1298,7 +1229,7 @@ setup_env_files() {
         else
             log_warn "No .env.example found, creating minimal .env"
             cat > "$PROJECT_ROOT/.env" <<'ENVEOF'
-DATABASE_URL=postgresql://molthub:molthub@localhost:5432/molthub
+DATABASE_URL=file:./dev.db
 API_URL=http://localhost:4000
 PORT=4000
 FRONTEND_URL=http://localhost:3000
@@ -1324,7 +1255,7 @@ ENVEOF
         fi
     else
         cat > "$PROJECT_ROOT/apps/api/.env" <<'ENVEOF'
-DATABASE_URL=postgresql://molthub:molthub@localhost:5432/molthub
+DATABASE_URL=file:./dev.db
 JWT_SECRET=molthub-dev-jwt-secret-change-in-production-min32chars
 PORT=4000
 DEFAULT_DEPLOYMENT_TARGET=docker
@@ -1476,8 +1407,8 @@ setup_database() {
     if [ -f "$PROJECT_ROOT/apps/api/.env" ]; then
         db_url=$(grep '^DATABASE_URL=' "$PROJECT_ROOT/apps/api/.env" | cut -d'=' -f2-)
     fi
-    db_url="${db_url:-postgresql://molthub:molthub@localhost:5432/molthub}"
-    log_debug "DATABASE_URL=${db_url%%@*}@***"
+    db_url="${db_url:-file:./dev.db}"
+    log_debug "DATABASE_URL=$db_url"
 
     export DATABASE_URL="$db_url"
 

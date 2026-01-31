@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { prisma, BotHealth, BotStatus } from "@molthub/database";
+import { prisma } from "@molthub/database";
 import type { GatewayHealthSnapshot, ChannelHealth } from "@molthub/gateway-client";
 
 // ---- Response types --------------------------------------------------------
@@ -77,13 +77,13 @@ export class HealthAggregatorService {
       if (
         gwStatus === "ERROR" ||
         gwStatus === "DISCONNECTED" ||
-        inst.status === BotStatus.STOPPED ||
-        inst.status === BotStatus.ERROR
+        inst.status === "STOPPED" ||
+        inst.status === "ERROR"
       ) {
         unreachable++;
-      } else if (inst.health === BotHealth.HEALTHY) {
+      } else if (inst.health === "HEALTHY") {
         healthy++;
-      } else if (inst.health === BotHealth.DEGRADED) {
+      } else if (inst.health === "DEGRADED") {
         degraded++;
       } else {
         unhealthy++;
@@ -176,7 +176,7 @@ export class HealthAggregatorService {
       channelsLinked: s.channelsLinked,
       channelsDegraded: s.channelsDegraded,
       gatewayLatencyMs: s.gatewayLatencyMs,
-      data: s.data as unknown as GatewayHealthSnapshot,
+      data: JSON.parse(s.data as string) as GatewayHealthSnapshot,
     }));
   }
 
@@ -211,7 +211,7 @@ export class HealthAggregatorService {
 
     for (const snap of latestSnapshots) {
       if (!snap?.data) continue;
-      const healthData = snap.data as unknown as GatewayHealthSnapshot;
+      const healthData = JSON.parse(snap.data as string) as GatewayHealthSnapshot;
       if (!healthData.channels) continue;
 
       for (const ch of healthData.channels) {

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma, Prisma, Trace } from "@molthub/database";
+import { prisma, Trace } from "@molthub/database";
 import { CreateTraceDto, ListTracesQueryDto } from "./traces.dto";
 
 @Injectable()
@@ -16,11 +16,11 @@ export class TracesService {
         startedAt: dto.startedAt || new Date(),
         endedAt: dto.endedAt,
         durationMs: dto.durationMs,
-        input: dto.input as Prisma.InputJsonValue,
-        output: dto.output as Prisma.InputJsonValue,
-        error: dto.error as Prisma.InputJsonValue,
-        metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
-        tags: (dto.tags || {}) as Prisma.InputJsonValue,
+        input: dto.input ? JSON.stringify(dto.input) : undefined,
+        output: dto.output ? JSON.stringify(dto.output) : undefined,
+        error: dto.error ? JSON.stringify(dto.error) : undefined,
+        metadata: JSON.stringify(dto.metadata || {}),
+        tags: JSON.stringify(dto.tags || {}),
       },
     });
 
@@ -96,7 +96,7 @@ export class TracesService {
         status: "SUCCESS",
         endedAt,
         durationMs,
-        ...(output && { output: output as Prisma.InputJsonValue }),
+        ...(output && { output: JSON.stringify(output) }),
       },
     });
   }
@@ -112,7 +112,7 @@ export class TracesService {
         status: "ERROR",
         endedAt,
         durationMs,
-        error: error as Prisma.InputJsonValue,
+        error: JSON.stringify(error),
       },
     });
   }

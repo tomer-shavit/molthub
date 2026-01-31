@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
-import { prisma, BotStatus, GatewayConnectionStatus } from "@molthub/database";
+import { prisma } from "@molthub/database";
 import { AgentEvolutionService } from "./agent-evolution.service";
 
 @Injectable()
@@ -16,9 +16,9 @@ export class AgentEvolutionScheduler {
   async syncAllInstances() {
     const instances = await prisma.botInstance.findMany({
       where: {
-        status: { in: [BotStatus.RUNNING, BotStatus.DEGRADED] },
+        status: { in: ["RUNNING", "DEGRADED"] },
         gatewayConnection: {
-          status: GatewayConnectionStatus.CONNECTED,
+          status: "CONNECTED",
         },
       },
       select: { id: true, name: true },

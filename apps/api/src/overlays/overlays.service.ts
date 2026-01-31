@@ -11,12 +11,12 @@ export class OverlaysService {
         name: dto.name,
         description: dto.description,
         targetType: dto.targetType,
-        targetSelector: dto.targetSelector as Prisma.InputJsonValue,
-        overrides: dto.overrides as Prisma.InputJsonValue,
+        targetSelector: JSON.stringify(dto.targetSelector),
+        overrides: JSON.stringify(dto.overrides),
         priority: dto.priority || 0,
         enabled: dto.enabled ?? true,
-        rollout: dto.rollout as Prisma.InputJsonValue,
-        schedule: dto.schedule as Prisma.InputJsonValue,
+        rollout: dto.rollout ? JSON.stringify(dto.rollout) : null,
+        schedule: dto.schedule ? JSON.stringify(dto.schedule) : null,
         createdBy: dto.createdBy || "system",
       },
     });
@@ -56,12 +56,12 @@ export class OverlaysService {
         ...(dto.name && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.targetType && { targetType: dto.targetType }),
-        ...(dto.targetSelector && { targetSelector: dto.targetSelector as Prisma.InputJsonValue }),
-        ...(dto.overrides && { overrides: dto.overrides as Prisma.InputJsonValue }),
+        ...(dto.targetSelector && { targetSelector: JSON.stringify(dto.targetSelector) }),
+        ...(dto.overrides && { overrides: JSON.stringify(dto.overrides) }),
         ...(dto.priority !== undefined && { priority: dto.priority }),
         ...(dto.enabled !== undefined && { enabled: dto.enabled }),
-        ...(dto.rollout && { rollout: dto.rollout as Prisma.InputJsonValue }),
-        ...(dto.schedule && { schedule: dto.schedule as Prisma.InputJsonValue }),
+        ...(dto.rollout && { rollout: JSON.stringify(dto.rollout) }),
+        ...(dto.schedule && { schedule: JSON.stringify(dto.schedule) }),
       },
     });
   }
@@ -87,7 +87,7 @@ export class OverlaysService {
 
     // Filter overlays based on target selectors
     return overlays.filter(overlay => {
-      const selector = overlay.targetSelector as Record<string, unknown>;
+      const selector = JSON.parse(overlay.targetSelector as string) as Record<string, unknown>;
       
       switch (overlay.targetType) {
         case "fleet":

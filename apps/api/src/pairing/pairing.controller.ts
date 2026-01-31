@@ -8,7 +8,7 @@ import {
 } from "@nestjs/common";
 import { PairingService } from "./pairing.service";
 import { PairingActionDto, ApproveByCodeDto, ListPairingsQueryDto } from "./pairing.dto";
-import type { PairingState, OpenClawChannelType } from "@molthub/database";
+// PairingState and OpenClawChannelType were enums, now plain strings after SQLite migration
 
 @Controller("bot-instances/:id/pairings")
 export class PairingController {
@@ -22,7 +22,7 @@ export class PairingController {
     await this.pairingService.verifyInstanceExists(id);
     return this.pairingService.listPairings(
       id,
-      query.state ? (query.state as PairingState) : undefined,
+      query.state ? (query.state as string) : undefined,
     );
   }
 
@@ -40,7 +40,7 @@ export class PairingController {
     await this.pairingService.verifyInstanceExists(id);
     return this.pairingService.approvePairing(
       id,
-      body.channelType as OpenClawChannelType,
+      body.channelType as string,
       body.senderId,
     );
   }
@@ -53,7 +53,7 @@ export class PairingController {
     await this.pairingService.verifyInstanceExists(id);
     return this.pairingService.rejectPairing(
       id,
-      body.channelType as OpenClawChannelType,
+      body.channelType as string,
       body.senderId,
     );
   }
@@ -72,7 +72,7 @@ export class PairingController {
     await this.pairingService.verifyInstanceExists(id);
     return this.pairingService.revokePairing(
       id,
-      body.channelType as OpenClawChannelType,
+      body.channelType as string,
       body.senderId,
     );
   }

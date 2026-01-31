@@ -1,7 +1,6 @@
 import {
   IsOptional,
   IsString,
-  IsEnum,
   IsDateString,
   IsInt,
   Min,
@@ -9,7 +8,7 @@ import {
 } from "class-validator";
 import { Type } from "class-transformer";
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { AlertSeverity, AlertStatus } from "@molthub/database";
+// AlertSeverity, AlertStatus were enums, now plain strings after SQLite migration
 
 // ---------------------------------------------------------------------------
 // Query DTO
@@ -26,15 +25,15 @@ export class AlertQueryDto {
   @IsString()
   fleetId?: string;
 
-  @ApiPropertyOptional({ enum: AlertSeverity, description: "Filter by severity" })
+  @ApiPropertyOptional({ description: "Filter by severity" })
   @IsOptional()
-  @IsEnum(AlertSeverity)
-  severity?: AlertSeverity;
+  @IsString()
+  severity?: string;
 
-  @ApiPropertyOptional({ enum: AlertStatus, description: "Filter by status" })
+  @ApiPropertyOptional({ description: "Filter by status" })
   @IsOptional()
-  @IsEnum(AlertStatus)
-  status?: AlertStatus;
+  @IsString()
+  status?: string;
 
   @ApiPropertyOptional({ description: "Filter by rule name" })
   @IsOptional()

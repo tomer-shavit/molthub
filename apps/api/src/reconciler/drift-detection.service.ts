@@ -2,9 +2,6 @@ import { Injectable, Logger } from "@nestjs/common";
 import {
   prisma,
   BotInstance,
-  BotStatus,
-  BotHealth,
-  GatewayConnectionStatus,
 } from "@molthub/database";
 import type { OpenClawManifest } from "@molthub/core";
 import { GatewayManager } from "@molthub/gateway-client";
@@ -179,7 +176,7 @@ export class DriftDetectionService {
   async checkAllInstances(): Promise<{ instanceId: string; result: DriftCheckResult }[]> {
     const instances = await prisma.botInstance.findMany({
       where: {
-        status: { in: [BotStatus.RUNNING, BotStatus.DEGRADED] },
+        status: { in: ["RUNNING", "DEGRADED"] },
       },
     });
 
@@ -246,15 +243,15 @@ export class DriftDetectionService {
   ): Promise<void> {
     const hasCritical = findings.some((f) => f.severity === "CRITICAL");
 
-    let newHealth: BotHealth;
+    let newHealth: string;
     if (!gatewayReachable) {
-      newHealth = BotHealth.UNKNOWN;
+      newHealth = "UNKNOWN";
     } else if (gatewayHealthy === false || hasCritical) {
-      newHealth = BotHealth.UNHEALTHY;
+      newHealth = "UNHEALTHY";
     } else if (findings.length > 0) {
-      newHealth = BotHealth.DEGRADED;
+      newHealth = "DEGRADED";
     } else {
-      newHealth = BotHealth.HEALTHY;
+      newHealth = "HEALTHY";
     }
 
     // Only update if health actually changed
@@ -270,8 +267,8 @@ export class DriftDetectionService {
 
     // Update GatewayConnection status
     const gwStatus = gatewayReachable
-      ? GatewayConnectionStatus.CONNECTED
-      : GatewayConnectionStatus.DISCONNECTED;
+      ? "CONNECTED"
+      : "DISCONNECTED";
 
     await prisma.gatewayConnection.updateMany({
       where: { instanceId: instance.id },

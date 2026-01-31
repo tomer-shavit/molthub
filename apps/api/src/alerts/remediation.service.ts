@@ -1,8 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { prisma, AlertStatus } from "@molthub/database";
+import { prisma } from "@molthub/database";
 import { ReconcilerService } from "../reconciler/reconciler.service";
 import { OpenClawHealthService } from "../health/openclaw-health.service";
-import { ChannelAuthState } from "@molthub/database";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,7 +93,7 @@ export class RemediationService {
         remediationNote: `${result.success ? "Success" : "Failed"}: ${result.message}`,
         // If remediation succeeded, resolve the alert
         ...(result.success
-          ? { status: AlertStatus.RESOLVED, resolvedAt: new Date() }
+          ? { status: "RESOLVED", resolvedAt: new Date() }
           : {}),
       },
     });
@@ -153,10 +152,10 @@ export class RemediationService {
       const result = await prisma.channelAuthSession.updateMany({
         where: {
           instanceId,
-          state: { in: [ChannelAuthState.EXPIRED, ChannelAuthState.ERROR] },
+          state: { in: ["EXPIRED", "ERROR"] },
         },
         data: {
-          state: ChannelAuthState.PENDING,
+          state: "PENDING",
           lastError: null,
           attemptCount: 0,
         },

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, Prisma, IntegrationConnector, ConnectorStatus } from "@molthub/database";
+import { prisma, IntegrationConnector } from "@molthub/database";
 import { CreateConnectorDto, UpdateConnectorDto, ListConnectorsQueryDto, TestConnectionDto } from "./connectors.dto";
 
 @Injectable()
@@ -11,10 +11,10 @@ export class ConnectorsService {
         name: dto.name,
         description: dto.description,
         type: dto.type,
-        config: dto.config as Prisma.InputJsonValue,
+        config: JSON.stringify(dto.config),
         isShared: dto.isShared ?? true,
-        allowedInstanceIds: dto.allowedInstanceIds as Prisma.InputJsonValue,
-        tags: (dto.tags || {}) as Prisma.InputJsonValue,
+        allowedInstanceIds: JSON.stringify(dto.allowedInstanceIds || []),
+        tags: JSON.stringify(dto.tags || {}),
         createdBy: dto.createdBy || "system",
       },
     });
@@ -67,16 +67,16 @@ export class ConnectorsService {
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.config && { config: dto.config as Prisma.InputJsonValue }),
+        ...(dto.config && { config: JSON.stringify(dto.config) }),
         ...(dto.isShared !== undefined && { isShared: dto.isShared }),
-        ...(dto.allowedInstanceIds && { allowedInstanceIds: dto.allowedInstanceIds as Prisma.InputJsonValue }),
-        ...(dto.tags && { tags: dto.tags as Prisma.InputJsonValue }),
-        ...(dto.rotationSchedule && { rotationSchedule: dto.rotationSchedule as Prisma.InputJsonValue }),
+        ...(dto.allowedInstanceIds && { allowedInstanceIds: JSON.stringify(dto.allowedInstanceIds) }),
+        ...(dto.tags && { tags: JSON.stringify(dto.tags) }),
+        ...(dto.rotationSchedule && { rotationSchedule: JSON.stringify(dto.rotationSchedule) }),
       },
     });
   }
 
-  async updateStatus(id: string, status: ConnectorStatus, message?: string): Promise<IntegrationConnector> {
+  async updateStatus(id: string, status: string, message?: string): Promise<IntegrationConnector> {
     await this.findOne(id);
 
     return prisma.integrationConnector.update({
@@ -84,8 +84,8 @@ export class ConnectorsService {
       data: {
         status,
         ...(message && { statusMessage: message }),
-        ...(status === ConnectorStatus.ACTIVE && { lastTestedAt: new Date(), lastTestResult: "SUCCESS" }),
-        ...(status === ConnectorStatus.ERROR && { lastTestedAt: new Date(), lastTestResult: "FAILURE" }),
+        ...(status === "ACTIVE" && { lastTestedAt: new Date(), lastTestResult: "SUCCESS" }),
+        ...(status === "ERROR" && { lastTestedAt: new Date(), lastTestResult: "FAILURE" }),
       },
     });
   }
@@ -116,7 +116,7 @@ export class ConnectorsService {
       
       await this.updateStatus(
         id, 
-        testResult.success ? ConnectorStatus.ACTIVE : ConnectorStatus.ERROR,
+        testResult.success ? "ACTIVE" : "ERROR",
         testResult.message
       );
 
@@ -130,7 +130,7 @@ export class ConnectorsService {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      await this.updateStatus(id, ConnectorStatus.ERROR, message);
+      await this.updateStatus(id, "ERROR", message);
       
       return {
         connectorId: id,

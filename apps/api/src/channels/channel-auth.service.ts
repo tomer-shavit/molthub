@@ -2,7 +2,6 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from "@nes
 import { prisma } from "@molthub/database";
 import {
   OpenClawChannelType,
-  ChannelAuthState,
   CHANNEL_TYPE_META,
   NODE_REQUIRED_CHANNELS,
   QR_PAIRING_CHANNELS,
@@ -12,6 +11,8 @@ import { ChannelAuthFactory } from "./auth/auth-factory";
 // ============================================
 // Auth Session (in-memory until ChannelAuthSession model lands via WP-06)
 // ============================================
+
+type ChannelAuthState = string;
 
 export interface AuthSession {
   id: string;
@@ -61,7 +62,7 @@ export class ChannelAuthService {
       throw new NotFoundException(`Channel ${channelId} not found`);
     }
 
-    const config = channel.config as Record<string, unknown>;
+    const config = (typeof channel.config === "string" ? JSON.parse(channel.config) : channel.config) as Record<string, unknown>;
     const openclawType = config?.openclawType as OpenClawChannelType | undefined;
 
     if (!openclawType) {
@@ -161,7 +162,7 @@ export class ChannelAuthService {
       throw new NotFoundException(`Channel ${channelId} not found`);
     }
 
-    const config = channel.config as Record<string, unknown>;
+    const config = (typeof channel.config === "string" ? JSON.parse(channel.config) : channel.config) as Record<string, unknown>;
     const openclawType = config?.openclawType as OpenClawChannelType | undefined;
 
     if (!openclawType) {
@@ -239,7 +240,7 @@ export class ChannelAuthService {
       throw new NotFoundException(`Channel ${channelId} not found`);
     }
 
-    const config = channel.config as Record<string, unknown>;
+    const config = (typeof channel.config === "string" ? JSON.parse(channel.config) : channel.config) as Record<string, unknown>;
     const openclawType = config?.openclawType as OpenClawChannelType | undefined;
 
     if (openclawType !== "whatsapp") {
@@ -278,7 +279,7 @@ export class ChannelAuthService {
     const session = this.sessions.get(channelId);
 
     if (!session) {
-      const config = channel.config as Record<string, unknown>;
+      const config = (typeof channel.config === "string" ? JSON.parse(channel.config) : channel.config) as Record<string, unknown>;
       const openclawType =
         (config?.openclawType as OpenClawChannelType) || "whatsapp";
 
@@ -399,7 +400,7 @@ export class ChannelAuthService {
       throw new NotFoundException(`Bot instance ${botInstanceId} not found`);
     }
 
-    const metadata = bot.metadata as Record<string, unknown> | null;
+    const metadata = (typeof bot.metadata === "string" ? JSON.parse(bot.metadata) : bot.metadata) as Record<string, unknown> | null;
     const runtime = metadata?.runtime as string | undefined;
 
     if (runtime && runtime.toLowerCase() === "bun") {

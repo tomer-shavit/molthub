@@ -2,9 +2,6 @@ import { Injectable, Logger } from "@nestjs/common";
 import {
   prisma,
   BotInstance,
-  BotStatus,
-  BotHealth,
-  DeploymentEventType,
 } from "@molthub/database";
 import {
   validateOpenClawManifest,
@@ -102,10 +99,10 @@ export class ReconcilerService {
       // Mark as reconciling
       await prisma.botInstance.update({
         where: { id: instanceId },
-        data: { status: BotStatus.RECONCILING },
+        data: { status: "RECONCILING" },
       });
 
-      await this.logEvent(instanceId, DeploymentEventType.RECONCILE_START, "Starting v2 reconciliation");
+      await this.logEvent(instanceId, "RECONCILE_START", "Starting v2 reconciliation");
       changes.push("Reconciliation started");
 
       // 2. Parse and validate the desired manifest
@@ -175,14 +172,14 @@ export class ReconcilerService {
       }
 
       // 7. Final DB update
-      const finalHealth = status.gatewayHealth?.ok ? BotHealth.HEALTHY
-        : status.gatewayConnected ? BotHealth.DEGRADED
-        : BotHealth.UNKNOWN;
+      const finalHealth = status.gatewayHealth?.ok ? "HEALTHY"
+        : status.gatewayConnected ? "DEGRADED"
+        : "UNKNOWN";
 
       await prisma.botInstance.update({
         where: { id: instanceId },
         data: {
-          status: BotStatus.RUNNING,
+          status: "RUNNING",
           health: finalHealth,
           configHash: desiredHash,
           lastReconcileAt: new Date(),
@@ -195,7 +192,7 @@ export class ReconcilerService {
 
       await this.logEvent(
         instanceId,
-        DeploymentEventType.RECONCILE_SUCCESS,
+        "RECONCILE_SUCCESS",
         `Reconciliation completed in ${durationMs}ms`,
       );
 
@@ -214,14 +211,14 @@ export class ReconcilerService {
       await prisma.botInstance.update({
         where: { id: instanceId },
         data: {
-          status: BotStatus.ERROR,
+          status: "ERROR",
           lastError: message,
           errorCount: { increment: 1 },
           lastReconcileAt: new Date(),
         },
       });
 
-      await this.logEvent(instanceId, DeploymentEventType.RECONCILE_ERROR, message);
+      await this.logEvent(instanceId, "RECONCILE_ERROR", message);
 
       return {
         success: false,
@@ -401,7 +398,7 @@ export class ReconcilerService {
 
     await prisma.botInstance.update({
       where: { id: instanceId },
-      data: { status: BotStatus.STOPPED },
+      data: { status: "STOPPED" },
     });
   }
 
@@ -428,13 +425,13 @@ export class ReconcilerService {
    * OpenClawManifest.  Falls back to wrapping legacy manifests in a v2 envelope.
    */
   private parseManifest(instance: BotInstance): OpenClawManifest {
-    const raw = instance.desiredManifest;
+    const rawStr = instance.desiredManifest;
 
-    if (!raw || typeof raw !== "object") {
+    if (!rawStr) {
       throw new Error(`Instance ${instance.id} has no desired manifest`);
     }
 
-    const obj = raw as Record<string, unknown>;
+    const obj = (typeof rawStr === "string" ? JSON.parse(rawStr) : rawStr) as Record<string, unknown>;
 
     // If it's already a v2 manifest, validate directly
     if (obj.apiVersion === "molthub/v2") {
@@ -468,15 +465,15 @@ export class ReconcilerService {
    */
   private isNewInstance(instance: BotInstance): boolean {
     return (
-      instance.status === BotStatus.CREATING ||
-      instance.status === BotStatus.PENDING ||
+      instance.status === "CREATING" ||
+      instance.status === "PENDING" ||
       (!instance.lastReconcileAt && !instance.configHash)
     );
   }
 
   private async logEvent(
     instanceId: string,
-    eventType: DeploymentEventType,
+    eventType: string,
     message: string,
   ): Promise<void> {
     try {

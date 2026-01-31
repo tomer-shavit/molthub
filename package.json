@@ -26,7 +26,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "dev:setup": "bash scripts/dev-start.sh",
+    "dev:setup": "bash scripts/setup.sh",
     "lint": "turbo lint",
     "test": "turbo test",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",

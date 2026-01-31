@@ -7,7 +7,9 @@ import {
 } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import { prisma } from "@molthub/database";
-import type { PairingState, OpenClawChannelType } from "@molthub/database";
+// PairingState and OpenClawChannelType were enums, now plain strings after SQLite migration
+type PairingState = string;
+type OpenClawChannelType = string;
 import { GatewayManager } from "@molthub/gateway-client";
 import type { GatewayConnectionOptions } from "@molthub/gateway-client";
 

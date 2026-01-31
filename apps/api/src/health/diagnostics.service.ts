@@ -1,9 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
   prisma,
-  GatewayConnectionStatus,
-  ChannelAuthState,
-  BotStatus,
 } from "@molthub/database";
 import {
   GatewayClient,
@@ -166,13 +163,13 @@ export class DiagnosticsService {
 
     // Auth checks
     const authChecks = instance.channelAuthSessions.map((session) => {
-      const ok = session.state === ChannelAuthState.PAIRED;
+      const ok = session.state === "PAIRED";
       let message = `State: ${session.state}`;
-      if (session.state === ChannelAuthState.EXPIRED) {
+      if (session.state === "EXPIRED") {
         message = "Authentication has expired — re-pair required";
-      } else if (session.state === ChannelAuthState.ERROR) {
+      } else if (session.state === "ERROR") {
         message = session.lastError ?? "Authentication error";
-      } else if (session.state === ChannelAuthState.PENDING) {
+      } else if (session.state === "PENDING") {
         message = "Pairing not yet completed";
       }
       return {
@@ -192,7 +189,7 @@ export class DiagnosticsService {
     const overallPass =
       configValid &&
       gatewayReachable &&
-      authChecks.every((a) => a.ok || a.state === ChannelAuthState.PENDING.toString());
+      authChecks.every((a) => a.ok || a.state === "PENDING".toString());
 
     return {
       instanceId,
@@ -347,14 +344,14 @@ export class DiagnosticsService {
     }
 
     for (const session of sessions) {
-      if (session.state === ChannelAuthState.EXPIRED) {
+      if (session.state === "EXPIRED") {
         findings.push({
           category: "channels",
           severity: "error",
           message: `${session.channelType} auth has expired`,
           repairAction: `Re-pair the ${session.channelType} channel by initiating a new auth flow.`,
         });
-      } else if (session.state === ChannelAuthState.ERROR) {
+      } else if (session.state === "ERROR") {
         findings.push({
           category: "channels",
           severity: "error",
@@ -362,14 +359,14 @@ export class DiagnosticsService {
           detail: session.lastError ?? undefined,
           repairAction: `Reset and re-pair the ${session.channelType} channel.`,
         });
-      } else if (session.state === ChannelAuthState.PENDING) {
+      } else if (session.state === "PENDING") {
         findings.push({
           category: "channels",
           severity: "warning",
           message: `${session.channelType} auth is pending — pairing not completed`,
           repairAction: `Complete the ${session.channelType} pairing flow.`,
         });
-      } else if (session.state === ChannelAuthState.PAIRED) {
+      } else if (session.state === "PAIRED") {
         // Check if about to expire
         if (session.expiresAt && session.expiresAt.getTime() < Date.now() + 24 * 60 * 60 * 1000) {
           findings.push({
@@ -446,7 +443,7 @@ export class DiagnosticsService {
     },
     findings: DiagnosticFinding[],
   ): void {
-    if (instance.status === BotStatus.ERROR) {
+    if (instance.status === "ERROR") {
       findings.push({
         category: "instance",
         severity: "critical",
@@ -454,7 +451,7 @@ export class DiagnosticsService {
         detail: instance.lastError ?? undefined,
         repairAction: "Investigate the error and reconcile the instance.",
       });
-    } else if (instance.status === BotStatus.STOPPED) {
+    } else if (instance.status === "STOPPED") {
       findings.push({
         category: "instance",
         severity: "warning",

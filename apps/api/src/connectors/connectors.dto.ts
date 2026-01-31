@@ -3,11 +3,10 @@ import {
   IsOptional,
   IsObject,
   IsBoolean,
-  IsEnum,
   IsArray,
   MaxLength
 } from "class-validator";
-import { ConnectorStatus } from "@molthub/database";
+// ConnectorStatus was an enum, now plain string after SQLite migration
 
 export class CreateConnectorDto {
   @IsString()
@@ -89,9 +88,9 @@ export class ListConnectorsQueryDto {
   @IsOptional()
   type?: string;
 
-  @IsEnum(ConnectorStatus)
+  @IsString()
   @IsOptional()
-  status?: ConnectorStatus;
+  status?: string;
 
   @IsBoolean()
   @IsOptional()

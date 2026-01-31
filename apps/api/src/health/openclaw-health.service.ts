@@ -3,9 +3,6 @@ import { Cron } from "@nestjs/schedule";
 import {
   Prisma,
   prisma,
-  BotHealth,
-  BotStatus,
-  GatewayConnectionStatus,
 } from "@molthub/database";
 import {
   GatewayClient,
@@ -96,7 +93,7 @@ export class OpenClawHealthService {
       const record = await prisma.healthSnapshot.create({
         data: {
           instanceId,
-          data: snapshot as unknown as Prisma.InputJsonValue,
+          data: JSON.stringify(snapshot),
           isHealthy,
           channelsLinked: linkedChannels,
           channelsDegraded: degradedChannels,
@@ -108,7 +105,7 @@ export class OpenClawHealthService {
       await prisma.gatewayConnection.update({
         where: { instanceId },
         data: {
-          status: GatewayConnectionStatus.CONNECTED,
+          status: "CONNECTED",
           lastHeartbeat: new Date(),
           latencyMs,
           configHash: undefined, // preserve existing
@@ -116,13 +113,13 @@ export class OpenClawHealthService {
       });
 
       // Derive BotHealth from snapshot
-      let health: BotHealth;
+      let health: string;
       if (!snapshot.ok) {
-        health = BotHealth.UNHEALTHY;
+        health = "UNHEALTHY";
       } else if (degradedChannels > 0) {
-        health = BotHealth.DEGRADED;
+        health = "DEGRADED";
       } else {
-        health = BotHealth.HEALTHY;
+        health = "HEALTHY";
       }
 
       await prisma.botInstance.update({
@@ -169,7 +166,7 @@ export class OpenClawHealthService {
   async pollAllInstances(): Promise<void> {
     const instances = await prisma.botInstance.findMany({
       where: {
-        status: { in: [BotStatus.RUNNING, BotStatus.DEGRADED] },
+        status: { in: ["RUNNING", "DEGRADED"] },
         gatewayConnection: { isNot: null },
       },
       select: { id: true },
@@ -210,7 +207,7 @@ export class OpenClawHealthService {
     return {
       id: record.id,
       instanceId: record.instanceId,
-      data: record.data as unknown as GatewayHealthSnapshot,
+      data: JSON.parse(record.data as string) as GatewayHealthSnapshot,
       isHealthy: record.isHealthy,
       channelsLinked: record.channelsLinked,
       channelsDegraded: record.channelsDegraded,
@@ -269,7 +266,7 @@ export class OpenClawHealthService {
       await prisma.healthSnapshot.create({
         data: {
           instanceId,
-          data: snapshot as unknown as Prisma.InputJsonValue,
+          data: JSON.stringify(snapshot),
           isHealthy: snapshot.ok,
           channelsLinked: snapshot.channels.length,
           channelsDegraded: snapshot.channels.filter((ch) => !ch.ok).length,
@@ -300,7 +297,7 @@ export class OpenClawHealthService {
       await prisma.gatewayConnection.update({
         where: { instanceId },
         data: {
-          status: GatewayConnectionStatus.ERROR,
+          status: "ERROR",
           lastHeartbeat: new Date(),
         },
       });
@@ -313,7 +310,7 @@ export class OpenClawHealthService {
       await prisma.botInstance.update({
         where: { id: instanceId },
         data: {
-          health: BotHealth.UNHEALTHY,
+          health: "UNHEALTHY",
           lastHealthCheckAt: new Date(),
           lastError: errorMessage,
           errorCount: { increment: 1 },

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { prisma, Template } from "@molthub/database";
-import { Prisma } from "@molthub/database";
+// Prisma namespace no longer needed after SQLite migration
 import {
   CreateTemplateDto,
   PreviewConfigDto,
@@ -39,7 +39,7 @@ function builtinToResponse(t: BuiltinTemplate): TemplateResponseDto {
 
 function dbToResponse(t: Template): TemplateResponseDto {
   // DB templates store config in `manifestTemplate` (v1 compat) or `defaultConfig`.
-  const raw = t.manifestTemplate as Record<string, unknown> | null;
+  const raw = (typeof t.manifestTemplate === "string" ? JSON.parse(t.manifestTemplate) : t.manifestTemplate) as Record<string, unknown> | null;
   return {
     id: t.id,
     name: t.name,
@@ -107,9 +107,9 @@ export class TemplatesService {
         name: dto.name,
         description: dto.description,
         category: dto.category,
-        manifestTemplate: (dto.defaultConfig ??
+        manifestTemplate: JSON.stringify(dto.defaultConfig ??
           dto.manifestTemplate ??
-          {}) as Prisma.InputJsonValue,
+          {}),
         isBuiltin: false,
         workspaceId: "default",
       },
@@ -194,7 +194,7 @@ export class TemplatesService {
       name: dbTemplate.name,
       description: dbTemplate.description,
       category: (dbTemplate.category as BuiltinTemplate["category"]) ?? "minimal",
-      defaultConfig: (dbTemplate.manifestTemplate as Record<string, unknown>) ?? {},
+      defaultConfig: (typeof dbTemplate.manifestTemplate === "string" ? JSON.parse(dbTemplate.manifestTemplate) : dbTemplate.manifestTemplate) as Record<string, unknown> ?? {},
       requiredInputs: [],
       channels: [],
       recommendedPolicies: [],

@@ -1,11 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import {
   prisma,
-  Prisma,
   CommunicationChannel,
   BotChannelBinding,
-  ChannelType,
-  ChannelStatus,
 } from "@molthub/database";
 import {
   CreateChannelDto,
@@ -31,15 +28,15 @@ import { ChannelConfigGenerator, ChannelData } from "./channel-config-generator"
 // Map OpenClawChannelType -> existing ChannelType enum
 // ============================================
 
-const OPENCLAW_TO_DB_TYPE: Partial<Record<OpenClawChannelType, ChannelType>> = {
-  slack: ChannelType.SLACK,
-  telegram: ChannelType.TELEGRAM,
-  discord: ChannelType.DISCORD,
+const OPENCLAW_TO_DB_TYPE: Partial<Record<OpenClawChannelType, string>> = {
+  slack: "SLACK",
+  telegram: "TELEGRAM",
+  discord: "DISCORD",
 };
 
-function resolveDbChannelType(openclawType: OpenClawChannelType, explicit?: ChannelType): ChannelType {
+function resolveDbChannelType(openclawType: OpenClawChannelType, explicit?: string): string {
   if (explicit) return explicit;
-  return OPENCLAW_TO_DB_TYPE[openclawType] ?? ChannelType.CUSTOM;
+  return OPENCLAW_TO_DB_TYPE[openclawType] ?? "CUSTOM";
 }
 
 @Injectable()
@@ -94,12 +91,12 @@ export class ChannelsService {
         name: dto.name,
         workspaceId: dto.workspaceId,
         type: dbType,
-        config: config as Prisma.InputJsonValue,
-        defaults: {} as Prisma.InputJsonValue,
+        config: JSON.stringify(config),
+        defaults: JSON.stringify({}),
         isShared: dto.isShared ?? true,
-        tags: (dto.tags || {}) as Prisma.InputJsonValue,
+        tags: JSON.stringify(dto.tags || {}),
         createdBy: dto.createdBy || "system",
-        status: ChannelStatus.PENDING,
+        status: "PENDING",
       },
     });
   }
@@ -124,7 +121,7 @@ export class ChannelsService {
     // Filter by openclawType if specified
     if (query.openclawType) {
       return channels.filter((ch) => {
-        const cfg = ch.config as Record<string, unknown> | null;
+        const cfg = (typeof ch.config === "string" ? JSON.parse(ch.config) : ch.config) as Record<string, unknown> | null;
         return cfg?.openclawType === query.openclawType;
       });
     }
@@ -162,7 +159,7 @@ export class ChannelsService {
 
   async update(id: string, dto: UpdateChannelDto): Promise<CommunicationChannel> {
     const channel = await this.findOne(id);
-    const existingConfig = (channel.config as Record<string, unknown>) || {} as Record<string, unknown>;
+    const existingConfig = (typeof channel.config === "string" ? JSON.parse(channel.config) : channel.config || {}) as Record<string, unknown>;
 
     // Merge policies
     if (dto.policies) {
@@ -197,10 +194,10 @@ export class ChannelsService {
       where: { id },
       data: {
         ...(dto.name && { name: dto.name }),
-        config: existingConfig as Prisma.InputJsonValue,
+        config: JSON.stringify(existingConfig),
         ...(dto.isShared !== undefined && { isShared: dto.isShared }),
         ...(dto.status && { status: dto.status }),
-        ...(dto.tags && { tags: dto.tags as Prisma.InputJsonValue }),
+        ...(dto.tags && { tags: JSON.stringify(dto.tags) }),
       },
     });
   }
@@ -244,7 +241,7 @@ export class ChannelsService {
     }
 
     // Runtime check for Node-required channels
-    const config = channel.config as Record<string, unknown> | null;
+    const config = (typeof channel.config === "string" ? JSON.parse(channel.config) : channel.config) as Record<string, unknown> | null;
     const openclawType = config?.openclawType as OpenClawChannelType | undefined;
     if (openclawType && NODE_REQUIRED_CHANNELS.includes(openclawType)) {
       await this.authService.validateRuntimeCompatibility(dto.botId, openclawType);
@@ -270,8 +267,8 @@ export class ChannelsService {
         botId: dto.botId,
         channelId,
         purpose: dto.purpose,
-        settings: (dto.settings || {}) as Prisma.InputJsonValue,
-        targetDestination: dto.targetDestination as Prisma.InputJsonValue,
+        settings: JSON.stringify(dto.settings || {}),
+        targetDestination: dto.targetDestination ? JSON.stringify(dto.targetDestination) : null,
         isActive: dto.isActive ?? true,
       },
     });
@@ -288,8 +285,8 @@ export class ChannelsService {
       where: { id: bindingId },
       data: {
         ...(dto.purpose && { purpose: dto.purpose }),
-        ...(dto.settings && { settings: dto.settings as Prisma.InputJsonValue }),
-        ...(dto.targetDestination && { targetDestination: dto.targetDestination as Prisma.InputJsonValue }),
+        ...(dto.settings && { settings: JSON.stringify(dto.settings) }),
+        ...(dto.targetDestination && { targetDestination: JSON.stringify(dto.targetDestination) }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
       },
     });
@@ -353,7 +350,7 @@ export class ChannelsService {
 
     const channelDataList: ChannelData[] = bindings
       .map((binding) => {
-        const config = binding.channel.config as Record<string, unknown> | null;
+        const config = (typeof binding.channel.config === "string" ? JSON.parse(binding.channel.config) : binding.channel.config) as Record<string, unknown> | null;
         if (!config?.openclawType) return null;
 
         return {
@@ -384,7 +381,7 @@ export class ChannelsService {
       throw new NotFoundException(`Channel ${id} not found`);
     }
 
-    const config = dto.config || (channel.config as Record<string, unknown>);
+    const config = dto.config || (typeof channel.config === "string" ? JSON.parse(channel.config) : channel.config) as Record<string, unknown>;
     const openclawType = config?.openclawType as OpenClawChannelType | undefined;
 
     if (!openclawType) {
@@ -411,7 +408,7 @@ export class ChannelsService {
       await prisma.communicationChannel.update({
         where: { id },
         data: {
-          status: ChannelStatus.ERROR,
+          status: "ERROR",
           statusMessage: testResult.error,
           lastTestedAt: new Date(),
           errorCount: { increment: 1 },
@@ -435,7 +432,7 @@ export class ChannelsService {
     await prisma.communicationChannel.update({
       where: { id },
       data: {
-        status: ChannelStatus.ACTIVE,
+        status: "ACTIVE",
         statusMessage: "Connection test successful",
         lastTestedAt: new Date(),
         errorCount: 0,
@@ -482,7 +479,7 @@ export class ChannelsService {
 
     const results = await Promise.all(
       bindings.map(async (binding) => {
-        const config = binding.channel.config as Record<string, unknown> | null;
+        const config = (typeof binding.channel.config === "string" ? JSON.parse(binding.channel.config) : binding.channel.config) as Record<string, unknown> | null;
         const openclawType = config?.openclawType as string | undefined;
 
         // Simulate health check
@@ -537,7 +534,7 @@ export class ChannelsService {
       throw new NotFoundException(`Channel ${id} not found`);
     }
 
-    const config = channel.config as Record<string, unknown> | null;
+    const config = (typeof channel.config === "string" ? JSON.parse(channel.config) : channel.config) as Record<string, unknown> | null;
 
     const recentBindings = await prisma.botChannelBinding.findMany({
       where: { channelId: id },

@@ -1,12 +1,10 @@
 import {
   IsString,
   IsOptional,
-  IsEnum,
   IsNumber,
   IsBoolean,
 } from "class-validator";
 import { Transform } from "class-transformer";
-import { SloMetric, SloWindow } from "@molthub/database";
 
 export class CreateSloDto {
   @IsString()
@@ -19,15 +17,15 @@ export class CreateSloDto {
   @IsString()
   instanceId: string;
 
-  @IsEnum(SloMetric)
-  metric: SloMetric;
+  @IsString()
+  metric: string;
 
   @IsNumber()
   @Transform(({ value }) => parseFloat(value))
   targetValue: number;
 
-  @IsEnum(SloWindow)
-  window: SloWindow;
+  @IsString()
+  window: string;
 
   @IsString()
   @IsOptional()
@@ -47,18 +45,18 @@ export class UpdateSloDto {
   @IsOptional()
   instanceId?: string;
 
-  @IsEnum(SloMetric)
+  @IsString()
   @IsOptional()
-  metric?: SloMetric;
+  metric?: string;
 
   @IsNumber()
   @Transform(({ value }) => (value !== undefined ? parseFloat(value) : undefined))
   @IsOptional()
   targetValue?: number;
 
-  @IsEnum(SloWindow)
+  @IsString()
   @IsOptional()
-  window?: SloWindow;
+  window?: string;
 
   @IsBoolean()
   @IsOptional()

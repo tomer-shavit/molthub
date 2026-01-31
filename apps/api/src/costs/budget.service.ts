@@ -3,8 +3,6 @@ import { Cron } from "@nestjs/schedule";
 import {
   prisma,
   BudgetConfig,
-  AlertSeverity,
-  AlertStatus,
   Prisma,
 } from "@molthub/database";
 import { CreateBudgetDto, UpdateBudgetDto, BudgetQueryDto } from "./costs.dto";
@@ -122,7 +120,7 @@ export class BudgetService {
         budget,
         "budget_critical",
         isCritical,
-        AlertSeverity.CRITICAL,
+        "CRITICAL",
         spendPct,
       );
 
@@ -131,7 +129,7 @@ export class BudgetService {
         budget,
         "budget_warning",
         isWarning && !isCritical,
-        AlertSeverity.WARNING,
+        "WARNING",
         spendPct,
       );
     }
@@ -172,14 +170,14 @@ export class BudgetService {
     budget: BudgetConfig,
     rule: string,
     isTriggered: boolean,
-    severity: AlertSeverity,
+    severity: string,
     spendPct: number,
   ): Promise<void> {
     // Find existing active alert for this budget + rule
     const existingAlert = await prisma.healthAlert.findFirst({
       where: {
         rule,
-        status: { in: [AlertStatus.ACTIVE, AlertStatus.ACKNOWLEDGED] },
+        status: { in: ["ACTIVE", "ACKNOWLEDGED"] },
         ...(budget.instanceId && { instanceId: budget.instanceId }),
         ...(budget.fleetId && { fleetId: budget.fleetId }),
       },
@@ -208,7 +206,7 @@ export class BudgetService {
             fleetId: budget.fleetId,
             rule,
             severity,
-            status: AlertStatus.ACTIVE,
+            status: "ACTIVE",
             title,
             message,
             detail: JSON.stringify({
@@ -228,7 +226,7 @@ export class BudgetService {
       await prisma.healthAlert.update({
         where: { id: existingAlert.id },
         data: {
-          status: AlertStatus.RESOLVED,
+          status: "RESOLVED",
           resolvedAt: new Date(),
         },
       });

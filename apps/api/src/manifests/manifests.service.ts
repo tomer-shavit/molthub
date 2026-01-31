@@ -61,7 +61,7 @@ export class ManifestsService {
       data: {
         instanceId,
         version: nextVersion,
-        content: dto.content as Prisma.InputJsonValue,
+        content: JSON.stringify(dto.content),
         createdBy: "system", // TODO: Get from auth context
       },
     });

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma, Prisma } from "@molthub/database";
+import { prisma } from "@molthub/database";
 import {
   BUILTIN_OPENCLAW_POLICY_PACKS,
   OpenClawConfig,
@@ -61,7 +61,7 @@ export class OpenClawSecurityAuditService {
       throw new NotFoundException(`Instance '${instanceId}' not found`);
     }
 
-    const manifest = (instance.desiredManifest as Record<string, unknown>) || {};
+    const manifest = (typeof instance.desiredManifest === "string" ? JSON.parse(instance.desiredManifest) : instance.desiredManifest) as Record<string, unknown> || {};
     const spec = (manifest?.spec as Record<string, unknown>) || {};
     const metadata = (manifest?.metadata as Record<string, unknown>) || {};
     const openclawConfig = (spec.openclawConfig || {}) as unknown as OpenClawConfig;
@@ -77,7 +77,7 @@ export class OpenClawSecurityAuditService {
     const context: OpenClawEvaluationContext = {
       environment,
       otherInstances: otherInstances.map((inst) => {
-        const otherManifest = (inst.desiredManifest as Record<string, unknown>) || {};
+        const otherManifest = (typeof inst.desiredManifest === "string" ? JSON.parse(inst.desiredManifest) : inst.desiredManifest) as Record<string, unknown> || {};
         const otherSpec = (otherManifest?.spec as Record<string, unknown>) || {};
         const otherOpenClaw = (otherSpec?.openclawConfig || {}) as unknown as OpenClawConfig;
         return {
@@ -182,7 +182,7 @@ export class OpenClawSecurityAuditService {
       throw new NotFoundException(`Instance '${instanceId}' not found`);
     }
 
-    const manifest = (instance.desiredManifest as Record<string, unknown>) || {};
+    const manifest = (typeof instance.desiredManifest === "string" ? JSON.parse(instance.desiredManifest) : instance.desiredManifest) as Record<string, unknown> || {};
     const manifestSpec = (manifest.spec as Record<string, unknown>) || {};
     let config = (manifestSpec.openclawConfig as Record<string, unknown>) || {};
 
@@ -212,7 +212,7 @@ export class OpenClawSecurityAuditService {
       };
       await prisma.botInstance.update({
         where: { id: instanceId },
-        data: { desiredManifest: updatedManifest as Prisma.InputJsonValue },
+        data: { desiredManifest: JSON.stringify(updatedManifest) },
       });
     }
 

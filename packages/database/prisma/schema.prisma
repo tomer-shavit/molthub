@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -36,7 +36,7 @@ model User {
   id          String    @id @default(cuid())
   email       String
   name        String
-  role        UserRole  @default(VIEWER)
+  role        String  @default("VIEWER")
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())
@@ -47,20 +47,12 @@ model User {
 
   @@unique([email, workspaceId])
 }
-
-enum UserRole {
-  OWNER
-  ADMIN
-  OPERATOR
-  VIEWER
-}
-
 // Auth model for simple JWT-based authentication
 model AuthUser {
   id          String    @id @default(cuid())
   username    String    @unique
   passwordHash String
-  role        UserRole  @default(OPERATOR)
+  role        String  @default("OPERATOR")
   isActive    Boolean   @default(true)
   lastLoginAt DateTime?
   createdAt   DateTime  @default(now())
@@ -76,22 +68,22 @@ model Fleet {
   name        String
   workspaceId String
   workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  environment Environment
+  environment String
   description String?
-  status      FleetStatus @default(ACTIVE)
-  tags        Json        @default("{}")
+  status      String @default("ACTIVE")
+  tags        String        @default("{}")
 
   // Infrastructure references
   ecsClusterArn    String?
   vpcId            String?
-  privateSubnetIds Json    @default("[]")
+  privateSubnetIds String    @default("[]")
   securityGroupId  String?
 
   // Configuration
   defaultProfileId      String?
-  enforcedPolicyPackIds Json    @default("[]")
+  enforcedPolicyPackIds String    @default("[]")
 
-  defaultDeploymentType DeploymentType?
+  defaultDeploymentType String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -107,14 +99,6 @@ model Fleet {
   @@index([workspaceId])
   @@index([status])
 }
-
-enum FleetStatus {
-  ACTIVE
-  PAUSED
-  DRAINING
-  ERROR
-}
-
 // Enhanced BotInstance with fleet association
 model BotInstance {
   id          String    @id @default(cuid())
@@ -127,17 +111,17 @@ model BotInstance {
   // Configuration layers
   templateId String?
   profileId  String?
-  overlayIds Json    @default("[]")
+  overlayIds String    @default("[]")
 
   // Current state
-  status                 BotStatus @default(CREATING)
-  health                 BotHealth @default(UNKNOWN)
-  desiredManifest        Json
+  status                 String @default("CREATING")
+  health                 String @default("UNKNOWN")
+  desiredManifest        String
   appliedManifestVersion String?
 
   // Operational metadata
-  tags     Json @default("{}")
-  metadata Json @default("{}")
+  tags     String @default("{}")
+  metadata String @default("{}")
 
   // Runtime info
   lastReconcileAt   DateTime?
@@ -160,7 +144,7 @@ model BotInstance {
   createdBy String
 
   // OpenClaw-native fields
-  deploymentType     DeploymentType?
+  deploymentType     String?
   deploymentTargetId String?
   deploymentTarget   DeploymentTarget? @relation(fields: [deploymentTargetId], references: [id])
   gatewayPort        Int?
@@ -201,34 +185,15 @@ model BotInstance {
   @@index([health])
 }
 
-enum BotStatus {
-  CREATING
-  PENDING
-  RUNNING
-  DEGRADED
-  STOPPED
-  PAUSED
-  DELETING
-  ERROR
-  RECONCILING
-}
-
-enum BotHealth {
-  HEALTHY
-  UNHEALTHY
-  UNKNOWN
-  DEGRADED
-}
-
 // Legacy Instance model (kept for compatibility, migrate to BotInstance)
 model Instance {
   id                String         @id @default(cuid())
   workspaceId       String
   workspace         Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name              String
-  environment       Environment    @default(dev)
-  tags              Json           @default("{}")
-  status            InstanceStatus @default(CREATING)
+  environment       String    @default("dev")
+  tags              String           @default("{}")
+  status            String @default("CREATING")
   desiredManifestId String?
   lastReconcileAt   DateTime?
   lastError         String?
@@ -250,21 +215,6 @@ model Instance {
   @@index([status])
 }
 
-enum Environment {
-  dev
-  staging
-  prod
-}
-
-enum InstanceStatus {
-  CREATING
-  RUNNING
-  DEGRADED
-  STOPPED
-  DELETING
-  ERROR
-}
-
 // Profile: Shared defaults for instances
 model Profile {
   id          String    @id @default(cuid())
@@ -274,15 +224,15 @@ model Profile {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   // Scope
-  fleetIds Json @default("[]") // Empty = available to all fleets
+  fleetIds String @default("[]") // Empty = available to all fleets
 
   // Default configurations
-  defaults      Json // Profile defaults object
-  mergeStrategy Json @default("{}")
+  defaults      String // Profile defaults object
+  mergeStrategy String @default("{}")
 
   // Override settings
   allowInstanceOverrides Boolean @default(true)
-  lockedFields           Json    @default("[]")
+  lockedFields           String    @default("[]")
 
   // Priority for applying multiple profiles
   priority Int     @default(0)
@@ -308,16 +258,16 @@ model Overlay {
 
   // Target specification
   targetType     String // instance, fleet, environment, tag
-  targetSelector Json // Selector criteria
+  targetSelector String // Selector criteria
 
   // Override values
-  overrides Json // Override configuration
+  overrides String // Override configuration
 
   // Behavior
   priority Int     @default(0)
   enabled  Boolean @default(true)
-  rollout  Json? // Rollout configuration
-  schedule Json? // Schedule for temporary overlays
+  rollout  String? // Rollout configuration
+  schedule String? // Schedule for temporary overlays
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -339,12 +289,12 @@ model PolicyPack {
   // Scope
   isBuiltin          Boolean @default(false)
   autoApply          Boolean @default(false)
-  targetWorkspaces   Json?
-  targetEnvironments Json?
-  targetTags         Json?
+  targetWorkspaces   String?
+  targetEnvironments String?
+  targetTags         String?
 
   // Rules
-  rules Json // Array of PolicyRule objects
+  rules String // Array of PolicyRule objects
 
   // Settings
   isEnforced Boolean @default(false)
@@ -372,10 +322,10 @@ model IntegrationConnector {
 
   // Type and configuration
   type   String // openai, slack, discord, etc.
-  config Json // ConnectionConfig object
+  config String // ConnectionConfig object
 
   // Status
-  status         ConnectorStatus @default(PENDING)
+  status         String @default("PENDING")
   statusMessage  String?
   lastTestedAt   DateTime?
   lastTestResult String?
@@ -383,16 +333,16 @@ model IntegrationConnector {
 
   // Sharing
   isShared           Boolean @default(true)
-  allowedInstanceIds Json? // If not shared, specific instances
+  allowedInstanceIds String? // If not shared, specific instances
 
   // Rotation
-  rotationSchedule Json?
+  rotationSchedule String?
 
   // Usage tracking
   usageCount Int       @default(0)
   lastUsedAt DateTime?
 
-  tags Json @default("{}")
+  tags String @default("{}")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -405,14 +355,6 @@ model IntegrationConnector {
   @@index([type])
   @@index([status])
 }
-
-enum ConnectorStatus {
-  ACTIVE
-  INACTIVE
-  ERROR
-  PENDING
-}
-
 // Bot to Connector binding
 model BotConnectorBinding {
   id            String               @id @default(cuid())
@@ -422,8 +364,8 @@ model BotConnectorBinding {
   connector     IntegrationConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
 
   purpose       String // llm, channel, database, etc.
-  channelConfig Json? // Channel-specific configuration
-  overrides     Json? // Bot-specific overrides
+  channelConfig String? // Channel-specific configuration
+  overrides     String? // Bot-specific overrides
 
   healthStatus    String    @default("UNKNOWN")
   lastHealthCheck DateTime?
@@ -446,13 +388,13 @@ model ChangeSet {
   description String
 
   // Change details
-  fromManifest Json?
-  toManifest   Json
+  fromManifest String?
+  toManifest   String
 
   // Rollout configuration
   rolloutStrategy   String @default("ALL") // ALL, PERCENTAGE, CANARY
   rolloutPercentage Int?
-  canaryInstances   Json?
+  canaryInstances   String?
 
   // Status
   status String @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, FAILED, ROLLED_BACK
@@ -501,13 +443,13 @@ model Trace {
   durationMs Int?
 
   // Details
-  input  Json?
-  output Json?
-  error  Json?
+  input  String?
+  output String?
+  error  String?
 
   // Context
-  metadata Json @default("{}")
-  tags     Json @default("{}")
+  metadata String @default("{}")
+  tags     String @default("{}")
 
   createdAt DateTime @default(now())
 
@@ -553,7 +495,7 @@ model ManifestVersion {
   instanceId String
   instance   Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
   version    Int
-  content    Json
+  content    String
   createdBy  String
   user       User     @relation(fields: [createdBy], references: [id])
   createdAt  DateTime @default(now())
@@ -570,7 +512,7 @@ model AuditEvent {
   resourceType String
   resourceId   String
   diffSummary  String?
-  metadata     Json      @default("{}")
+  metadata     String      @default("{}")
   timestamp    DateTime  @default(now())
   workspaceId  String
   workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -590,7 +532,7 @@ model Template {
   name             String
   description      String
   category         String
-  manifestTemplate Json
+  manifestTemplate String
   isBuiltin        Boolean    @default(false)
   workspaceId      String?
   workspace        Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
@@ -605,24 +547,14 @@ model DeploymentEvent {
   id         String              @id @default(cuid())
   instanceId String
   instance   Instance            @relation(fields: [instanceId], references: [id], onDelete: Cascade)
-  eventType  DeploymentEventType
+  eventType  String
   message    String
-  metadata   Json                @default("{}")
+  metadata   String                @default("{}")
   createdAt  DateTime            @default(now())
 
   @@index([instanceId])
   @@index([createdAt])
 }
-
-enum DeploymentEventType {
-  RECONCILE_START
-  RECONCILE_SUCCESS
-  RECONCILE_ERROR
-  ECS_DEPLOYMENT
-  ECS_ROLLBACK
-  DRIFT_DETECTED
-}
-
 // SkillPack: Reusable bundle of skills and MCPs for multiple bots
 model SkillPack {
   id          String   @id @default(cuid())
@@ -632,14 +564,14 @@ model SkillPack {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   
   // Skills configuration (e.g., [{"name": "github", "version": "1.0.0"}])
-  skills Json @default("[]")
+  skills String @default("[]")
   
   // MCP servers configuration
   // e.g., [{"name": "github", "command": "npx -y @modelcontextprotocol/server-github"}]
-  mcps Json @default("[]")
+  mcps String @default("[]")
   
-  // Environment variables shared across all bots using this pack
-  envVars Json @default("{}")
+  // String variables shared across all bots using this pack
+  envVars String @default("{}")
   
   // Whether this is a built-in pack (provided by Molthub)
   isBuiltin Boolean @default(false)
@@ -668,7 +600,7 @@ model BotInstanceSkillPack {
   skillPack     SkillPack   @relation(fields: [skillPackId], references: [id], onDelete: Cascade)
 
   // Instance-specific overrides (merged with pack defaults)
-  envOverrides Json @default("{}")
+  envOverrides String @default("{}")
 
   // When this pack was attached to the bot
   attachedAt DateTime @default(now())
@@ -683,32 +615,13 @@ model BotInstanceSkillPack {
 // Configure and monitor messaging channels per bot
 // ============================================
 
-enum ChannelType {
-  SLACK
-  TELEGRAM
-  DISCORD
-  EMAIL
-  WEBHOOK
-  SMS
-  PUSHOVER
-  CUSTOM
-}
-
-enum ChannelStatus {
-  ACTIVE
-  INACTIVE
-  ERROR
-  PENDING
-  DEGRADED
-}
-
 model CommunicationChannel {
   id          String   @id @default(cuid())
   name        String   // e.g., "Support Slack", "Alerts Telegram"
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  type ChannelType
+  type String
 
   // Channel configuration (type-specific)
   // Slack: { token: string, channelId?: string }
@@ -716,14 +629,14 @@ model CommunicationChannel {
   // Discord: { botToken: string, guildId?: string, channelId?: string }
   // Email: { smtpHost, smtpPort, username, password, fromAddress }
   // Webhook: { url, headers?, secret? }
-  config Json
+  config String
 
   // Default settings for this channel
-  defaults Json @default("{}")
+  defaults String @default("{}")
   // e.g., { mentionOnError: true, quietHours: { start: "22:00", end: "08:00" } }
 
   // Status tracking
-  status        ChannelStatus @default(PENDING)
+  status        String @default("PENDING")
   statusMessage String?
   lastTestedAt  DateTime?
   lastError     String?
@@ -738,7 +651,7 @@ model CommunicationChannel {
   // Sharing
   isShared Boolean @default(true)  // Can be used by multiple bots
 
-  tags Json @default("{}")
+  tags String @default("{}")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -765,7 +678,7 @@ model BotChannelBinding {
   purpose String @default("notifications")
 
   // Bot-specific overrides (merged with channel defaults)
-  settings Json @default("{}")
+  settings String @default("{}")
   // e.g., {
   //   filters: [{ type: "error", minSeverity: "high" }],
   //   formatting: "markdown",
@@ -777,7 +690,7 @@ model BotChannelBinding {
   // Slack: specific channel ID
   // Telegram: specific chat ID
   // Email: specific recipients
-  targetDestination Json?
+  targetDestination String?
 
   // Status
   isActive Boolean @default(true)
@@ -797,46 +710,6 @@ model BotChannelBinding {
 // OPENCLAW-NATIVE ENUMS
 // ============================================
 
-enum DeploymentType {
-  LOCAL
-  REMOTE_VM
-  DOCKER
-  ECS_FARGATE
-  CLOUD_RUN
-  ACI
-  KUBERNETES
-}
-
-enum GatewayConnectionStatus {
-  CONNECTED
-  DISCONNECTED
-  CONNECTING
-  ERROR
-}
-
-enum ChannelAuthState {
-  PENDING
-  PAIRING
-  PAIRED
-  EXPIRED
-  ERROR
-}
-
-enum OpenClawChannelType {
-  WHATSAPP
-  TELEGRAM
-  DISCORD
-  SLACK
-  SIGNAL
-  IMESSAGE
-  MATTERMOST
-  GOOGLE_CHAT
-  MS_TEAMS
-  LINE
-  MATRIX
-
-}
-
 // ============================================
 // OPENCLAW-NATIVE MODELS
 // ============================================
@@ -852,13 +725,13 @@ model GatewayConnection {
   authMode String @default("token") // "token" | "password"
   authToken String? // Encrypted gateway auth token
 
-  status        GatewayConnectionStatus @default(DISCONNECTED)
+  status        String @default("DISCONNECTED")
   lastHeartbeat DateTime?
   configHash    String?
   latencyMs     Int?
 
   protocolVersion Int?
-  clientMetadata  Json?
+  clientMetadata  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -895,8 +768,8 @@ model ChannelAuthSession {
   instanceId String
   instance   BotInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
 
-  channelType OpenClawChannelType
-  state       ChannelAuthState @default(PENDING)
+  channelType String
+  state       String @default("PENDING")
 
   // Auth flow data
   qrCodeData  String? // Base64 QR code for WhatsApp
@@ -923,14 +796,14 @@ model ChannelAuthSession {
 model DeploymentTarget {
   id   String         @id @default(cuid())
   name String
-  type DeploymentType
+  type String
 
   // Type-specific configuration (JSON)
   // For remote-vm: { host, sshPort, username, privateKeyRef }
   // For docker: { imageName, networkName }
   // For kubernetes: { namespace, kubeContext }
   // For cloud: provider-specific settings
-  config Json @default("{}")
+  config String @default("{}")
 
   status        String   @default("active") // "active" | "inactive" | "error"
   statusMessage String?
@@ -953,7 +826,7 @@ model SecurityAuditResult {
   instance   BotInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
 
   // Findings
-  findings      Json // Array of { ruleId, severity, message, field?, suggestedFix? }
+  findings      String // Array of { ruleId, severity, message, field?, suggestedFix? }
   totalErrors   Int  @default(0)
   totalWarnings Int  @default(0)
   totalInfo     Int  @default(0)
@@ -971,25 +844,6 @@ model SecurityAuditResult {
 // PHASE 2: SLOs, BUDGETS, COSTS, ALERTS
 // ============================================
 
-enum SloMetric {
-  UPTIME
-  LATENCY_P50
-  LATENCY_P95
-  LATENCY_P99
-  ERROR_RATE
-  CHANNEL_HEALTH
-}
-
-enum SloWindow {
-  ROLLING_1H
-  ROLLING_24H
-  ROLLING_7D
-  ROLLING_30D
-  CALENDAR_DAY
-  CALENDAR_WEEK
-  CALENDAR_MONTH
-}
-
 // SloDefinition: Per-bot SLO targets
 model SloDefinition {
   id         String      @id @default(cuid())
@@ -999,9 +853,9 @@ model SloDefinition {
   name        String
   description String?
 
-  metric      SloMetric
+  metric      String
   targetValue Float       // e.g., 99.9 for uptime %, or 200 for latency ms
-  window      SloWindow
+  window      String
 
   // Current state
   currentValue Float?
@@ -1061,16 +915,6 @@ model BudgetConfig {
   @@index([fleetId])
   @@index([isActive])
 }
-
-enum CostProvider {
-  OPENAI
-  ANTHROPIC
-  GOOGLE
-  AWS_BEDROCK
-  AZURE_OPENAI
-  CUSTOM
-}
-
 // CostEvent: Individual token usage / cost events
 model CostEvent {
   id         String      @id @default(cuid())
@@ -1078,7 +922,7 @@ model CostEvent {
   instance   BotInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
 
   // Provider info
-  provider CostProvider
+  provider String
   model    String       // e.g., "gpt-4", "claude-3-opus"
 
   // Token usage
@@ -1093,7 +937,7 @@ model CostEvent {
   traceId     String? // Optional link to a trace
 
   // Metadata
-  metadata Json @default("{}")
+  metadata String @default("{}")
 
   occurredAt DateTime @default(now())
 
@@ -1101,20 +945,6 @@ model CostEvent {
   @@index([provider])
   @@index([occurredAt])
   @@index([instanceId, occurredAt])
-}
-
-enum AlertSeverity {
-  INFO
-  WARNING
-  ERROR
-  CRITICAL
-}
-
-enum AlertStatus {
-  ACTIVE
-  ACKNOWLEDGED
-  RESOLVED
-  SUPPRESSED
 }
 
 // HealthAlert: Persistent, DB-backed alerts with remediation
@@ -1129,8 +959,8 @@ model HealthAlert {
 
   // Alert info
   rule     String         // e.g., "unreachable_instance", "slo_breach", "budget_warning"
-  severity AlertSeverity
-  status   AlertStatus    @default(ACTIVE)
+  severity String
+  status   String    @default("ACTIVE")
 
   title   String
   message String
@@ -1168,7 +998,7 @@ model HealthSnapshot {
   instance   BotInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
 
   // Health data from Gateway
-  data      Json    // Full health snapshot from Gateway WS
+  data      String    // Full health snapshot from Gateway WS
   isHealthy Boolean @default(true)
 
   // Channel health
@@ -1192,15 +1022,15 @@ model AgentStateSnapshot {
   instance   BotInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
 
   // Live state captured from Gateway
-  liveConfig      Json
+  liveConfig      String
   liveConfigHash  String
-  liveSkills      Json    @default("[]")
-  liveMcpServers  Json    @default("[]")
-  liveChannels    Json    @default("[]")
-  liveToolProfile Json?
+  liveSkills      String    @default("[]")
+  liveMcpServers  String    @default("[]")
+  liveChannels    String    @default("[]")
+  liveToolProfile String?
 
   // Pre-computed diff against deployed config
-  diffFromDeployed Json?
+  diffFromDeployed String?
   hasEvolved       Boolean @default(false)
   totalChanges     Int     @default(0)
 
@@ -1219,12 +1049,12 @@ model DevicePairing {
   instanceId String
   instance   BotInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
 
-  channelType  OpenClawChannelType
+  channelType  String
   senderId     String
   senderName   String?
   platform     String?
 
-  state        PairingState @default(PENDING)
+  state        String @default("PENDING")
   pairingCode  String?
   expiresAt    DateTime?
 
@@ -1243,12 +1073,4 @@ model DevicePairing {
   @@index([channelType])
   @@index([instanceId, pairingCode])
   @@unique([instanceId, channelType, senderId])
-}
-
-enum PairingState {
-  PENDING
-  APPROVED
-  REJECTED
-  REVOKED
-  EXPIRED
 }
