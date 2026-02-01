@@ -32,7 +32,7 @@ import { JustDeployedBanner } from "@/components/dashboard/just-deployed-banner"
 import { EvolutionBanner, type EvolutionBannerData } from "@/components/openclaw/evolution-banner";
 import { LiveSkills } from "@/components/openclaw/live-skills";
 import { EvolutionDiff } from "@/components/openclaw/evolution-diff";
-import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet, type DeploymentEvent, type AgentEvolutionSnapshot, type TokenUsageSummary, type AgentCard } from "@/lib/api";
+import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet, type DeploymentEvent, type AgentEvolutionSnapshot, type TokenUsageSummary, type AgentCard, type A2aJsonRpcResponse } from "@/lib/api";
 import { PairingTab } from "@/components/pairing/pairing-tab";
 import Link from "next/link";
 import {
@@ -63,6 +63,7 @@ import {
   Copy,
   Check,
   Loader2,
+  Send,
 } from "lucide-react";
 
 interface BotDetailClientProps {
@@ -95,6 +96,9 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
   const [isLoadingAgentCard, setIsLoadingAgentCard] = useState(false);
   const [agentCardError, setAgentCardError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [a2aTestMessage, setA2aTestMessage] = useState("");
+  const [a2aTestResult, setA2aTestResult] = useState<A2aJsonRpcResponse | null>(null);
+  const [isSendingA2a, setIsSendingA2a] = useState(false);
 
   // Fetch token usage when bot is running/degraded, poll every 15s
   useEffect(() => {
@@ -327,6 +331,26 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
     }
   }, [bot.id, router, toast]);
 
+  // Send A2A test message
+  const handleSendA2aTest = useCallback(async () => {
+    if (!a2aTestMessage.trim() || isSendingA2a) return;
+    setIsSendingA2a(true);
+    setA2aTestResult(null);
+    try {
+      const result = await api.sendA2aMessage(bot.id, a2aTestMessage.trim());
+      setA2aTestResult(result);
+      setA2aTestMessage("");
+    } catch (err) {
+      setA2aTestResult({
+        jsonrpc: "2.0",
+        id: "error",
+        error: { code: -1, message: err instanceof Error ? err.message : "Unknown error" },
+      });
+    } finally {
+      setIsSendingA2a(false);
+    }
+  }, [a2aTestMessage, isSendingA2a, bot.id]);
+
   // Run diagnostics
   const handleDiagnostics = useCallback(async () => {
     setIsDiagnosing(true);
@@ -497,9 +521,16 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
       <div className="flex flex-wrap gap-4 mb-8">
         <HealthIndicator health={bot.health} />
         {bot.lastError && (
-          <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1 rounded-full text-sm">
-            <AlertCircle className="w-4 h-4" />
-            Error state
+          <div className="relative group">
+            <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1 rounded-full text-sm cursor-default">
+              <AlertCircle className="w-4 h-4" />
+              Error state
+            </div>
+            <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block">
+              <div className="bg-popover text-popover-foreground border rounded-md shadow-md px-3 py-2 text-xs max-w-sm whitespace-pre-wrap">
+                {bot.lastError}
+              </div>
+            </div>
           </div>
         )}
         {bot.errorCount > 0 && (
@@ -1167,28 +1198,92 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
                   </pre>
                 </CardContent>
               </Card>
+
+              {/* Test A2A Message */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Send className="w-4 h-4" />
+                    Test A2A Message
+                  </CardTitle>
+                  <CardDescription>
+                    Send a test message via the A2A SendMessage JSON-RPC method
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={a2aTestMessage}
+                      onChange={(e) => setA2aTestMessage(e.target.value)}
+                      placeholder="Type a message to send to this agent..."
+                      className="flex-1 px-3 py-2 text-sm rounded-md border bg-background"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !isSendingA2a && a2aTestMessage.trim()) {
+                          handleSendA2aTest();
+                        }
+                      }}
+                      disabled={isSendingA2a}
+                    />
+                    <Button
+                      onClick={handleSendA2aTest}
+                      disabled={isSendingA2a || !a2aTestMessage.trim()}
+                      size="sm"
+                    >
+                      {isSendingA2a ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+
+                  {a2aTestResult && (
+                    <div className="space-y-3">
+                      {a2aTestResult.error ? (
+                        <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950/20 p-3">
+                          <p className="text-sm font-medium text-red-600">Error {a2aTestResult.error.code}</p>
+                          <p className="text-sm text-red-500 mt-1">{a2aTestResult.error.message}</p>
+                        </div>
+                      ) : a2aTestResult.result ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Badge variant={a2aTestResult.result.status.state === "completed" ? "default" : "destructive"}>
+                              {a2aTestResult.result.status.state}
+                            </Badge>
+                            <span className="text-muted-foreground text-xs">
+                              Task: {a2aTestResult.result.id.slice(0, 8)}...
+                            </span>
+                          </div>
+                          {a2aTestResult.result.status.message && (
+                            <div className="rounded-md border bg-muted/50 p-3">
+                              <p className="text-sm whitespace-pre-wrap">
+                                {a2aTestResult.result.status.message.parts
+                                  ?.map((p) => p.text)
+                                  .filter(Boolean)
+                                  .join("\n") || "No text content"}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+
+                      <div>
+                        <button
+                          onClick={() => setA2aTestResult(null)}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Clear result
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           ) : null}
         </TabsContent>
       </Tabs>
-
-      {/* Last Error Alert */}
-      {bot.lastError && (
-        <Card className="mt-8 border-red-200 bg-red-50">
-          <CardHeader>
-            <CardTitle className="text-red-800 flex items-center gap-2">
-              <AlertCircle className="w-5 h-5" />
-              Last Error
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-red-700 text-sm whitespace-pre-wrap overflow-auto max-h-48">{bot.lastError}</pre>
-            <p className="text-red-600 text-xs mt-2">
-              Error count: {bot.errorCount}
-            </p>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Chat Panel */}
       <BotChatPanel

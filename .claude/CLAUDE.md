@@ -158,6 +158,7 @@ Once everything passes verification:
 - **ALWAYS prefer parallel execution.** This is a core principle. When multiple tool calls, agents, file reads, or searches are independent, launch them ALL concurrently in a single message. Never do sequentially what can be done in parallel. This applies to every step: reading docs, exploring code, researching OpenClaw, implementing features, running tests, and spawning review agents.
 - **One PR per feature/fix** pushed to `master` via `gh pr create`.
 - **Track everything** with `TodoWrite` for visibility.
+- **Never run `pnpm dev` yourself.** If you make changes that affect the API server (port 4000), kill any existing process on port 4000 (`lsof -ti:4000 | xargs -r kill -9`) and ask the user to run `pnpm dev` in their console.
 
 ---
 

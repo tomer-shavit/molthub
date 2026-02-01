@@ -1311,6 +1311,26 @@ class ApiClient {
     return this.fetch(`/a2a/${botInstanceId}/agent-card`);
   }
 
+  async sendA2aMessage(botInstanceId: string, message: string): Promise<A2aJsonRpcResponse> {
+    const ts = Date.now();
+    const body = {
+      jsonrpc: "2.0",
+      id: `msg-${ts}`,
+      method: "SendMessage",
+      params: {
+        message: {
+          messageId: `msg-${ts}`,
+          role: "user",
+          parts: [{ text: message }],
+        },
+      },
+    };
+    return this.fetch(`/a2a/${botInstanceId}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
   // ============================================
   // Bot Routing Rules
   // ============================================
@@ -1889,6 +1909,30 @@ export interface AgentCard {
     organization: string;
     url?: string;
   };
+}
+
+export interface A2aTaskStatus {
+  state: string;
+  message?: {
+    messageId: string;
+    role: string;
+    parts: { text?: string }[];
+  };
+  timestamp?: string;
+}
+
+export interface A2aTask {
+  id: string;
+  contextId: string;
+  status: A2aTaskStatus;
+  artifacts?: unknown[];
+}
+
+export interface A2aJsonRpcResponse {
+  jsonrpc: "2.0";
+  id: string | number;
+  result?: A2aTask;
+  error?: { code: number; message: string };
 }
 
 // ============================================
