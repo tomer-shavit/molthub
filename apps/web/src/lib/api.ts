@@ -1311,7 +1311,7 @@ class ApiClient {
     return this.fetch(`/a2a/${botInstanceId}/agent-card`);
   }
 
-  async sendA2aMessage(botInstanceId: string, message: string): Promise<A2aJsonRpcResponse> {
+  async sendA2aMessage(botInstanceId: string, message: string, apiKey?: string): Promise<A2aJsonRpcResponse> {
     const ts = Date.now();
     const body = {
       jsonrpc: "2.0",
@@ -1325,9 +1325,35 @@ class ApiClient {
         },
       },
     };
+    const headers: Record<string, string> = {};
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
     return this.fetch(`/a2a/${botInstanceId}`, {
       method: "POST",
+      headers,
       body: JSON.stringify(body),
+    });
+  }
+
+  // ============================================
+  // A2A API Keys
+  // ============================================
+
+  async generateA2aApiKey(botInstanceId: string, label?: string): Promise<A2aApiKeyCreateResponse> {
+    return this.fetch(`/a2a/${botInstanceId}/api-keys`, {
+      method: "POST",
+      body: JSON.stringify({ label }),
+    });
+  }
+
+  async listA2aApiKeys(botInstanceId: string): Promise<A2aApiKeyInfo[]> {
+    return this.fetch(`/a2a/${botInstanceId}/api-keys`);
+  }
+
+  async revokeA2aApiKey(botInstanceId: string, keyId: string): Promise<void> {
+    await this.fetch(`/a2a/${botInstanceId}/api-keys/${keyId}`, {
+      method: "DELETE",
     });
   }
 
@@ -1933,6 +1959,21 @@ export interface A2aJsonRpcResponse {
   id: string | number;
   result?: A2aTask;
   error?: { code: number; message: string };
+}
+
+export interface A2aApiKeyInfo {
+  id: string;
+  keyPrefix: string;
+  label: string | null;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface A2aApiKeyCreateResponse {
+  key: string;
+  id: string;
 }
 
 // ============================================

@@ -32,7 +32,7 @@ import { JustDeployedBanner } from "@/components/dashboard/just-deployed-banner"
 import { EvolutionBanner, type EvolutionBannerData } from "@/components/openclaw/evolution-banner";
 import { LiveSkills } from "@/components/openclaw/live-skills";
 import { EvolutionDiff } from "@/components/openclaw/evolution-diff";
-import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet, type DeploymentEvent, type AgentEvolutionSnapshot, type TokenUsageSummary, type AgentCard, type A2aJsonRpcResponse } from "@/lib/api";
+import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet, type DeploymentEvent, type AgentEvolutionSnapshot, type TokenUsageSummary, type AgentCard, type A2aJsonRpcResponse, type A2aApiKeyInfo } from "@/lib/api";
 import { PairingTab } from "@/components/pairing/pairing-tab";
 import Link from "next/link";
 import {
@@ -64,6 +64,9 @@ import {
   Check,
   Loader2,
   Send,
+  Key,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 interface BotDetailClientProps {
@@ -99,6 +102,12 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
   const [a2aTestMessage, setA2aTestMessage] = useState("");
   const [a2aTestResult, setA2aTestResult] = useState<A2aJsonRpcResponse | null>(null);
   const [isSendingA2a, setIsSendingA2a] = useState(false);
+  const [apiKeys, setApiKeys] = useState<A2aApiKeyInfo[]>([]);
+  const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(false);
+  const [newKeyLabel, setNewKeyLabel] = useState("");
+  const [isGeneratingKey, setIsGeneratingKey] = useState(false);
+  const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
+  const [showNewKey, setShowNewKey] = useState(true);
 
   // Fetch token usage when bot is running/degraded, poll every 15s
   useEffect(() => {
@@ -131,6 +140,46 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
       .catch((err) => setAgentCardError(err instanceof Error ? err.message : "Failed to load Agent Card"))
       .finally(() => setIsLoadingAgentCard(false));
   }, [activeTab, bot.id, agentCard, isLoadingAgentCard]);
+
+  // Fetch API keys when A2A tab is activated
+  const fetchApiKeys = useCallback(() => {
+    setIsLoadingApiKeys(true);
+    api.listA2aApiKeys(bot.id)
+      .then((keys) => setApiKeys(keys))
+      .catch(() => setApiKeys([]))
+      .finally(() => setIsLoadingApiKeys(false));
+  }, [bot.id]);
+
+  useEffect(() => {
+    if (activeTab !== "a2a") return;
+    fetchApiKeys();
+  }, [activeTab, fetchApiKeys]);
+
+  const handleGenerateApiKey = useCallback(async () => {
+    setIsGeneratingKey(true);
+    try {
+      const result = await api.generateA2aApiKey(bot.id, newKeyLabel || undefined);
+      setNewlyCreatedKey(result.key);
+      setShowNewKey(true);
+      setNewKeyLabel("");
+      fetchApiKeys();
+      toast("API key generated", "success");
+    } catch (err) {
+      toast("Failed to generate API key", "error");
+    } finally {
+      setIsGeneratingKey(false);
+    }
+  }, [bot.id, newKeyLabel, fetchApiKeys, toast]);
+
+  const handleRevokeApiKey = useCallback(async (keyId: string) => {
+    try {
+      await api.revokeA2aApiKey(bot.id, keyId);
+      fetchApiKeys();
+      toast("API key revoked", "success");
+    } catch {
+      toast("Failed to revoke API key", "error");
+    }
+  }, [bot.id, fetchApiKeys, toast]);
 
   const handleCopy = useCallback((text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -208,10 +257,6 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
     : 0;
   const uptimeHours = Math.floor(uptimeTotal / 3600);
   const uptimeMinutes = Math.floor((uptimeTotal % 3600) / 60);
-
-  const successRate = metrics && metrics.total > 0
-    ? Math.round((metrics.success / metrics.total) * 100)
-    : 0;
 
   // Build gateway status from bot metadata
   const gatewayStatus: GatewayStatusData = {
@@ -331,13 +376,17 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
     }
   }, [bot.id, router, toast]);
 
-  // Send A2A test message
+  // Send A2A test message (uses newest active API key if available)
   const handleSendA2aTest = useCallback(async () => {
     if (!a2aTestMessage.trim() || isSendingA2a) return;
     setIsSendingA2a(true);
     setA2aTestResult(null);
+
+    // Find the most recently created active key to use for auth
+    const activeKey = newlyCreatedKey || undefined;
+
     try {
-      const result = await api.sendA2aMessage(bot.id, a2aTestMessage.trim());
+      const result = await api.sendA2aMessage(bot.id, a2aTestMessage.trim(), activeKey);
       setA2aTestResult(result);
       setA2aTestMessage("");
     } catch (err) {
@@ -349,7 +398,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
     } finally {
       setIsSendingA2a(false);
     }
-  }, [a2aTestMessage, isSendingA2a, bot.id]);
+  }, [a2aTestMessage, isSendingA2a, bot.id, newlyCreatedKey]);
 
   // Run diagnostics
   const handleDiagnostics = useCallback(async () => {
@@ -603,28 +652,12 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
           />
 
           {/* Metrics Grid */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+          <div className="grid gap-4 md:grid-cols-2 mb-6">
             <MetricCard
               title="Uptime"
               value={`${uptimeHours}h ${uptimeMinutes}m`}
               description="Since last restart"
               icon={<Clock className="w-4 h-4" />}
-            />
-            <MetricCard
-              title="Success Rate"
-              value={`${successRate}%`}
-              description={`${metrics?.success || 0} / ${metrics?.total || 0} requests`}
-              icon={<CheckCircle className="w-4 h-4" />}
-              className={cn(
-                successRate < 90 ? "border-l-4 border-l-red-500" :
-                successRate < 95 ? "border-l-4 border-l-yellow-500" : ""
-              )}
-            />
-            <MetricCard
-              title="Avg Latency"
-              value={metrics?.avgDuration ? `${Math.round(metrics.avgDuration)}ms` : "N/A"}
-              description="Response time"
-              icon={<Zap className="w-4 h-4" />}
             />
             <MetricCard
               title="Restarts"
@@ -1059,6 +1092,120 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
                 </CardContent>
               </Card>
 
+              {/* Authentication / API Keys */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Key className="w-4 h-4" />
+                    Authentication
+                  </CardTitle>
+                  <CardDescription>
+                    API keys for authenticating A2A JSON-RPC requests to this bot
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Newly created key banner */}
+                  {newlyCreatedKey && (
+                    <div className="rounded-md border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 p-3 space-y-2">
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                        Save this key — it won&apos;t be shown again
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-xs bg-background px-2 py-1.5 rounded border font-mono truncate">
+                          {showNewKey ? newlyCreatedKey : "•".repeat(40)}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowNewKey(!showNewKey)}
+                        >
+                          {showNewKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCopy(newlyCreatedKey, "newApiKey")}
+                        >
+                          {copiedField === "newApiKey" ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        </Button>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground"
+                        onClick={() => setNewlyCreatedKey(null)}
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Generate form */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newKeyLabel}
+                      onChange={(e) => setNewKeyLabel(e.target.value)}
+                      placeholder="Key label (optional)"
+                      className="flex-1 px-3 py-2 text-sm rounded-md border bg-background"
+                      disabled={isGeneratingKey}
+                    />
+                    <Button
+                      onClick={handleGenerateApiKey}
+                      disabled={isGeneratingKey}
+                      size="sm"
+                    >
+                      {isGeneratingKey ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Key className="w-4 h-4 mr-1.5" />}
+                      Generate Key
+                    </Button>
+                  </div>
+
+                  {/* Key list */}
+                  {isLoadingApiKeys ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : apiKeys.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-3">
+                      No API keys yet. Generate one to secure this bot&apos;s A2A endpoint.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {apiKeys.map((k) => (
+                        <div
+                          key={k.id}
+                          className={cn(
+                            "flex items-center justify-between px-3 py-2 rounded-md border text-sm",
+                            !k.isActive && "opacity-50",
+                          )}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <code className="font-mono text-xs text-muted-foreground">{k.keyPrefix}</code>
+                            {k.label && <span className="text-foreground truncate">{k.label}</span>}
+                            {!k.isActive && <Badge variant="secondary" className="text-[10px]">Revoked</Badge>}
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-xs text-muted-foreground">
+                              {k.lastUsedAt ? `Used ${new Date(k.lastUsedAt).toLocaleDateString()}` : "Never used"}
+                            </span>
+                            {k.isActive && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600"
+                                onClick={() => handleRevokeApiKey(k.id)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Agent Identity */}
               <div className="grid gap-4 md:grid-cols-2">
                 <Card>
@@ -1211,6 +1358,11 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {!newlyCreatedKey && apiKeys.filter((k) => k.isActive).length === 0 && (
+                    <div className="rounded-md border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 px-3 py-2 text-xs text-yellow-700 dark:text-yellow-300">
+                      Generate an API key above to test — the A2A endpoint requires authentication.
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <input
                       type="text"

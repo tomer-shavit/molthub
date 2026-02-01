@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Param, Body, Logger } from "@nestjs/common";
+import { Controller, Get, Post, Delete, Param, Body, Logger, UseGuards } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiParam } from "@nestjs/swagger";
 import { Public } from "../auth/public.decorator";
 import { A2aAgentCardService } from "./a2a-agent-card.service";
 import { A2aMessageService } from "./a2a-message.service";
+import { A2aApiKeyService } from "./a2a-api-key.service";
+import { A2aApiKeyGuard } from "./a2a-api-key.guard";
 import type { JsonRpcRequest, JsonRpcResponse, SendMessageParams } from "./a2a.types";
 
 @ApiTags("a2a")
@@ -13,7 +15,10 @@ export class A2aController {
   constructor(
     private readonly agentCardService: A2aAgentCardService,
     private readonly messageService: A2aMessageService,
+    private readonly apiKeyService: A2aApiKeyService,
   ) {}
+
+  // ---- Public discovery endpoints (no auth) ----
 
   @Get(":botInstanceId/agent-card")
   @Public()
@@ -31,8 +36,11 @@ export class A2aController {
     return this.agentCardService.generate(botInstanceId);
   }
 
+  // ---- A2A JSON-RPC endpoint (requires API key) ----
+
   @Post(":botInstanceId")
   @Public()
+  @UseGuards(A2aApiKeyGuard)
   @ApiOperation({ summary: "A2A JSON-RPC 2.0 endpoint" })
   @ApiParam({ name: "botInstanceId", description: "Bot instance ID" })
   async handleJsonRpc(
@@ -91,5 +99,33 @@ export class A2aController {
           error: { code: -32601, message: `Method not found: ${body.method}` },
         };
     }
+  }
+
+  // ---- API key management (requires user JWT auth) ----
+
+  @Post(":botInstanceId/api-keys")
+  @ApiOperation({ summary: "Generate a new A2A API key for a bot instance" })
+  @ApiParam({ name: "botInstanceId", description: "Bot instance ID" })
+  async generateApiKey(
+    @Param("botInstanceId") botInstanceId: string,
+    @Body() body: { label?: string },
+  ) {
+    return this.apiKeyService.generate(botInstanceId, body?.label);
+  }
+
+  @Get(":botInstanceId/api-keys")
+  @ApiOperation({ summary: "List A2A API keys for a bot instance" })
+  @ApiParam({ name: "botInstanceId", description: "Bot instance ID" })
+  async listApiKeys(@Param("botInstanceId") botInstanceId: string) {
+    return this.apiKeyService.list(botInstanceId);
+  }
+
+  @Delete(":botInstanceId/api-keys/:keyId")
+  @ApiOperation({ summary: "Revoke an A2A API key" })
+  @ApiParam({ name: "botInstanceId", description: "Bot instance ID" })
+  @ApiParam({ name: "keyId", description: "API key ID to revoke" })
+  async revokeApiKey(@Param("keyId") keyId: string) {
+    await this.apiKeyService.revoke(keyId);
+    return { success: true };
   }
 }

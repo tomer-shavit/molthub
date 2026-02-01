@@ -183,6 +183,9 @@ model BotInstance {
   routingRulesAsSource BotRoutingRule[] @relation("SourceBot")
   routingRulesAsTarget BotRoutingRule[] @relation("TargetBot")
 
+  // A2A API keys
+  a2aApiKeys A2aApiKey[]
+
   @@unique([workspaceId, name])
   @@index([workspaceId])
   @@index([fleetId])
@@ -1116,4 +1119,21 @@ model BotRoutingRule {
   @@index([sourceBotId])
   @@index([targetBotId])
   @@index([enabled])
+}
+
+// A2A API Key for bot-to-bot authentication
+model A2aApiKey {
+  id            String    @id @default(cuid())
+  keyHash       String    // SHA-256 hash of the full key
+  keyPrefix     String    // First 12 chars for display (e.g., "mh_a2a_7f8a...")
+  label         String?
+  botInstanceId String
+  botInstance   BotInstance @relation(fields: [botInstanceId], references: [id], onDelete: Cascade)
+  lastUsedAt    DateTime?
+  expiresAt     DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  @@index([botInstanceId])
+  @@index([keyHash])
 }
