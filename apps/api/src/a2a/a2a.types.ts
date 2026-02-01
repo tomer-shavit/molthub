@@ -136,3 +136,10 @@ export interface A2aTask {
   history?: A2aMessage[];
   metadata?: Record<string, unknown>;
 }
+
+// --- A2A tasks/get Params ---
+
+export interface TaskGetParams {
+  id: string;
+  historyLength?: number;
+}

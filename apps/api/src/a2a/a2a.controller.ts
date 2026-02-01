@@ -1,11 +1,12 @@
-import { Controller, Get, Post, Delete, Param, Body, Logger, UseGuards } from "@nestjs/common";
+import { Controller, Get, Post, Delete, Param, Body, Logger, UseGuards, NotFoundException } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiParam } from "@nestjs/swagger";
 import { Public } from "../auth/public.decorator";
 import { A2aAgentCardService } from "./a2a-agent-card.service";
 import { A2aMessageService } from "./a2a-message.service";
 import { A2aApiKeyService } from "./a2a-api-key.service";
+import { A2aTaskService } from "./a2a-task.service";
 import { A2aApiKeyGuard } from "./a2a-api-key.guard";
-import type { JsonRpcRequest, JsonRpcResponse, SendMessageParams } from "./a2a.types";
+import type { JsonRpcRequest, JsonRpcResponse, SendMessageParams, TaskGetParams } from "./a2a.types";
 
 @ApiTags("a2a")
 @Controller("a2a")
@@ -16,6 +17,7 @@ export class A2aController {
     private readonly agentCardService: A2aAgentCardService,
     private readonly messageService: A2aMessageService,
     private readonly apiKeyService: A2aApiKeyService,
+    private readonly taskService: A2aTaskService,
   ) {}
 
   // ---- Public discovery endpoints (no auth) ----
@@ -92,6 +94,27 @@ export class A2aController {
         }
       }
 
+      case "tasks/get": {
+        const params = body.params as TaskGetParams | undefined;
+        if (!params?.id) {
+          return {
+            jsonrpc: "2.0",
+            id: body.id,
+            error: { code: -32602, message: "Invalid params: id is required" },
+          };
+        }
+        try {
+          const task = await this.taskService.getTask(botInstanceId, params.id, params.historyLength);
+          return { jsonrpc: "2.0", id: body.id, result: task };
+        } catch (err) {
+          if (err instanceof NotFoundException) {
+            return { jsonrpc: "2.0", id: body.id, error: { code: -32001, message: "Task not found" } };
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          return { jsonrpc: "2.0", id: body.id, error: { code: -32000, message } };
+        }
+      }
+
       default:
         return {
           jsonrpc: "2.0",
@@ -99,6 +122,15 @@ export class A2aController {
           error: { code: -32601, message: `Method not found: ${body.method}` },
         };
     }
+  }
+
+  // ---- Task listing (requires user JWT auth) ----
+
+  @Get(":botInstanceId/tasks")
+  @ApiOperation({ summary: "List A2A tasks for a bot instance" })
+  @ApiParam({ name: "botInstanceId", description: "Bot instance ID" })
+  async listTasks(@Param("botInstanceId") botInstanceId: string) {
+    return this.taskService.listTasks(botInstanceId);
   }
 
   // ---- API key management (requires user JWT auth) ----

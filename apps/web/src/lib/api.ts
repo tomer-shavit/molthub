@@ -1358,6 +1358,14 @@ class ApiClient {
   }
 
   // ============================================
+  // A2A Tasks
+  // ============================================
+
+  async listA2aTasks(botInstanceId: string): Promise<A2aTaskInfo[]> {
+    return this.fetch(`/a2a/${botInstanceId}/tasks`);
+  }
+
+  // ============================================
   // Bot Routing Rules
   // ============================================
 
@@ -1974,6 +1982,31 @@ export interface A2aApiKeyInfo {
 export interface A2aApiKeyCreateResponse {
   key: string;
   id: string;
+}
+
+export interface A2aTaskInfo {
+  id: string;
+  contextId: string;
+  status: {
+    state: string;
+    message?: {
+      messageId: string;
+      role: string;
+      parts: { text?: string }[];
+    };
+    timestamp?: string;
+  };
+  history?: {
+    messageId: string;
+    role: string;
+    parts: { text?: string }[];
+  }[];
+  metadata?: {
+    startedAt?: string;
+    endedAt?: string | null;
+    durationMs?: number | null;
+    inputText?: string | null;
+  };
 }
 
 // ============================================

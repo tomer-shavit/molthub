@@ -32,7 +32,7 @@ import { JustDeployedBanner } from "@/components/dashboard/just-deployed-banner"
 import { EvolutionBanner, type EvolutionBannerData } from "@/components/openclaw/evolution-banner";
 import { LiveSkills } from "@/components/openclaw/live-skills";
 import { EvolutionDiff } from "@/components/openclaw/evolution-diff";
-import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet, type DeploymentEvent, type AgentEvolutionSnapshot, type TokenUsageSummary, type AgentCard, type A2aJsonRpcResponse, type A2aApiKeyInfo } from "@/lib/api";
+import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet, type DeploymentEvent, type AgentEvolutionSnapshot, type TokenUsageSummary, type AgentCard, type A2aJsonRpcResponse, type A2aApiKeyInfo, type A2aTaskInfo } from "@/lib/api";
 import { PairingTab } from "@/components/pairing/pairing-tab";
 import Link from "next/link";
 import {
@@ -67,6 +67,10 @@ import {
   Key,
   Eye,
   EyeOff,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
 } from "lucide-react";
 
 interface BotDetailClientProps {
@@ -108,6 +112,14 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
   const [showNewKey, setShowNewKey] = useState(true);
+  const [a2aTasks, setA2aTasks] = useState<A2aTaskInfo[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [taskSearch, setTaskSearch] = useState("");
+  const [taskStatusFilter, setTaskStatusFilter] = useState<string>("all");
+  const [taskPage, setTaskPage] = useState(0);
+  const TASKS_PER_PAGE = 10;
+  const MAX_EXPANDED_TEXT = 500;
 
   // Fetch token usage when bot is running/degraded, poll every 15s
   useEffect(() => {
@@ -150,10 +162,19 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
       .finally(() => setIsLoadingApiKeys(false));
   }, [bot.id]);
 
+  const fetchA2aTasks = useCallback(() => {
+    setIsLoadingTasks(true);
+    api.listA2aTasks(bot.id)
+      .then((tasks) => setA2aTasks(tasks))
+      .catch(() => setA2aTasks([]))
+      .finally(() => setIsLoadingTasks(false));
+  }, [bot.id]);
+
   useEffect(() => {
     if (activeTab !== "a2a") return;
     fetchApiKeys();
-  }, [activeTab, fetchApiKeys]);
+    fetchA2aTasks();
+  }, [activeTab, fetchApiKeys, fetchA2aTasks]);
 
   const handleGenerateApiKey = useCallback(async () => {
     setIsGeneratingKey(true);
@@ -389,6 +410,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
       const result = await api.sendA2aMessage(bot.id, a2aTestMessage.trim(), activeKey);
       setA2aTestResult(result);
       setA2aTestMessage("");
+      fetchA2aTasks();
     } catch (err) {
       setA2aTestResult({
         jsonrpc: "2.0",
@@ -398,7 +420,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
     } finally {
       setIsSendingA2a(false);
     }
-  }, [a2aTestMessage, isSendingA2a, bot.id, newlyCreatedKey]);
+  }, [a2aTestMessage, isSendingA2a, bot.id, newlyCreatedKey, fetchA2aTasks]);
 
   // Run diagnostics
   const handleDiagnostics = useCallback(async () => {
@@ -1343,6 +1365,167 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
                   <pre className="text-xs bg-muted rounded-md p-4 overflow-auto max-h-64 font-mono">
                     {JSON.stringify(agentCard, null, 2)}
                   </pre>
+                </CardContent>
+              </Card>
+
+              {/* Recent Tasks */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Activity className="w-4 h-4" />
+                        Recent Tasks
+                        {a2aTasks.length > 0 && (
+                          <span className="text-xs font-normal text-muted-foreground">({a2aTasks.length})</span>
+                        )}
+                      </CardTitle>
+                      <CardDescription>
+                        A2A tasks processed by this bot
+                      </CardDescription>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={fetchA2aTasks} disabled={isLoadingTasks}>
+                      {isLoadingTasks ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  {a2aTasks.length > 0 && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <input
+                          type="text"
+                          placeholder="Search by input or output..."
+                          value={taskSearch}
+                          onChange={(e) => { setTaskSearch(e.target.value); setTaskPage(0); }}
+                          className="w-full rounded-md border bg-background pl-8 pr-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                      </div>
+                      <select
+                        value={taskStatusFilter}
+                        onChange={(e) => { setTaskStatusFilter(e.target.value); setTaskPage(0); }}
+                        className="rounded-md border bg-background px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                      >
+                        <option value="all">All status</option>
+                        <option value="completed">Completed</option>
+                        <option value="failed">Failed</option>
+                        <option value="working">Working</option>
+                      </select>
+                    </div>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {a2aTasks.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">
+                      No A2A tasks yet. Send a test message below to create one.
+                    </p>
+                  ) : (() => {
+                    const filtered = a2aTasks.filter((task) => {
+                      if (taskStatusFilter !== "all" && task.status.state !== taskStatusFilter) return false;
+                      if (taskSearch) {
+                        const q = taskSearch.toLowerCase();
+                        const inputText = String(task.metadata?.inputText || "").toLowerCase();
+                        const outputText = (task.status.message?.parts?.map((p) => p.text).join(" ") || "").toLowerCase();
+                        if (!inputText.includes(q) && !outputText.includes(q) && !task.id.toLowerCase().includes(q)) return false;
+                      }
+                      return true;
+                    });
+                    const totalPages = Math.max(1, Math.ceil(filtered.length / TASKS_PER_PAGE));
+                    const page = Math.min(taskPage, totalPages - 1);
+                    const paged = filtered.slice(page * TASKS_PER_PAGE, (page + 1) * TASKS_PER_PAGE);
+
+                    return (
+                      <>
+                        {filtered.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-6">
+                            No tasks match your search.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {paged.map((task) => {
+                              const isExpanded = expandedTaskId === task.id;
+                              const inputText = String(task.metadata?.inputText || "");
+                              const outputText = task.status.message?.parts
+                                ?.map((p) => p.text)
+                                .filter(Boolean)
+                                .join("\n") || "";
+                              const durationMs = task.metadata?.durationMs;
+                              return (
+                                <div key={task.id} className="border rounded-md overflow-hidden">
+                                  <button
+                                    onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
+                                  >
+                                    <Badge
+                                      variant={task.status.state === "completed" ? "default" : task.status.state === "failed" ? "destructive" : "secondary"}
+                                      className="text-xs shrink-0"
+                                    >
+                                      {task.status.state}
+                                    </Badge>
+                                    <span className="text-sm truncate flex-1 text-muted-foreground">
+                                      {inputText ? (inputText.length > 60 ? inputText.slice(0, 60) + "..." : inputText) : "—"}
+                                    </span>
+                                    {durationMs != null && (
+                                      <span className="text-xs text-muted-foreground shrink-0">
+                                        {durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`}
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-muted-foreground shrink-0">
+                                      {task.status.timestamp ? new Date(task.status.timestamp).toLocaleTimeString() : ""}
+                                    </span>
+                                  </button>
+                                  {isExpanded && (
+                                    <div className="border-t px-3 py-3 space-y-3 bg-muted/30">
+                                      <div className="grid grid-cols-2 gap-2 text-xs">
+                                        <div>
+                                          <span className="text-muted-foreground">Task ID:</span>{" "}
+                                          <span className="font-mono">{task.id.slice(0, 12)}...</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-muted-foreground">Context:</span>{" "}
+                                          <span className="font-mono">{task.contextId.slice(0, 12)}...</span>
+                                        </div>
+                                      </div>
+                                      {inputText && (
+                                        <div>
+                                          <p className="text-xs font-medium text-muted-foreground mb-1">Input</p>
+                                          <div className="rounded-md border bg-background p-2 text-sm whitespace-pre-wrap max-h-48 overflow-auto">
+                                            {inputText.length > MAX_EXPANDED_TEXT ? inputText.slice(0, MAX_EXPANDED_TEXT) + "..." : inputText}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {outputText && (
+                                        <div>
+                                          <p className="text-xs font-medium text-muted-foreground mb-1">Output</p>
+                                          <div className="rounded-md border bg-background p-2 text-sm whitespace-pre-wrap max-h-48 overflow-auto">
+                                            {outputText.length > MAX_EXPANDED_TEXT ? outputText.slice(0, MAX_EXPANDED_TEXT) + "..." : outputText}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {totalPages > 1 && (
+                          <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                            <span className="text-xs text-muted-foreground">
+                              {filtered.length} task{filtered.length !== 1 ? "s" : ""} · page {page + 1}/{totalPages}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => setTaskPage(page - 1)}>
+                                <ChevronLeft className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => setTaskPage(page + 1)}>
+                                <ChevronRight className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </CardContent>
               </Card>
 
