@@ -66,14 +66,14 @@ import {
 
 interface BotDetailClientProps {
   bot: BotInstance;
-  traces: Trace[];
-  metrics: TraceStats | null;
-  changeSets: ChangeSet[];
-  events: DeploymentEvent[];
+  traces?: Trace[];
+  metrics?: TraceStats | null;
+  changeSets?: ChangeSet[];
+  events?: DeploymentEvent[];
   evolution?: AgentEvolutionSnapshot | null;
 }
 
-export function BotDetailClient({ bot, traces, metrics, changeSets, events, evolution: initialEvolution }: BotDetailClientProps) {
+export function BotDetailClient({ bot, traces = [], metrics = null, changeSets = [], events = [], evolution: initialEvolution }: BotDetailClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
   const [isApplyingConfig, setIsApplyingConfig] = useState(false);
@@ -135,8 +135,11 @@ export function BotDetailClient({ bot, traces, metrics, changeSets, events, evol
   }, [bot.id]);
 
   // Derive data from bot
-  const uptimeHours = Math.floor(bot.uptimeSeconds / 3600);
-  const uptimeMinutes = Math.floor((bot.uptimeSeconds % 3600) / 60);
+  const uptimeTotal = bot.runningSince
+    ? Math.max(0, Math.floor((Date.now() - new Date(bot.runningSince).getTime()) / 1000))
+    : 0;
+  const uptimeHours = Math.floor(uptimeTotal / 3600);
+  const uptimeMinutes = Math.floor((uptimeTotal % 3600) / 60);
 
   const successRate = metrics && metrics.total > 0
     ? Math.round((metrics.success / metrics.total) * 100)

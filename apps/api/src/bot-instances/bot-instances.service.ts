@@ -183,8 +183,9 @@ export class BotInstancesService {
     
     await prisma.botInstance.update({
       where: { id },
-      data: { 
+      data: {
         status: "RECONCILING",
+        runningSince: null,
         restartCount: { increment: 1 },
         lastReconcileAt: new Date(),
       },
@@ -196,7 +197,7 @@ export class BotInstancesService {
     
     await prisma.botInstance.update({
       where: { id },
-      data: { status: "PAUSED" },
+      data: { status: "PAUSED", runningSince: null },
     });
   }
 
@@ -205,7 +206,7 @@ export class BotInstancesService {
     
     await prisma.botInstance.update({
       where: { id },
-      data: { status: "PENDING" },
+      data: { status: "PENDING", runningSince: null },
     });
   }
 
