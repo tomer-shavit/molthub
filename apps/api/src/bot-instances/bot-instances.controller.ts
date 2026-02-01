@@ -103,6 +103,18 @@ export class BotInstancesController {
     return this.botInstancesService.updateAiGatewaySettings(id, dto);
   }
 
+  @Post(":id/reconcile")
+  @HttpCode(HttpStatus.OK)
+  async reconcile(@Param("id") id: string): Promise<Record<string, unknown>> {
+    return this.botInstancesService.reconcileInstance(id);
+  }
+
+  @Post(":id/doctor")
+  @HttpCode(HttpStatus.OK)
+  async doctor(@Param("id") id: string): Promise<Record<string, unknown>> {
+    return this.botInstancesService.runDoctor(id);
+  }
+
   @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param("id") id: string): Promise<void> {

@@ -17,7 +17,6 @@ model Workspace {
   awsRegion    String   @default("us-east-1")
 
   users                 User[]
-  instances             Instance[]
   botInstances          BotInstance[]
   fleets                Fleet[]
   templates             Template[]
@@ -42,7 +41,6 @@ model User {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  manifests   ManifestVersion[]
   auditEvents AuditEvent[]
 
   @@unique([email, workspaceId])
@@ -186,35 +184,6 @@ model BotInstance {
   @@index([health])
 }
 
-// Legacy Instance model (kept for compatibility, migrate to BotInstance)
-model Instance {
-  id                String         @id @default(cuid())
-  workspaceId       String
-  workspace         Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  name              String
-  environment       String    @default("dev")
-  tags              String           @default("{}")
-  status            String @default("CREATING")
-  desiredManifestId String?
-  lastReconcileAt   DateTime?
-  lastError         String?
-
-  // AWS resources
-  ecsClusterArn      String?
-  ecsServiceArn      String?
-  taskDefinitionArn  String?
-  cloudwatchLogGroup String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  manifests        ManifestVersion[]
-  deploymentEvents DeploymentEvent[]
-
-  @@unique([workspaceId, name])
-  @@index([workspaceId])
-  @@index([status])
-}
 
 // Profile: Shared defaults for instances
 model Profile {
@@ -491,19 +460,6 @@ model CredentialRotation {
   @@index([status])
 }
 
-model ManifestVersion {
-  id         String   @id @default(cuid())
-  instanceId String
-  instance   Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
-  version    Int
-  content    String
-  createdBy  String
-  user       User     @relation(fields: [createdBy], references: [id])
-  createdAt  DateTime @default(now())
-
-  @@unique([instanceId, version])
-  @@index([instanceId])
-}
 
 model AuditEvent {
   id           String    @id @default(cuid())
@@ -544,18 +500,7 @@ model Template {
   @@index([category])
 }
 
-model DeploymentEvent {
-  id         String              @id @default(cuid())
-  instanceId String
-  instance   Instance            @relation(fields: [instanceId], references: [id], onDelete: Cascade)
-  eventType  String
-  message    String
-  metadata   String                @default("{}")
-  createdAt  DateTime            @default(now())
 
-  @@index([instanceId])
-  @@index([createdAt])
-}
 // SkillPack: Reusable bundle of skills and MCPs for multiple bots
 model SkillPack {
   id          String   @id @default(cuid())

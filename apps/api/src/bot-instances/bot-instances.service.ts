@@ -303,6 +303,18 @@ export class BotInstancesService {
     return results;
   }
 
+  async reconcileInstance(id: string): Promise<Record<string, unknown>> {
+    await this.findOne(id);
+    const result = await this.reconciler.reconcile(id);
+    return result as unknown as Record<string, unknown>;
+  }
+
+  async runDoctor(id: string): Promise<Record<string, unknown>> {
+    await this.findOne(id);
+    const result = await this.reconciler.doctor(id);
+    return result as unknown as Record<string, unknown>;
+  }
+
   async getDashboardData(workspaceId: string) {
     const [
       totalInstances,

@@ -4,7 +4,6 @@ import { ConfigModule } from "@nestjs/config";
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
 import { ScheduleModule } from "@nestjs/schedule";
 import { configValidationSchema } from "./config/validation";
-import { InstancesModule } from "./instances/instances.module";
 import { BotInstancesModule } from "./bot-instances/bot-instances.module";
 import { FleetModule } from "./fleets/fleets.module";
 import { ProfilesModule } from "./profiles/profiles.module";
@@ -13,7 +12,6 @@ import { PolicyPacksModule } from "./policy-packs/policy-packs.module";
 import { ConnectorsModule } from "./connectors/connectors.module";
 import { ChangeSetsModule } from "./change-sets/change-sets.module";
 import { TracesModule } from "./traces/traces.module";
-import { ManifestsModule } from "./manifests/manifests.module";
 import { TemplatesModule } from "./templates/templates.module";
 import { AuditModule } from "./audit/audit.module";
 import { ReconcilerModule } from "./reconciler/reconciler.module";
@@ -53,7 +51,6 @@ import { JwtAuthGuard } from "./auth/jwt-auth.guard";
     }]),
     AuthModule,
     HealthModule,
-    InstancesModule,
     BotInstancesModule,
     FleetModule,
     ProfilesModule,
@@ -62,7 +59,6 @@ import { JwtAuthGuard } from "./auth/jwt-auth.guard";
     ConnectorsModule,
     ChangeSetsModule,
     TracesModule,
-    ManifestsModule,
     TemplatesModule,
     AuditModule,
     ReconcilerModule,

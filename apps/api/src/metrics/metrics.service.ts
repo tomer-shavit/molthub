@@ -15,34 +15,20 @@ export class MetricsService {
   async collectMetrics(): Promise<string> {
     const lines: string[] = [];
 
-    // Instance counts by status
-    const instancesByStatus = await prisma.instance.groupBy({
+    // Bot instance counts by status
+    const botInstancesByStatus = await prisma.botInstance.groupBy({
       by: ["status"],
       _count: { id: true },
     });
 
-    lines.push("# HELP molthub_instances_total Total number of instances");
+    lines.push("# HELP molthub_instances_total Total number of bot instances");
     lines.push("# TYPE molthub_instances_total gauge");
-    for (const row of instancesByStatus) {
+    for (const row of botInstancesByStatus) {
       lines.push(`molthub_instances_total{status="${row.status}"} ${row._count.id}`);
     }
 
-    // Reconciliation events in last hour
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const reconcileEvents = await prisma.deploymentEvent.groupBy({
-      by: ["eventType"],
-      where: { createdAt: { gte: oneHourAgo } },
-      _count: { id: true },
-    });
-
-    lines.push("");
-    lines.push("# HELP molthub_reconcile_events_total Reconciliation events in last hour");
-    lines.push("# TYPE molthub_reconcile_events_total counter");
-    for (const row of reconcileEvents) {
-      lines.push(`molthub_reconcile_events_total{event_type="${row.eventType}"} ${row._count.id}`);
-    }
-
     // Audit events in last hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const auditEvents = await prisma.auditEvent.count({
       where: { timestamp: { gte: oneHourAgo } },
     });

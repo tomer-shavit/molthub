@@ -1,21 +1,5 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-export interface Instance {
-  id: string;
-  workspaceId: string;
-  name: string;
-  environment: 'dev' | 'staging' | 'prod';
-  tags: Record<string, string>;
-  status: 'CREATING' | 'RUNNING' | 'DEGRADED' | 'STOPPED' | 'DELETING' | 'ERROR';
-  desiredManifestId?: string;
-  lastReconcileAt?: string;
-  lastError?: string;
-  ecsServiceArn?: string;
-  cloudwatchLogGroup?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface BotInstance {
   id: string;
   name: string;
@@ -206,15 +190,6 @@ export interface UpdateProfilePayload {
   lockedFields?: string[];
   priority?: number;
   isActive?: boolean;
-}
-
-export interface ManifestVersion {
-  id: string;
-  instanceId: string;
-  version: number;
-  content: Record<string, unknown>;
-  createdBy: string;
-  createdAt: string;
 }
 
 export interface ChangeSet {
@@ -614,39 +589,6 @@ class ApiClient {
     return this.fetch('/auth/me');
   }
 
-  // Instances
-  async listInstances(): Promise<Instance[]> {
-    return this.fetch('/instances');
-  }
-
-  async getInstance(id: string): Promise<Instance> {
-    return this.fetch(`/instances/${id}`);
-  }
-
-  async createInstance(data: {
-    name: string;
-    environment: string;
-    templateId: string;
-    tags?: Record<string, string>;
-  }): Promise<Instance> {
-    return this.fetch('/instances', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async restartInstance(id: string): Promise<void> {
-    await this.fetch(`/instances/${id}/actions/restart`, { method: 'POST' });
-  }
-
-  async stopInstance(id: string): Promise<void> {
-    await this.fetch(`/instances/${id}/actions/stop`, { method: 'POST' });
-  }
-
-  async deleteInstance(id: string): Promise<void> {
-    await this.fetch(`/instances/${id}`, { method: 'DELETE' });
-  }
-
   // Bot Instances
   async listBotInstances(fleetId?: string): Promise<BotInstance[]> {
     const params = fleetId ? `?fleetId=${fleetId}` : '';
@@ -697,25 +639,6 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
-  }
-
-  // Manifests
-  async listManifests(instanceId: string): Promise<ManifestVersion[]> {
-    return this.fetch(`/instances/${instanceId}/manifests`);
-  }
-
-  async createManifest(
-    instanceId: string,
-    data: { content: Record<string, unknown>; description?: string }
-  ): Promise<ManifestVersion> {
-    return this.fetch(`/instances/${instanceId}/manifests`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async triggerReconcile(instanceId: string): Promise<void> {
-    await this.fetch(`/instances/${instanceId}/manifests/reconcile`, { method: 'POST' });
   }
 
   // Templates
@@ -834,7 +757,7 @@ class ApiClient {
 
   // Deployment Events
   async listDeploymentEvents(instanceId: string): Promise<DeploymentEvent[]> {
-    return this.fetch(`/instances/${instanceId}/events`);
+    return this.fetch(`/bot-instances/${instanceId}/events`);
   }
 
   // Profiles
@@ -910,38 +833,38 @@ class ApiClient {
 
   // OpenClaw Instance Management
   async getInstanceHealth(id: string): Promise<InstanceHealth> {
-    return this.fetch(`/instances/${id}/health`);
+    return this.fetch(`/bot-instances/${id}/health`);
   }
 
   async getInstanceDrift(id: string): Promise<InstanceDrift> {
-    return this.fetch(`/instances/${id}/drift`);
+    return this.fetch(`/bot-instances/${id}/drift`);
   }
 
   async reconcileInstance(id: string): Promise<void> {
-    await this.fetch(`/instances/${id}/reconcile`, { method: 'POST' });
+    await this.fetch(`/bot-instances/${id}/reconcile`, { method: 'POST' });
   }
 
   async runDiagnostics(id: string): Promise<DiagnosticsResult> {
-    return this.fetch(`/instances/${id}/doctor`, { method: 'POST' });
+    return this.fetch(`/bot-instances/${id}/doctor`, { method: 'POST' });
   }
 
   async getInstanceConfig(id: string): Promise<{ config: Record<string, unknown>; hash: string }> {
-    return this.fetch(`/instances/${id}/config`);
+    return this.fetch(`/bot-instances/${id}/config`);
   }
 
   async applyConfig(id: string, config: string): Promise<void> {
-    await this.fetch(`/instances/${id}/config`, {
+    await this.fetch(`/bot-instances/${id}/config`, {
       method: 'PUT',
       body: JSON.stringify({ raw: config }),
     });
   }
 
   async startChannelAuth(id: string, channelId: string): Promise<ChannelAuthStatus> {
-    return this.fetch(`/instances/${id}/channels/${channelId}/auth`, { method: 'POST' });
+    return this.fetch(`/bot-instances/${id}/channels/${channelId}/auth`, { method: 'POST' });
   }
 
   async getChannelAuthStatus(id: string, channelId: string): Promise<ChannelAuthStatus> {
-    return this.fetch(`/instances/${id}/channels/${channelId}/auth`);
+    return this.fetch(`/bot-instances/${id}/channels/${channelId}/auth`);
   }
 
   // Onboarding
@@ -1014,7 +937,7 @@ class ApiClient {
     completedAt?: string;
     error?: string;
   }> {
-    return this.fetch(`/instances/${instanceId}/provisioning/status`);
+    return this.fetch(`/bot-instances/${instanceId}/provisioning/status`);
   }
 
   // Multi-Bot UX
@@ -1217,27 +1140,27 @@ class ApiClient {
   // ============================================
 
   async debugGetProcesses(instanceId: string): Promise<DebugProcessInfo[]> {
-    return this.fetch(`/instances/${instanceId}/debug/processes`);
+    return this.fetch(`/bot-instances/${instanceId}/debug/processes`);
   }
 
   async debugProbeGateway(instanceId: string): Promise<DebugGatewayProbeResult> {
-    return this.fetch(`/instances/${instanceId}/debug/gateway-probe`);
+    return this.fetch(`/bot-instances/${instanceId}/debug/gateway-probe`);
   }
 
   async debugGetConfig(instanceId: string): Promise<DebugRedactedConfig> {
-    return this.fetch(`/instances/${instanceId}/debug/config`);
+    return this.fetch(`/bot-instances/${instanceId}/debug/config`);
   }
 
   async debugGetEnvStatus(instanceId: string): Promise<DebugEnvVarStatus[]> {
-    return this.fetch(`/instances/${instanceId}/debug/env`);
+    return this.fetch(`/bot-instances/${instanceId}/debug/env`);
   }
 
   async debugGetStateFiles(instanceId: string): Promise<DebugFileInfo[]> {
-    return this.fetch(`/instances/${instanceId}/debug/state-files`);
+    return this.fetch(`/bot-instances/${instanceId}/debug/state-files`);
   }
 
   async debugTestConnectivity(instanceId: string): Promise<DebugConnectivityResult> {
-    return this.fetch(`/instances/${instanceId}/debug/connectivity`);
+    return this.fetch(`/bot-instances/${instanceId}/debug/connectivity`);
   }
 
   // User Context

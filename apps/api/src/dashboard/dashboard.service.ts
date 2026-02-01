@@ -93,10 +93,10 @@ export class DashboardService {
 
     // Get failed deployments in last hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const failedDeployments = await prisma.deploymentEvent.count({
+    const failedDeployments = await prisma.botInstance.count({
       where: {
-        eventType: "RECONCILE_ERROR",
-        createdAt: { gte: oneHourAgo },
+        status: "ERROR",
+        updatedAt: { gte: oneHourAgo },
       },
     });
 
@@ -186,22 +186,23 @@ export class DashboardService {
       resourceType: "INSTANCE",
     }));
 
-    // Also include recent deployment errors for backward compat
-    const recentErrors = await prisma.deploymentEvent.findMany({
+    // Include recent bot instance errors
+    const recentErrorInstances = await prisma.botInstance.findMany({
       where: {
-        eventType: "RECONCILE_ERROR",
-        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        status: "ERROR",
+        updatedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { updatedAt: "desc" },
       take: 10,
+      select: { id: true, name: true, lastError: true, updatedAt: true },
     });
 
-    const deploymentAlerts = recentErrors.map((error) => ({
-      id: error.id,
+    const deploymentAlerts = recentErrorInstances.map((inst) => ({
+      id: inst.id,
       severity: "WARNING" as const,
-      message: error.message,
-      timestamp: error.createdAt,
-      resourceId: error.instanceId,
+      message: inst.lastError || `Instance ${inst.name} is in error state`,
+      timestamp: inst.updatedAt,
+      resourceId: inst.id,
       resourceType: "INSTANCE",
     }));
 

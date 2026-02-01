@@ -478,26 +478,6 @@ export class ReconcilerService {
     eventType: string,
     message: string,
   ): Promise<void> {
-    try {
-      // Attempt to log to the legacy DeploymentEvent table for backward compat.
-      // This requires a matching Instance record. If none exists (pure v2
-      // BotInstance), we silently skip.
-      const legacyInstance = await prisma.instance.findFirst({
-        where: { name: instanceId },
-      });
-
-      if (legacyInstance) {
-        await prisma.deploymentEvent.create({
-          data: {
-            instanceId: legacyInstance.id,
-            eventType,
-            message,
-          },
-        });
-      }
-    } catch {
-      // Non-critical — log and continue
-      this.logger.debug(`Could not write deployment event for ${instanceId}: ${eventType}`);
-    }
+    this.logger.debug(`[${instanceId}] ${eventType}: ${message}`);
   }
 }
