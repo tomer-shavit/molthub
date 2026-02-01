@@ -139,7 +139,7 @@ export function SingleBotDashboard({ bot }: SingleBotDashboardProps) {
             <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5" />
-                Uptime: {formatUptime(bot.uptimeSeconds)}
+                Uptime: {formatUptime(bot.runningSince ? Math.max(0, Math.floor((Date.now() - new Date(bot.runningSince).getTime()) / 1000)) : 0)}
               </span>
               {bot.openclawVersion && (
                 <span className="font-mono text-xs">v{bot.openclawVersion}</span>

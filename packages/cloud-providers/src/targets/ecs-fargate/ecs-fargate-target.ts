@@ -1,4 +1,33 @@
-import { execFile } from "child_process";
+import {
+  CloudFormationClient,
+  CreateStackCommand,
+  DeleteStackCommand,
+  DescribeStacksCommand,
+} from "@aws-sdk/client-cloudformation";
+import {
+  ECSClient,
+  DescribeServicesCommand,
+  UpdateServiceCommand,
+  ListTasksCommand,
+  DescribeTasksCommand,
+} from "@aws-sdk/client-ecs";
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeNetworkInterfacesCommand,
+} from "@aws-sdk/client-ec2";
+import {
+  SecretsManagerClient,
+  CreateSecretCommand,
+  UpdateSecretCommand,
+  DeleteSecretCommand,
+} from "@aws-sdk/client-secrets-manager";
+import {
+  CloudWatchLogsClient,
+  DescribeLogStreamsCommand,
+  GetLogEventsCommand,
+} from "@aws-sdk/client-cloudwatch-logs";
 import {
   DeploymentTarget,
   DeploymentTargetType,
@@ -11,78 +40,73 @@ import {
   GatewayEndpoint,
 } from "../../interface/deployment-target";
 import type { EcsFargateConfig } from "./ecs-fargate-config";
+import { generateSimpleTemplate } from "./templates/simple";
+import { generateProductionTemplate } from "./templates/production";
 
-/**
- * ECS Fargate requires a registry-hosted image. Users must build and push
- * the OpenClaw image to their own registry (e.g. ECR) and set the `image`
- * field in their ECS Fargate deployment config.
- */
-const DEFAULT_IMAGE = "openclaw:local";
-const DEFAULT_CLUSTER = "openclaw-cluster";
-const DEFAULT_CPU = 256;
-const DEFAULT_MEMORY = 512;
 
-/**
- * Executes an AWS CLI command and returns stdout.
- * Credentials and region are injected via environment variables.
- */
-function runAwsCommand(args: string[], config: EcsFargateConfig): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      "aws",
-      args,
-      {
-        timeout: 120_000,
-        env: {
-          ...process.env,
-          AWS_ACCESS_KEY_ID: config.accessKeyId,
-          AWS_SECRET_ACCESS_KEY: config.secretAccessKey,
-          AWS_DEFAULT_REGION: config.region,
-        },
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(new Error(`AWS CLI failed: aws ${args.join(" ")}\n${stderr || error.message}`));
-          return;
-        }
-        resolve(stdout.trim());
-      },
-    );
-  });
-}
+const DEFAULT_CPU = 1024;
+const DEFAULT_MEMORY = 2048;
+const STACK_POLL_INTERVAL_MS = 10_000;
+const STACK_TIMEOUT_MS = 600_000; // 10 minutes
+const ENDPOINT_POLL_INTERVAL_MS = 10_000;
+const ENDPOINT_TIMEOUT_MS = 300_000; // 5 minutes
 
 /**
  * EcsFargateTarget manages an OpenClaw gateway instance running
- * on AWS ECS Fargate (serverless containers).
+ * on AWS ECS Fargate via CloudFormation.
  *
- * Uses the AWS CLI to manage task definitions, services, secrets,
- * and CloudWatch log groups. All commands include explicit region
- * and credential configuration.
+ * Uses AWS SDK v3 for all cloud operations. Simple tier deploys
+ * directly into the default VPC; Production tier creates a full
+ * VPC with ALB via CloudFormation.
  */
 export class EcsFargateTarget implements DeploymentTarget {
   readonly type = DeploymentTargetType.ECS_FARGATE;
 
   private readonly config: EcsFargateConfig;
-  private readonly clusterName: string;
-  private readonly image: string;
   private readonly cpu: number;
   private readonly memory: number;
-  private readonly assignPublicIp: boolean;
+
+  private readonly cfnClient: CloudFormationClient;
+  private readonly ecsClient: ECSClient;
+  private readonly ec2Client: EC2Client;
+  private readonly smClient: SecretsManagerClient;
+  private readonly cwlClient: CloudWatchLogsClient;
 
   /** Derived resource names — set during install */
+  private stackName = "";
+  private clusterName = "";
   private serviceName = "";
-  private taskFamily = "";
   private secretName = "";
   private logGroup = "";
   private gatewayPort = 18789;
 
   constructor(config: EcsFargateConfig) {
     this.config = config;
-    this.clusterName = config.clusterName ?? DEFAULT_CLUSTER;
-    this.image = config.image ?? DEFAULT_IMAGE;
     this.cpu = config.cpu ?? DEFAULT_CPU;
     this.memory = config.memory ?? DEFAULT_MEMORY;
-    this.assignPublicIp = config.assignPublicIp ?? true;
+
+    // Derive resource names from profileName (allows re-instantiated targets
+    // to operate on existing resources without calling install() again)
+    if (config.profileName) {
+      const p = config.profileName;
+      this.stackName = `molthub-bot-${p}`;
+      this.clusterName = `molthub-${p}`;
+      this.serviceName = `molthub-${p}`;
+      this.secretName = `molthub/${p}/config`;
+      this.logGroup = `/ecs/molthub-${p}`;
+    }
+
+    const credentials = {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+    };
+    const region = config.region;
+
+    this.cfnClient = new CloudFormationClient({ region, credentials });
+    this.ecsClient = new ECSClient({ region, credentials });
+    this.ec2Client = new EC2Client({ region, credentials });
+    this.smClient = new SecretsManagerClient({ region, credentials });
+    this.cwlClient = new CloudWatchLogsClient({ region, credentials });
   }
 
   // ------------------------------------------------------------------
@@ -92,140 +116,74 @@ export class EcsFargateTarget implements DeploymentTarget {
   async install(options: InstallOptions): Promise<InstallResult> {
     const profileName = options.profileName;
     this.gatewayPort = options.port;
-    this.serviceName = `openclaw-${profileName}`;
-    this.taskFamily = `openclaw-${profileName}`;
-    this.secretName = `openclaw/${profileName}/config`;
-    this.logGroup = `/ecs/openclaw-${profileName}`;
-
-    const resolvedImage = options.openclawVersion
-      ? this.image.replace(/:.*$/, `:${options.openclawVersion}`)
-      : this.image;
+    this.stackName = `molthub-bot-${profileName}`;
+    this.clusterName = `molthub-${profileName}`;
+    this.serviceName = `molthub-${profileName}`;
+    this.secretName = `molthub/${profileName}/config`;
+    this.logGroup = `/ecs/molthub-${profileName}`;
 
     try {
-      // 1. Create or verify the ECS cluster
-      await runAwsCommand(
-        [
-          "ecs",
-          "create-cluster",
-          "--cluster-name",
-          this.clusterName,
-          "--region",
-          this.config.region,
-        ],
-        this.config,
-      );
+      // 1. Resolve image: use public node:22-slim unless a custom image is provided
+      const imageUri = this.config.image ?? "node:22-slim";
+      const usePublicImage = !this.config.image;
 
-      // 2. Create CloudWatch log group (ignore AlreadyExists)
-      try {
-        await runAwsCommand(
-          [
-            "logs",
-            "create-log-group",
-            "--log-group-name",
-            this.logGroup,
-            "--region",
-            this.config.region,
-          ],
-          this.config,
-        );
-      } catch {
-        // Log group may already exist — safe to ignore
-      }
+      // 2. Create the config secret in Secrets Manager (empty initially, configure() fills it)
+      await this.ensureSecret(this.secretName, "{}");
 
-      // 3. Build container definition JSON
-      const containerDef = [
-        {
-          name: "openclaw",
-          image: resolvedImage,
-          essential: true,
-          portMappings: [
-            {
-              containerPort: this.gatewayPort,
-              hostPort: this.gatewayPort,
-              protocol: "tcp",
-            },
-          ],
-          environment: [
-            {
-              name: "OPENCLAW_CONFIG_PATH",
-              value: "/tmp/openclaw-config.json",
-            },
-          ],
-          logConfiguration: {
-            logDriver: "awslogs",
-            options: {
-              "awslogs-group": this.logGroup,
-              "awslogs-region": this.config.region,
-              "awslogs-stream-prefix": "ecs",
-            },
-          },
-        },
-      ];
-
-      // 4. Register Fargate task definition
-      const registerArgs = [
-        "ecs",
-        "register-task-definition",
-        "--family",
-        this.taskFamily,
-        "--network-mode",
-        "awsvpc",
-        "--requires-compatibilities",
-        "FARGATE",
-        "--cpu",
-        String(this.cpu),
-        "--memory",
-        String(this.memory),
-        "--container-definitions",
-        JSON.stringify(containerDef),
-        "--region",
-        this.config.region,
-      ];
-
-      if (this.config.executionRoleArn) {
-        registerArgs.push("--execution-role-arn", this.config.executionRoleArn);
-      }
-      if (this.config.taskRoleArn) {
-        registerArgs.push("--task-role-arn", this.config.taskRoleArn);
-      }
-
-      await runAwsCommand(registerArgs, this.config);
-
-      // 5. Create ECS service
-      const networkConfig = {
-        awsvpcConfiguration: {
-          subnets: this.config.subnetIds,
-          securityGroups: [this.config.securityGroupId],
-          assignPublicIp: this.assignPublicIp ? "ENABLED" : "DISABLED",
-        },
+      // 3. Generate CloudFormation template
+      const templateParams = {
+        botName: profileName,
+        gatewayPort: this.gatewayPort,
+        imageUri,
+        usePublicImage,
+        cpu: this.cpu,
+        memory: this.memory,
+        gatewayAuthToken: options.gatewayAuthToken ?? "",
+        containerEnv: options.containerEnv ?? {},
       };
 
-      await runAwsCommand(
-        [
-          "ecs",
-          "create-service",
-          "--cluster",
-          this.clusterName,
-          "--service-name",
-          this.serviceName,
-          "--task-definition",
-          this.taskFamily,
-          "--desired-count",
-          "1",
-          "--launch-type",
-          "FARGATE",
-          "--network-configuration",
-          JSON.stringify(networkConfig),
-          "--region",
-          this.config.region,
-        ],
-        this.config,
+      const template =
+        this.config.tier === "production"
+          ? generateProductionTemplate({
+              ...templateParams,
+              certificateArn: this.config.certificateArn,
+            })
+          : generateSimpleTemplate(templateParams);
+
+      // 4. For simple tier, look up default VPC and subnets
+      const cfParams: Array<{
+        ParameterKey: string;
+        ParameterValue: string;
+      }> = [];
+      if (this.config.tier === "simple") {
+        const { vpcId, subnetIds } = await this.getDefaultVpcAndSubnets();
+        cfParams.push(
+          { ParameterKey: "VpcId", ParameterValue: vpcId },
+          {
+            ParameterKey: "SubnetIds",
+            ParameterValue: subnetIds.join(","),
+          },
+        );
+      }
+
+      // 5. Deploy CloudFormation stack
+      await this.cfnClient.send(
+        new CreateStackCommand({
+          StackName: this.stackName,
+          TemplateBody: JSON.stringify(template),
+          Parameters: cfParams.length > 0 ? cfParams : undefined,
+          Capabilities: ["CAPABILITY_NAMED_IAM"],
+          Tags: [{ Key: "molthub:bot", Value: profileName }],
+        }),
       );
+
+      // 6. Wait for stack creation
+      await this.waitForStack("CREATE_COMPLETE");
 
       return {
         success: true,
         instanceId: this.serviceName,
-        message: `ECS Fargate service "${this.serviceName}" created in cluster "${this.clusterName}"`,
+        message: `ECS Fargate stack "${this.stackName}" created (${this.config.tier} tier)`,
         serviceName: this.serviceName,
       };
     } catch (error) {
@@ -246,52 +204,56 @@ export class EcsFargateTarget implements DeploymentTarget {
     this.gatewayPort = config.gatewayPort;
 
     if (!this.secretName) {
-      this.secretName = `openclaw/${profileName}/config`;
+      this.secretName = `molthub/${profileName}/config`;
     }
 
-    const configData = JSON.stringify(
-      {
-        profileName: config.profileName,
-        gatewayPort: config.gatewayPort,
-        environment: config.environment || {},
-        ...config.config,
-      },
-      null,
-      2,
-    );
+    // Apply the same config transformations as the Docker target
+    // so that the openclaw.json written inside the container is valid.
+    const raw = { ...config.config } as Record<string, unknown>;
+
+    // gateway.bind = "lan" — ECS containers MUST bind to 0.0.0.0
+    if (raw.gateway && typeof raw.gateway === "object") {
+      const gw = { ...(raw.gateway as Record<string, unknown>) };
+      gw.bind = "lan";
+      delete gw.host;
+      delete gw.port;
+      raw.gateway = gw;
+    }
+
+    // skills.allowUnverified is not a valid OpenClaw key
+    if (raw.skills && typeof raw.skills === "object") {
+      const skills = { ...(raw.skills as Record<string, unknown>) };
+      delete skills.allowUnverified;
+      raw.skills = skills;
+    }
+
+    // sandbox at root level -> agents.defaults.sandbox
+    if ("sandbox" in raw) {
+      const agents = (raw.agents as Record<string, unknown>) || {};
+      const defaults = (agents.defaults as Record<string, unknown>) || {};
+      defaults.sandbox = raw.sandbox;
+      agents.defaults = defaults;
+      raw.agents = agents;
+      delete raw.sandbox;
+    }
+
+    // channels.*.enabled is not valid — presence means active
+    if (raw.channels && typeof raw.channels === "object") {
+      for (const [key, value] of Object.entries(raw.channels as Record<string, unknown>)) {
+        if (value && typeof value === "object" && "enabled" in (value as Record<string, unknown>)) {
+          const { enabled: _enabled, ...rest } = value as Record<string, unknown>;
+          (raw.channels as Record<string, unknown>)[key] = rest;
+        }
+      }
+    }
+
+    // Store the transformed config as JSON — this will be injected as
+    // the OPENCLAW_CONFIG env var and written to ~/.openclaw/openclaw.json
+    // by the container startup command.
+    const configData = JSON.stringify(raw, null, 2);
 
     try {
-      // Attempt to create the secret first
-      try {
-        await runAwsCommand(
-          [
-            "secretsmanager",
-            "create-secret",
-            "--name",
-            this.secretName,
-            "--secret-string",
-            configData,
-            "--region",
-            this.config.region,
-          ],
-          this.config,
-        );
-      } catch {
-        // Secret may already exist — update it instead
-        await runAwsCommand(
-          [
-            "secretsmanager",
-            "update-secret",
-            "--secret-id",
-            this.secretName,
-            "--secret-string",
-            configData,
-            "--region",
-            this.config.region,
-          ],
-          this.config,
-        );
-      }
+      await this.ensureSecret(this.secretName, configData);
 
       return {
         success: true,
@@ -312,20 +274,12 @@ export class EcsFargateTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async start(): Promise<void> {
-    await runAwsCommand(
-      [
-        "ecs",
-        "update-service",
-        "--cluster",
-        this.clusterName,
-        "--service",
-        this.serviceName,
-        "--desired-count",
-        "1",
-        "--region",
-        this.config.region,
-      ],
-      this.config,
+    await this.ecsClient.send(
+      new UpdateServiceCommand({
+        cluster: this.clusterName,
+        service: this.serviceName,
+        desiredCount: 1,
+      }),
     );
   }
 
@@ -334,20 +288,12 @@ export class EcsFargateTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async stop(): Promise<void> {
-    await runAwsCommand(
-      [
-        "ecs",
-        "update-service",
-        "--cluster",
-        this.clusterName,
-        "--service",
-        this.serviceName,
-        "--desired-count",
-        "0",
-        "--region",
-        this.config.region,
-      ],
-      this.config,
+    await this.ecsClient.send(
+      new UpdateServiceCommand({
+        cluster: this.clusterName,
+        service: this.serviceName,
+        desiredCount: 0,
+      }),
     );
   }
 
@@ -356,19 +302,12 @@ export class EcsFargateTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async restart(): Promise<void> {
-    await runAwsCommand(
-      [
-        "ecs",
-        "update-service",
-        "--cluster",
-        this.clusterName,
-        "--service",
-        this.serviceName,
-        "--force-new-deployment",
-        "--region",
-        this.config.region,
-      ],
-      this.config,
+    await this.ecsClient.send(
+      new UpdateServiceCommand({
+        cluster: this.clusterName,
+        service: this.serviceName,
+        forceNewDeployment: true,
+      }),
     );
   }
 
@@ -378,40 +317,28 @@ export class EcsFargateTarget implements DeploymentTarget {
 
   async getStatus(): Promise<TargetStatus> {
     try {
-      const output = await runAwsCommand(
-        [
-          "ecs",
-          "describe-services",
-          "--cluster",
-          this.clusterName,
-          "--services",
-          this.serviceName,
-          "--region",
-          this.config.region,
-          "--output",
-          "json",
-        ],
-        this.config,
+      const result = await this.ecsClient.send(
+        new DescribeServicesCommand({
+          cluster: this.clusterName,
+          services: [this.serviceName],
+        }),
       );
 
-      const data = JSON.parse(output);
-      const service = data.services?.[0];
-
+      const service = result.services?.[0];
       if (!service) {
         return { state: "not-installed" };
       }
 
-      const runningCount: number = service.runningCount ?? 0;
-      const desiredCount: number = service.desiredCount ?? 0;
-      const serviceStatus: string = service.status ?? "";
+      const runningCount = service.runningCount ?? 0;
+      const desiredCount = service.desiredCount ?? 0;
+      const serviceStatus = service.status ?? "";
 
       let state: TargetStatus["state"];
       if (runningCount > 0) {
         state = "running";
       } else if (desiredCount === 0) {
         state = "stopped";
-      } else if (serviceStatus === "ACTIVE" && desiredCount > 0 && runningCount === 0) {
-        // Desired > 0 but nothing running — likely an error or still starting
+      } else if (serviceStatus === "ACTIVE" && desiredCount > 0) {
         state = "error";
       } else {
         state = "error";
@@ -420,7 +347,10 @@ export class EcsFargateTarget implements DeploymentTarget {
       return {
         state,
         gatewayPort: this.gatewayPort,
-        error: state === "error" ? `Service status: ${serviceStatus}, running: ${runningCount}/${desiredCount}` : undefined,
+        error:
+          state === "error"
+            ? `Service status: ${serviceStatus}, running: ${runningCount}/${desiredCount}`
+            : undefined,
       };
     } catch {
       return { state: "not-installed" };
@@ -433,84 +363,42 @@ export class EcsFargateTarget implements DeploymentTarget {
 
   async getLogs(options?: DeploymentLogOptions): Promise<string[]> {
     try {
-      const args = [
-        "logs",
-        "get-log-events",
-        "--log-group-name",
-        this.logGroup,
-        "--log-stream-name-prefix",
-        "ecs/openclaw",
-        "--region",
-        this.config.region,
-        "--output",
-        "json",
-      ];
-
-      if (options?.lines) {
-        args.push("--limit", String(options.lines));
-      }
-
-      if (options?.since) {
-        args.push("--start-time", String(options.since.getTime()));
-      }
-
-      // First, find the latest log stream
-      const streamsOutput = await runAwsCommand(
-        [
-          "logs",
-          "describe-log-streams",
-          "--log-group-name",
-          this.logGroup,
-          "--order-by",
-          "LastEventTime",
-          "--descending",
-          "--limit",
-          "1",
-          "--region",
-          this.config.region,
-          "--output",
-          "json",
-        ],
-        this.config,
+      const streamsResult = await this.cwlClient.send(
+        new DescribeLogStreamsCommand({
+          logGroupName: this.logGroup,
+          orderBy: "LastEventTime",
+          descending: true,
+          limit: 1,
+        }),
       );
 
-      const streamsData = JSON.parse(streamsOutput);
-      const latestStream = streamsData.logStreams?.[0];
-
-      if (!latestStream) {
+      const latestStream = streamsResult.logStreams?.[0];
+      if (!latestStream?.logStreamName) {
         return [];
       }
 
-      const eventsArgs = [
-        "logs",
-        "get-log-events",
-        "--log-group-name",
-        this.logGroup,
-        "--log-stream-name",
-        latestStream.logStreamName,
-        "--region",
-        this.config.region,
-        "--output",
-        "json",
-      ];
+      const eventsResult = await this.cwlClient.send(
+        new GetLogEventsCommand({
+          logGroupName: this.logGroup,
+          logStreamName: latestStream.logStreamName,
+          limit: options?.lines,
+          startTime: options?.since?.getTime(),
+        }),
+      );
 
-      if (options?.lines) {
-        eventsArgs.push("--limit", String(options.lines));
-      }
-
-      if (options?.since) {
-        eventsArgs.push("--start-time", String(options.since.getTime()));
-      }
-
-      const eventsOutput = await runAwsCommand(eventsArgs, this.config);
-      const eventsData = JSON.parse(eventsOutput);
-      const events: Array<{ message: string }> = eventsData.events ?? [];
-
-      let lines = events.map((e) => e.message).filter(Boolean);
+      let lines = (eventsResult.events ?? [])
+        .map((e) => e.message)
+        .filter((m): m is string => Boolean(m));
 
       if (options?.filter) {
-        const pattern = new RegExp(options.filter, "i");
-        lines = lines.filter((line) => pattern.test(line));
+        try {
+          const pattern = new RegExp(options.filter, "i");
+          lines = lines.filter((line) => pattern.test(line));
+        } catch {
+          // If the filter is not a valid regex, use literal string match
+          const literal = options.filter.toLowerCase();
+          lines = lines.filter((line) => line.toLowerCase().includes(literal));
+        }
       }
 
       return lines;
@@ -524,103 +412,91 @@ export class EcsFargateTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async getEndpoint(): Promise<GatewayEndpoint> {
-    try {
-      // 1. List tasks for the service
-      const listOutput = await runAwsCommand(
-        [
-          "ecs",
-          "list-tasks",
-          "--cluster",
-          this.clusterName,
-          "--service-name",
-          this.serviceName,
-          "--desired-status",
-          "RUNNING",
-          "--region",
-          this.config.region,
-          "--output",
-          "json",
-        ],
-        this.config,
-      );
-
-      const listData = JSON.parse(listOutput);
-      const taskArns: string[] = listData.taskArns ?? [];
-
-      if (taskArns.length === 0) {
-        throw new Error("No running tasks found for service");
+    // For production tier, return the ALB DNS name
+    if (this.config.tier === "production") {
+      const outputs = await this.getStackOutputs();
+      const albDns = outputs["AlbDnsName"];
+      if (!albDns) {
+        throw new Error("ALB DNS name not found in stack outputs");
       }
-
-      // 2. Describe the first task to get ENI attachment
-      const describeOutput = await runAwsCommand(
-        [
-          "ecs",
-          "describe-tasks",
-          "--cluster",
-          this.clusterName,
-          "--tasks",
-          taskArns[0],
-          "--region",
-          this.config.region,
-          "--output",
-          "json",
-        ],
-        this.config,
-      );
-
-      const describeData = JSON.parse(describeOutput);
-      const task = describeData.tasks?.[0];
-
-      if (!task) {
-        throw new Error("Could not describe task");
-      }
-
-      // 3. Find the ENI attachment
-      const eniAttachment = task.attachments?.find(
-        (a: { type: string }) => a.type === "ElasticNetworkInterface",
-      );
-      const eniDetail = eniAttachment?.details?.find(
-        (d: { name: string; value: string }) => d.name === "networkInterfaceId",
-      );
-
-      if (!eniDetail?.value) {
-        throw new Error("No ENI found on task");
-      }
-
-      // 4. Get public IP from the ENI
-      const eniOutput = await runAwsCommand(
-        [
-          "ec2",
-          "describe-network-interfaces",
-          "--network-interface-ids",
-          eniDetail.value,
-          "--region",
-          this.config.region,
-          "--output",
-          "json",
-        ],
-        this.config,
-      );
-
-      const eniData = JSON.parse(eniOutput);
-      const publicIp =
-        eniData.NetworkInterfaces?.[0]?.Association?.PublicIp;
-
-      if (!publicIp) {
-        throw new Error("No public IP assigned to task ENI");
-      }
-
       return {
-        host: publicIp,
-        port: this.gatewayPort,
-        protocol: "ws",
+        host: albDns,
+        port: this.config.certificateArn ? 443 : 80,
+        protocol: this.config.certificateArn ? "wss" : "ws",
       };
-    } catch (error) {
-      // Fallback: return a placeholder that callers can handle
-      throw new Error(
-        `Failed to resolve ECS Fargate endpoint: ${error instanceof Error ? error.message : String(error)}`,
-      );
     }
+
+    // For simple tier, poll until a running task has a public IP.
+    // After start() sets desiredCount=1, ECS needs time to schedule the task,
+    // pull the image, and assign a public IP to the ENI.
+    const deadline = Date.now() + ENDPOINT_TIMEOUT_MS;
+    let lastError: string = "No running tasks found for service";
+
+    while (Date.now() < deadline) {
+      try {
+        const resolved = await this.resolveTaskPublicIp();
+        if (resolved) return resolved;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+      }
+
+      await new Promise((r) => setTimeout(r, ENDPOINT_POLL_INTERVAL_MS));
+    }
+
+    throw new Error(`Failed to resolve ECS Fargate endpoint: ${lastError}`);
+  }
+
+  /**
+   * Single attempt to find a running task's public IP. Returns null if no
+   * running task or public IP is available yet.
+   */
+  private async resolveTaskPublicIp(): Promise<GatewayEndpoint | null> {
+    const listResult = await this.ecsClient.send(
+      new ListTasksCommand({
+        cluster: this.clusterName,
+        serviceName: this.serviceName,
+        desiredStatus: "RUNNING",
+      }),
+    );
+
+    const taskArns = listResult.taskArns ?? [];
+    if (taskArns.length === 0) return null;
+
+    const describeResult = await this.ecsClient.send(
+      new DescribeTasksCommand({
+        cluster: this.clusterName,
+        tasks: [taskArns[0]],
+      }),
+    );
+
+    const task = describeResult.tasks?.[0];
+    if (!task) return null;
+
+    const eniAttachment = task.attachments?.find(
+      (a) => a.type === "ElasticNetworkInterface",
+    );
+    const eniDetail = eniAttachment?.details?.find(
+      (d) => d.name === "networkInterfaceId",
+    );
+
+    if (!eniDetail?.value) return null;
+
+    const eniResult = await this.ec2Client.send(
+      new DescribeNetworkInterfacesCommand({
+        NetworkInterfaceIds: [eniDetail.value],
+      }),
+    );
+
+    const publicIp =
+      eniResult.NetworkInterfaces?.[0]?.Association?.PublicIp;
+
+    if (!publicIp) return null;
+
+    return {
+      host: publicIp,
+      port: this.gatewayPort,
+      protocol: "ws",
+    };
   }
 
   // ------------------------------------------------------------------
@@ -628,116 +504,169 @@ export class EcsFargateTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async destroy(): Promise<void> {
-    // 1. Delete the ECS service (force to drain running tasks)
+    // 1. Delete CloudFormation stack (handles all CF-managed resources)
     try {
-      await runAwsCommand(
-        [
-          "ecs",
-          "update-service",
-          "--cluster",
-          this.clusterName,
-          "--service",
-          this.serviceName,
-          "--desired-count",
-          "0",
-          "--region",
-          this.config.region,
-        ],
-        this.config,
+      await this.cfnClient.send(
+        new DeleteStackCommand({ StackName: this.stackName }),
       );
-
-      await runAwsCommand(
-        [
-          "ecs",
-          "delete-service",
-          "--cluster",
-          this.clusterName,
-          "--service",
-          this.serviceName,
-          "--force",
-          "--region",
-          this.config.region,
-        ],
-        this.config,
-      );
+      await this.waitForStack("DELETE_COMPLETE");
     } catch {
-      // Service may not exist
+      // Stack may not exist
     }
 
-    // 2. Deregister the task definition
+    // 2. Delete the Secrets Manager secret
     try {
-      // List task definition revisions
-      const listOutput = await runAwsCommand(
-        [
-          "ecs",
-          "list-task-definitions",
-          "--family-prefix",
-          this.taskFamily,
-          "--region",
-          this.config.region,
-          "--output",
-          "json",
-        ],
-        this.config,
-      );
-
-      const listData = JSON.parse(listOutput);
-      const taskDefArns: string[] = listData.taskDefinitionArns ?? [];
-
-      for (const arn of taskDefArns) {
-        try {
-          await runAwsCommand(
-            [
-              "ecs",
-              "deregister-task-definition",
-              "--task-definition",
-              arn,
-              "--region",
-              this.config.region,
-            ],
-            this.config,
-          );
-        } catch {
-          // Best-effort cleanup
-        }
-      }
-    } catch {
-      // Task definition may not exist
-    }
-
-    // 3. Delete the secret
-    try {
-      await runAwsCommand(
-        [
-          "secretsmanager",
-          "delete-secret",
-          "--secret-id",
-          this.secretName,
-          "--force-delete-without-recovery",
-          "--region",
-          this.config.region,
-        ],
-        this.config,
+      await this.smClient.send(
+        new DeleteSecretCommand({
+          SecretId: this.secretName,
+          ForceDeleteWithoutRecovery: true,
+        }),
       );
     } catch {
       // Secret may not exist
     }
+  }
 
-    // 4. Delete the CloudWatch log group
+  // ------------------------------------------------------------------
+  // Private helpers
+  // ------------------------------------------------------------------
+
+  private async ensureSecret(name: string, value: string): Promise<void> {
     try {
-      await runAwsCommand(
-        [
-          "logs",
-          "delete-log-group",
-          "--log-group-name",
-          this.logGroup,
-          "--region",
-          this.config.region,
-        ],
-        this.config,
+      await this.smClient.send(
+        new CreateSecretCommand({
+          Name: name,
+          SecretString: value,
+        }),
       );
-    } catch {
-      // Log group may not exist
+    } catch (error: unknown) {
+      if (
+        error instanceof Error &&
+        error.name === "ResourceExistsException"
+      ) {
+        await this.smClient.send(
+          new UpdateSecretCommand({
+            SecretId: name,
+            SecretString: value,
+          }),
+        );
+      } else {
+        throw error;
+      }
     }
+  }
+
+  private async getDefaultVpcAndSubnets(): Promise<{
+    vpcId: string;
+    subnetIds: string[];
+  }> {
+    const vpcsResult = await this.ec2Client.send(
+      new DescribeVpcsCommand({
+        Filters: [{ Name: "isDefault", Values: ["true"] }],
+      }),
+    );
+
+    const vpc = vpcsResult.Vpcs?.[0];
+    if (!vpc?.VpcId) {
+      throw new Error(
+        "No default VPC found in this region. Create a VPC or use the production tier.",
+      );
+    }
+
+    const subnetsResult = await this.ec2Client.send(
+      new DescribeSubnetsCommand({
+        Filters: [
+          { Name: "vpc-id", Values: [vpc.VpcId] },
+          { Name: "default-for-az", Values: ["true"] },
+        ],
+      }),
+    );
+
+    const subnetIds = (subnetsResult.Subnets ?? [])
+      .map((s) => s.SubnetId)
+      .filter((id): id is string => Boolean(id));
+
+    if (subnetIds.length === 0) {
+      throw new Error("No default subnets found in the default VPC.");
+    }
+
+    return { vpcId: vpc.VpcId, subnetIds };
+  }
+
+  private async waitForStack(
+    targetStatus: "CREATE_COMPLETE" | "DELETE_COMPLETE",
+  ): Promise<void> {
+    const start = Date.now();
+
+    while (Date.now() - start < STACK_TIMEOUT_MS) {
+      try {
+        const result = await this.cfnClient.send(
+          new DescribeStacksCommand({ StackName: this.stackName }),
+        );
+
+        const stack = result.Stacks?.[0];
+        if (!stack) {
+          if (targetStatus === "DELETE_COMPLETE") return;
+          throw new Error(`Stack "${this.stackName}" not found`);
+        }
+
+        const status = stack.StackStatus;
+
+        if (status === targetStatus) return;
+
+        if (
+          status?.endsWith("_FAILED") ||
+          status === "ROLLBACK_COMPLETE" ||
+          status === "DELETE_FAILED"
+        ) {
+          const reason = stack.StackStatusReason || "Unknown error";
+          throw new Error(
+            `Stack "${this.stackName}" reached ${status}: ${reason}`,
+          );
+        }
+      } catch (error: unknown) {
+        if (
+          targetStatus === "DELETE_COMPLETE" &&
+          error instanceof Error &&
+          error.message.includes("does not exist")
+        ) {
+          return;
+        }
+        if (
+          error instanceof Error &&
+          (error.message.includes("_FAILED") ||
+            error.message.includes("ROLLBACK"))
+        ) {
+          throw error;
+        }
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, STACK_POLL_INTERVAL_MS),
+      );
+    }
+
+    throw new Error(
+      `Stack "${this.stackName}" timed out waiting for ${targetStatus}`,
+    );
+  }
+
+  private async getStackOutputs(): Promise<Record<string, string>> {
+    const result = await this.cfnClient.send(
+      new DescribeStacksCommand({ StackName: this.stackName }),
+    );
+
+    const stack = result.Stacks?.[0];
+    if (!stack) {
+      throw new Error(`Stack "${this.stackName}" not found`);
+    }
+
+    const outputs: Record<string, string> = {};
+    for (const output of stack.Outputs ?? []) {
+      if (output.OutputKey && output.OutputValue) {
+        outputs[output.OutputKey] = output.OutputValue;
+      }
+    }
+    return outputs;
   }
 }

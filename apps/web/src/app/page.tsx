@@ -5,52 +5,30 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge, HealthIndicator } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { NoChartData } from "@/components/ui/charts";
-import { TimeDisplay } from "@/components/ui/time-display";
 import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 import { redirect } from "next/navigation";
-import { api, type Fleet, type FleetHealth, type DashboardMetrics, type DashboardHealth } from "@/lib/api";
+import { api, type DashboardMetrics, type DashboardHealth } from "@/lib/api";
 import {
   Bot,
   Activity,
   AlertTriangle,
-  Clock,
-  DollarSign,
-  MessageSquare,
-  Search,
   RefreshCw,
-  Layers,
   ArrowRight,
-  Zap,
-  AlertCircle,
   CheckCircle2,
-  XCircle
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 async function getDashboardData() {
-  try {
-    const [metrics, health, fleets] = await Promise.all([
-      api.getDashboardMetrics(),
-      api.getDashboardHealth(),
-      api.listFleets(),
-    ]);
-    return { metrics, health, fleets };
-  } catch (error) {
-    console.error("Failed to fetch dashboard data:", error);
-    return { metrics: null, health: null, fleets: [] };
-  }
+  const [metrics, health, fleets, bots] = await Promise.all([
+    api.getDashboardMetrics().catch(() => null),
+    api.getDashboardHealth().catch(() => null),
+    api.listFleets().catch(() => []),
+    api.listBotInstances().catch(() => []),
+  ]);
+  return { metrics, health, fleets, bots };
 }
 
 export default async function DashboardPage() {
@@ -64,20 +42,7 @@ export default async function DashboardPage() {
     // If onboarding check fails, continue to dashboard
   }
 
-  const { metrics, health, fleets } = await getDashboardData();
-
-  // Show single-bot dashboard when only 1 bot exists
-  if (metrics && metrics.totalBots === 1) {
-    const { SingleBotDashboard } = await import("@/components/dashboard/single-bot-dashboard");
-    const bots = await api.listBotInstances().catch(() => []);
-    if (bots.length === 1) {
-      return (
-        <DashboardLayout>
-          <SingleBotDashboard bot={bots[0]} />
-        </DashboardLayout>
-      );
-    }
-  }
+  const { metrics, health, fleets, bots } = await getDashboardData();
 
   const overallStatus = health?.status || "HEALTHY";
   const healthyPercentage = metrics && metrics.totalBots > 0
@@ -90,7 +55,7 @@ export default async function DashboardPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">Fleet Health Dashboard</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
             <div className={cn(
               "flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium",
               overallStatus === "HEALTHY" && "bg-green-100 text-green-800",
@@ -104,7 +69,7 @@ export default async function DashboardPage() {
             </div>
           </div>
           <p className="text-muted-foreground mt-1">
-            Real-time overview of your OpenClaw fleet
+            Overview of your OpenClaw bots
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -118,10 +83,10 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Setup Checklist (shown for getting-started users, self-hides when all complete) */}
+      {/* Setup Checklist */}
       <SetupChecklist />
 
-      {/* Executive Metrics Grid */}
+      {/* Bot Counts */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <MetricCard
           title="Total Bots"
@@ -161,117 +126,78 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* Performance Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-        <MetricCard
-          title="Message Volume"
-          value={metrics?.messageVolume.toLocaleString() ?? "0"}
-          description="Messages in last hour"
-          icon={<MessageSquare className="w-4 h-4" />}
-        />
-        <MetricCard
-          title="Latency (p95)"
-          value={`${Math.round(metrics?.latencyP95 ?? 0)}ms`}
-          description="Response time"
-          icon={<Zap className="w-4 h-4" />}
-        />
-        <MetricCard
-          title="Failure Rate"
-          value={`${metrics?.failureRate ?? 0}%`}
-          description="Error percentage"
-          icon={<AlertCircle className="w-4 h-4" />}
-          className={(metrics?.failureRate ?? 0) > 1 ? "border-l-4 border-l-red-500" : ""}
-        />
-        <MetricCard
-          title="Cost (Hourly)"
-          value={metrics?.costPerHour ? `$${metrics.costPerHour}` : "No cost data yet"}
-          description="Estimated spend"
-          icon={<DollarSign className="w-4 h-4" />}
-        />
-      </div>
+      {/* Bots List */}
+      <Card className="mb-8">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Your Bots</CardTitle>
+              <CardDescription>{bots.length} bot{bots.length !== 1 ? "s" : ""} deployed</CardDescription>
+            </div>
+            <Link href="/bots/new">
+              <Button size="sm">
+                <Bot className="w-4 h-4 mr-2" />
+                Deploy New Bot
+              </Button>
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {bots.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Bot className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>No bots deployed yet.</p>
+              <Link href="/setup">
+                <Button className="mt-4">Deploy your first bot</Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {bots.map((bot) => (
+                <Link
+                  key={bot.id}
+                  href={`/bots/${bot.id}`}
+                  className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <Bot className="w-5 h-5 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">{bot.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {bot.deploymentType || "DOCKER"}
+                        {bot.gatewayPort ? ` · Port ${bot.gatewayPort}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <HealthIndicator health={bot.health} size="sm" />
+                    <StatusBadge status={bot.status} />
+                    <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Charts Row */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8">
+      {/* Fleet Health Breakdown */}
+      {fleets.length > 0 && (
         <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Message Volume</CardTitle>
-                <CardDescription>Last 24 hours</CardDescription>
-              </div>
-              <MessageSquare className="w-4 h-4 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <NoChartData height={200} message="No message volume data yet" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Latency (p95)</CardTitle>
-                <CardDescription>Milliseconds</CardDescription>
-              </div>
-              <Zap className="w-4 h-4 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <NoChartData height={200} message="No latency data yet" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Cost Trend</CardTitle>
-                <CardDescription>USD per hour</CardDescription>
-              </div>
-              <DollarSign className="w-4 h-4 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <NoChartData height={200} message="No cost data yet" />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Health Breakdown & Active Operations */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8">
-        {/* Fleet Health Summary */}
-        <Card className="lg:col-span-2">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Fleet Health Breakdown</CardTitle>
-                <CardDescription>Health status by fleet</CardDescription>
-              </div>
-              <div className="flex items-center gap-4 text-sm">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-green-500" />
-                  Healthy
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-yellow-500" />
-                  Degraded
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-red-500" />
-                  Unhealthy
-                </span>
-              </div>
-            </div>
+            <CardTitle>Fleet Health</CardTitle>
+            <CardDescription>Health status by fleet</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {health?.fleetHealth.map((fleet) => {
-                const healthyPct = fleet.totalInstances > 0 
+                const healthyPct = fleet.totalInstances > 0
                   ? Math.round((fleet.healthyCount / fleet.totalInstances) * 100)
                   : 0;
                 return (
                   <div key={fleet.fleetId} className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <Link 
+                      <Link
                         href={`/fleets/${fleet.fleetId}`}
                         className="font-medium hover:underline"
                       >
@@ -292,200 +218,13 @@ export default async function DashboardPage() {
               })}
               {!health?.fleetHealth.length && (
                 <p className="text-center text-muted-foreground py-4">
-                  No fleets found. Create your first fleet to get started.
+                  No fleet health data available.
                 </p>
               )}
             </div>
           </CardContent>
         </Card>
-
-        {/* Active Operations */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Operations</CardTitle>
-            <CardDescription>Current activities</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded">
-                    <RefreshCw className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">Active Change Sets</p>
-                    <p className="text-xs text-muted-foreground">In progress</p>
-                  </div>
-                </div>
-                <span className="text-lg font-bold">{metrics?.activeChangeSets ?? 0}</span>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-red-100 rounded">
-                    <AlertCircle className="w-4 h-4 text-red-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">Failed Deployments</p>
-                    <p className="text-xs text-muted-foreground">Last hour</p>
-                  </div>
-                </div>
-                <span className={cn(
-                  "text-lg font-bold",
-                  (metrics?.failedDeployments ?? 0) > 0 && "text-red-600"
-                )}>
-                  {metrics?.failedDeployments ?? 0}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-100 rounded">
-                    <Clock className="w-4 h-4 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">Avg Latency</p>
-                    <p className="text-xs text-muted-foreground">p50</p>
-                  </div>
-                </div>
-                <span className="text-lg font-bold">
-                  {Math.round(metrics?.latencyP50 ?? 0)}ms
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Alerts */}
-      {health?.recentAlerts && health.recentAlerts.length > 0 && (
-        <Card className="mb-8 border-orange-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-orange-500" />
-              Recent Alerts
-            </CardTitle>
-            <CardDescription>Issues requiring attention</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {health.recentAlerts.slice(0, 5).map((alert) => (
-                <div 
-                  key={alert.id}
-                  className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg",
-                    alert.severity === "CRITICAL" && "bg-red-50",
-                    alert.severity === "WARNING" && "bg-yellow-50",
-                    alert.severity === "INFO" && "bg-blue-50"
-                  )}
-                >
-                  {alert.severity === "CRITICAL" ? <XCircle className="w-4 h-4 text-red-500" /> :
-                   alert.severity === "WARNING" ? <AlertTriangle className="w-4 h-4 text-yellow-500" /> :
-                   <AlertCircle className="w-4 h-4 text-blue-500" />}
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{alert.message}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {alert.resourceType} • <TimeDisplay date={alert.timestamp} />
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       )}
-
-      {/* Fleets Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle>Fleets</CardTitle>
-              <CardDescription>Manage your bot fleets</CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search fleets..."
-                  className="pl-8 w-[250px]"
-                />
-              </div>
-              <Link href="/fleets/new">
-                <Button variant="outline" size="sm">
-                  <Layers className="w-4 h-4 mr-2" />
-                  New Fleet
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Environment</TableHead>
-                <TableHead>Health</TableHead>
-                <TableHead>Instances</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {fleets.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    <Layers className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>No fleets found.</p>
-                    <Link href="/fleets/new">
-                      <Button className="mt-4">Create your first fleet</Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                fleets.map((fleet) => {
-                  const fleetHealthInfo = health?.fleetHealth.find(f => f.fleetId === fleet.id);
-                  const healthStatus = fleetHealthInfo 
-                    ? fleetHealthInfo.unhealthyCount > 0 ? "UNHEALTHY" :
-                      fleetHealthInfo.degradedCount > 0 ? "DEGRADED" : "HEALTHY"
-                    : "UNKNOWN";
-                  
-                  return (
-                    <TableRow key={fleet.id}>
-                      <TableCell className="font-medium">
-                        <Link href={`/fleets/${fleet.id}`} className="hover:underline">
-                          {fleet.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="capitalize">{fleet.environment}</TableCell>
-                      <TableCell>
-                        <HealthIndicator 
-                          health={healthStatus} 
-                          showLabel={false}
-                          size="sm"
-                        />
-                      </TableCell>
-                      <TableCell>{fleet._count?.instances ?? 0}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={fleet.status} />
-                      </TableCell>
-                      <TableCell>
-                        <Link href={`/fleets/${fleet.id}`}>
-                          <Button variant="ghost" size="sm">
-                            View
-                            <ArrowRight className="w-4 h-4 ml-1" />
-                          </Button>
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </DashboardLayout>
   );
 }

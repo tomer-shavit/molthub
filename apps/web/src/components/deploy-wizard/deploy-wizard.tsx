@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { ChannelConfig } from "@/components/onboarding/channel-setup-step";
 import { api } from "@/lib/api";
 import { StepPlatform, Platform } from "./step-platform";
+import { AwsConfig } from "./aws-config-panel";
 import { StepChannels } from "./step-channels";
 import { StepModel, ModelConfig } from "./step-model";
 import { StepNameDeploy } from "./step-name-deploy";
@@ -33,18 +34,30 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
   const [botName, setBotName] = useState("");
   const [channelConfigs, setChannelConfigs] = useState<ChannelConfig[]>([]);
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
+  const [awsConfig, setAwsConfig] = useState<AwsConfig>({
+    accessKeyId: "",
+    secretAccessKey: "",
+    region: "us-east-1",
+    tier: "simple",
+  });
   const [deploying, setDeploying] = useState(false);
   const [deployedInstanceId, setDeployedInstanceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const canProceed = useCallback((): boolean => {
     switch (currentStep) {
-      case 0: return selectedPlatform !== null;
+      case 0: {
+        if (!selectedPlatform) return false;
+        if (selectedPlatform === "aws") {
+          return !!awsConfig.accessKeyId && !!awsConfig.secretAccessKey && !!awsConfig.region;
+        }
+        return true;
+      }
       case 1: return true; // channels are optional
       case 2: return true; // model is optional
       default: return false;
     }
-  }, [currentStep, selectedPlatform]);
+  }, [currentStep, selectedPlatform, awsConfig]);
 
   const handleNext = () => {
     if (currentStep < 4) {
@@ -76,7 +89,9 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
     try {
       const result = await api.deployOnboarding({
         botName: botName.trim(),
-        deploymentTarget: { type: selectedPlatform },
+        deploymentTarget: selectedPlatform === "aws"
+          ? { type: "ecs-fargate", ...awsConfig }
+          : { type: selectedPlatform },
         channels: channelConfigs.filter((ch) => ch.config.enabled !== false).length > 0
           ? channelConfigs
               .filter((ch) => ch.config.enabled !== false)
@@ -179,6 +194,8 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
           <StepPlatform
             selectedPlatform={selectedPlatform}
             onPlatformSelect={setSelectedPlatform}
+            awsConfig={awsConfig}
+            onAwsConfigChange={setAwsConfig}
           />
         )}
 

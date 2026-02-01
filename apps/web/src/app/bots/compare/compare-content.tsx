@@ -173,7 +173,7 @@ export default function ComparePageContent() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Uptime</span>
                   <span className="font-mono text-xs">
-                    {formatUptime(instance.uptimeSeconds)}
+                    {formatUptime(instance.runningSince ? Math.max(0, Math.floor((Date.now() - new Date(instance.runningSince).getTime()) / 1000)) : 0)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">

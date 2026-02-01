@@ -136,8 +136,9 @@ model BotInstance {
   cloudwatchLogGroup String?
 
   // Health metrics
-  uptimeSeconds Int @default(0)
-  restartCount  Int @default(0)
+  uptimeSeconds Int       @default(0)
+  restartCount  Int       @default(0)
+  runningSince  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

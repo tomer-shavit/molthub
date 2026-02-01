@@ -6,6 +6,7 @@ import {
   IsNotEmpty,
   MaxLength,
   Matches,
+  IsIn,
 } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -45,6 +46,15 @@ class DeploymentTargetDto {
   secretAccessKey?: string;
 
   @IsOptional()
+  @IsString()
+  @IsIn(["simple", "production"])
+  tier?: string;
+
+  @IsOptional()
+  @IsString()
+  certificateArn?: string;
+
+  @IsOptional()
   @IsArray()
   subnetIds?: string[];
 
@@ -78,6 +88,20 @@ export class OnboardingPreviewDto {
 
   @IsOptional()
   configOverrides?: Record<string, unknown>;
+}
+
+export class ValidateAwsDto {
+  @IsString()
+  @IsNotEmpty()
+  accessKeyId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  secretAccessKey: string;
+
+  @IsString()
+  @IsNotEmpty()
+  region: string;
 }
 
 export class OnboardingDeployDto {

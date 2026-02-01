@@ -101,12 +101,19 @@ export class LifecycleManagerService {
       this.provisioningEvents.updateStep(instance.id, "validate_config", "completed");
       this.provisioningEvents.updateStep(instance.id, "security_audit", "in_progress");
       this.provisioningEvents.updateStep(instance.id, "security_audit", "completed");
+      // Extract container environment variables and auth token from instance metadata
+      const instanceMeta = (typeof instance.metadata === "string" ? JSON.parse(instance.metadata) : instance.metadata) as Record<string, unknown> | null;
+      const containerEnv = (instanceMeta?.containerEnv as Record<string, string>) || undefined;
+      const gatewayAuthToken = (instanceMeta?.gatewayAuthToken as string) ?? undefined;
+
       const installStepId = this.getInstallStepId(deploymentType);
       this.provisioningEvents.updateStep(instance.id, installStepId, "in_progress");
       const installResult = await target.install({
         profileName,
         openclawVersion: instance.openclawVersion ?? undefined,
         port: gatewayPort,
+        gatewayAuthToken,
+        containerEnv,
       });
 
       if (!installResult.success) {
@@ -117,9 +124,6 @@ export class LifecycleManagerService {
       this.provisioningEvents.updateStep(instance.id, "create_container", "in_progress");
       this.provisioningEvents.updateStep(instance.id, "create_container", "completed");
       this.provisioningEvents.updateStep(instance.id, "write_config", "in_progress");
-      // Extract container environment variables (e.g., LLM API keys) from instance metadata
-      const instanceMeta = (typeof instance.metadata === "string" ? JSON.parse(instance.metadata) : instance.metadata) as Record<string, unknown> | null;
-      const containerEnv = (instanceMeta?.containerEnv as Record<string, string>) || undefined;
 
       const configureResult = await target.configure({
         profileName,
@@ -154,6 +158,7 @@ export class LifecycleManagerService {
         where: { id: instance.id },
         data: {
           status: "RUNNING",
+          runningSince: new Date(),
           health: health.ok ? "HEALTHY" : "DEGRADED",
           gatewayPort,
           profileName,
@@ -189,6 +194,7 @@ export class LifecycleManagerService {
         where: { id: instance.id },
         data: {
           status: "ERROR",
+          runningSince: null,
           health: "UNKNOWN",
           lastError: message,
           errorCount: { increment: 1 },
@@ -296,6 +302,7 @@ export class LifecycleManagerService {
       where: { id: instance.id },
       data: {
         status: "RUNNING",
+        runningSince: new Date(),
         restartCount: { increment: 1 },
         lastReconcileAt: new Date(),
       },
@@ -364,6 +371,7 @@ export class LifecycleManagerService {
       where: { id: instance.id },
       data: {
         status: "DELETING",
+        runningSince: null,
         health: "UNKNOWN",
       },
     });
@@ -437,7 +445,7 @@ export class LifecycleManagerService {
       });
 
       if (dbTarget) {
-        const targetConfig = this.mapDbTargetToConfig(dbTarget);
+        const targetConfig = this.mapDbTargetToConfig(dbTarget, instance);
         return DeploymentTargetFactory.create(targetConfig);
       }
     }
@@ -468,12 +476,15 @@ export class LifecycleManagerService {
       ECS_FARGATE: {
         type: "ecs-fargate",
         ecs: {
-          region: (instanceMeta?.awsRegion as string) ?? "us-east-1",
-          accessKeyId: (instanceMeta?.awsAccessKeyId as string) ?? "",
-          secretAccessKey: (instanceMeta?.awsSecretAccessKey as string) ?? "",
-          subnetIds: (instanceMeta?.subnetIds as string[]) ?? [],
-          securityGroupId: (instanceMeta?.securityGroupId as string) ?? "",
-          clusterName: `openclaw-${instance.name}`,
+          region: (instanceMeta?.region as string) ?? (instanceMeta?.awsRegion as string) ?? "us-east-1",
+          accessKeyId: (instanceMeta?.accessKeyId as string) ?? (instanceMeta?.awsAccessKeyId as string) ?? "",
+          secretAccessKey: (instanceMeta?.secretAccessKey as string) ?? (instanceMeta?.awsSecretAccessKey as string) ?? "",
+          tier: (instanceMeta?.tier as "simple" | "production") ?? "simple",
+          certificateArn: instanceMeta?.certificateArn as string | undefined,
+          cpu: instanceMeta?.cpu as number | undefined,
+          memory: instanceMeta?.memory as number | undefined,
+          image: instanceMeta?.image as string | undefined,
+          profileName: instance.profileName ?? instance.name,
         },
       },
     };
@@ -488,6 +499,7 @@ export class LifecycleManagerService {
    */
   private mapDbTargetToConfig(
     dbTarget: { type: string; config: unknown },
+    instance?: BotInstance,
   ): DeploymentTargetConfig {
     const cfg = (typeof dbTarget.config === "string" ? JSON.parse(dbTarget.config) : dbTarget.config ?? {}) as Record<string, unknown>;
 
@@ -533,15 +545,12 @@ export class LifecycleManagerService {
             region: (cfg.region as string) ?? "us-east-1",
             accessKeyId: (cfg.accessKeyId as string) ?? "",
             secretAccessKey: (cfg.secretAccessKey as string) ?? "",
-            subnetIds: (cfg.subnetIds as string[]) ?? [],
-            securityGroupId: (cfg.securityGroupId as string) ?? "",
-            clusterName: (cfg.clusterName as string) ?? "openclaw-cluster",
-            executionRoleArn: cfg.executionRoleArn as string | undefined,
-            taskRoleArn: cfg.taskRoleArn as string | undefined,
+            tier: (cfg.tier as "simple" | "production") ?? "simple",
+            certificateArn: cfg.certificateArn as string | undefined,
             cpu: cfg.cpu as number | undefined,
             memory: cfg.memory as number | undefined,
             image: cfg.image as string | undefined,
-            assignPublicIp: cfg.assignPublicIp as boolean | undefined,
+            profileName: instance?.profileName ?? instance?.name,
           },
         };
       default:
@@ -583,9 +592,9 @@ export class LifecycleManagerService {
       auth: { mode: "token", token: authToken ?? "" },
     };
 
-    const maxAttempts = 10;
-    const baseDelayMs = 1_000;
-    const maxDelayMs = 10_000;
+    const maxAttempts = 30;
+    const baseDelayMs = 5_000;
+    const maxDelayMs = 15_000;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {

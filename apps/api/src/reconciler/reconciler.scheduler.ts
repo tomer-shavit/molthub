@@ -75,6 +75,7 @@ export class ReconcilerScheduler {
           where: { id: instance.id },
           data: {
             status: "ERROR",
+            runningSince: null,
             lastError: `Instance stuck in ${instance.status} state for too long`,
             errorCount: { increment: 1 },
           },

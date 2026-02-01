@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Monitor, Cloud } from "lucide-react";
+import { AwsConfigPanel, AwsConfig } from "./aws-config-panel";
 
 export type Platform = "docker" | "aws" | "azure" | "gcp";
 
@@ -27,7 +28,7 @@ const PLATFORMS: PlatformOption[] = [
     name: "AWS",
     description: "Deploy to Amazon Web Services (ECS Fargate).",
     icon: <Cloud className="w-6 h-6" />,
-    available: false,
+    available: true,
   },
   {
     id: "azure",
@@ -48,9 +49,11 @@ const PLATFORMS: PlatformOption[] = [
 interface StepPlatformProps {
   selectedPlatform: Platform | null;
   onPlatformSelect: (platform: Platform) => void;
+  awsConfig: AwsConfig;
+  onAwsConfigChange: (config: AwsConfig) => void;
 }
 
-export function StepPlatform({ selectedPlatform, onPlatformSelect }: StepPlatformProps) {
+export function StepPlatform({ selectedPlatform, onPlatformSelect, awsConfig, onAwsConfigChange }: StepPlatformProps) {
   return (
     <div className="space-y-6">
       <div>
@@ -95,6 +98,10 @@ export function StepPlatform({ selectedPlatform, onPlatformSelect }: StepPlatfor
           );
         })}
       </div>
+
+      {selectedPlatform === "aws" && (
+        <AwsConfigPanel config={awsConfig} onChange={onAwsConfigChange} />
+      )}
     </div>
   );
 }

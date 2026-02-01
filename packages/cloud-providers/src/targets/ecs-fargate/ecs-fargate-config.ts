@@ -2,31 +2,25 @@
  * Configuration for AWS ECS Fargate deployment targets.
  *
  * Provides all settings needed to deploy an OpenClaw gateway instance
- * on AWS ECS Fargate (serverless containers).
+ * on AWS ECS Fargate via CloudFormation.
  */
 export interface EcsFargateConfig {
   /** AWS region (e.g. "us-east-1") */
   region: string;
-  /** AWS access key ID for CLI authentication */
+  /** AWS access key ID for SDK authentication */
   accessKeyId: string;
-  /** AWS secret access key for CLI authentication */
+  /** AWS secret access key for SDK authentication */
   secretAccessKey: string;
-  /** ECS cluster name (default: "openclaw-cluster") */
-  clusterName?: string;
-  /** VPC subnet IDs for Fargate tasks */
-  subnetIds: string[];
-  /** Security group ID for Fargate tasks */
-  securityGroupId: string;
-  /** IAM execution role ARN for ECS task (pulls images, writes logs) */
-  executionRoleArn?: string;
-  /** IAM task role ARN for the running container */
-  taskRoleArn?: string;
-  /** CPU units for the Fargate task (default: 256) */
+  /** Deployment tier: "simple" (public IP) or "production" (VPC + ALB) */
+  tier: "simple" | "production";
+  /** ACM certificate ARN for HTTPS (production tier only) */
+  certificateArn?: string;
+  /** CPU units for the Fargate task (default: 512) */
   cpu?: number;
-  /** Memory in MiB for the Fargate task (default: 512) */
+  /** Memory in MiB for the Fargate task (default: 1024) */
   memory?: number;
-  /** Container image (default: "openclaw:local") */
+  /** Container image (default: auto-pushed to ECR) */
   image?: string;
-  /** Whether to assign a public IP to the task (default: true) */
-  assignPublicIp?: boolean;
+  /** Bot/profile name — used to derive resource names on re-instantiation */
+  profileName?: string;
 }

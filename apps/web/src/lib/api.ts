@@ -34,6 +34,7 @@ export interface BotInstance {
   lastError?: string;
   errorCount: number;
   uptimeSeconds: number;
+  runningSince?: string;
   restartCount: number;
   ecsClusterArn?: string;
   ecsServiceArn?: string;
@@ -50,6 +51,12 @@ export interface BotInstance {
   aiGatewayUrl?: string;
   aiGatewayApiKey?: string;
   aiGatewayProvider: string;
+  gatewayConnection?: {
+    host: string;
+    port: number;
+    status: string;
+    authToken?: string;
+  };
   createdAt: string;
   updatedAt: string;
   createdBy: string;
@@ -579,6 +586,10 @@ class ApiClient {
       throw new Error(message);
     }
 
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return undefined;
+    }
+
     return response.json();
   }
 
@@ -969,6 +980,17 @@ class ApiClient {
     modelConfig?: { provider: string; model: string; apiKey: string };
   }): Promise<{ instanceId: string; fleetId: string; status: string }> {
     return this.fetch('/onboarding/deploy', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async validateAwsCredentials(data: {
+    accessKeyId: string;
+    secretAccessKey: string;
+    region: string;
+  }): Promise<{ valid: boolean; accountId?: string; error?: string }> {
+    return this.fetch('/onboarding/validate-aws', {
       method: 'POST',
       body: JSON.stringify(data),
     });

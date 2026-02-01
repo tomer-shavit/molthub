@@ -32,6 +32,10 @@ export interface InstallOptions {
   port: number;
   /** Method to use for installation */
   installMethod?: "curl" | "npm" | "pnpm";
+  /** Gateway authentication token (passed as env var for ECS targets) */
+  gatewayAuthToken?: string;
+  /** Additional container environment variables (e.g., LLM API keys) */
+  containerEnv?: Record<string, string>;
 }
 
 /**

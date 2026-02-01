@@ -99,7 +99,7 @@ export class ReconcilerService {
       // Mark as reconciling
       await prisma.botInstance.update({
         where: { id: instanceId },
-        data: { status: "RECONCILING" },
+        data: { status: "RECONCILING", runningSince: null },
       });
 
       await this.logEvent(instanceId, "RECONCILE_START", "Starting v2 reconciliation");
@@ -180,6 +180,7 @@ export class ReconcilerService {
         where: { id: instanceId },
         data: {
           status: "RUNNING",
+          runningSince: new Date(),
           health: finalHealth,
           configHash: desiredHash,
           lastReconcileAt: new Date(),
@@ -212,6 +213,7 @@ export class ReconcilerService {
         where: { id: instanceId },
         data: {
           status: "ERROR",
+          runningSince: null,
           lastError: message,
           errorCount: { increment: 1 },
           lastReconcileAt: new Date(),
@@ -398,7 +400,7 @@ export class ReconcilerService {
 
     await prisma.botInstance.update({
       where: { id: instanceId },
-      data: { status: "STOPPED" },
+      data: { status: "STOPPED", runningSince: null },
     });
   }
 

@@ -17,6 +17,12 @@ export { DockerContainerTarget } from "./targets/docker/docker-target";
 export { KubernetesTarget, KubernetesManifests } from "./targets/kubernetes/kubernetes-target";
 export { EcsFargateTarget } from "./targets/ecs-fargate/ecs-fargate-target";
 export type { EcsFargateConfig } from "./targets/ecs-fargate/ecs-fargate-config";
+export { pushImageToEcr } from "./targets/ecs-fargate/ecr-push";
+export type { EcrPushOptions, EcrPushResult } from "./targets/ecs-fargate/ecr-push";
+export { generateSimpleTemplate } from "./targets/ecs-fargate/templates/simple";
+export type { SimpleTemplateParams } from "./targets/ecs-fargate/templates/simple";
+export { generateProductionTemplate } from "./targets/ecs-fargate/templates/production";
+export type { ProductionTemplateParams } from "./targets/ecs-fargate/templates/production";
 export {
   CloudflareWorkersTarget,
   R2StateSync,

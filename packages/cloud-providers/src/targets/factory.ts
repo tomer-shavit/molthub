@@ -7,6 +7,7 @@ import { LocalMachineTarget } from "./local/local-target";
 import { RemoteVMTarget } from "./remote-vm/remote-vm-target";
 import { DockerContainerTarget } from "./docker/docker-target";
 import { KubernetesTarget } from "./kubernetes/kubernetes-target";
+import { EcsFargateTarget } from "./ecs-fargate/ecs-fargate-target";
 import { CloudflareWorkersTarget } from "./cloudflare-workers/cloudflare-workers-target";
 
 /**
@@ -47,7 +48,10 @@ export class DeploymentTargetFactory {
         return new KubernetesTarget(config.k8s);
 
       case "ecs-fargate":
-        throw new Error("ECS Fargate target is not yet implemented");
+        if (!config.ecs) {
+          throw new Error("ECS Fargate target requires 'ecs' configuration");
+        }
+        return new EcsFargateTarget(config.ecs);
 
       case "cloudflare-workers":
         if (!config.cloudflare) {

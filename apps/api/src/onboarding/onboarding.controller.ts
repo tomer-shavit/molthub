@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Param, Req } from "@nestjs/common";
 import { Request as ExpressRequest } from "express";
 import { Public } from "../auth/public.decorator";
 import { OnboardingService } from "./onboarding.service";
-import { OnboardingDeployDto, OnboardingPreviewDto } from "./onboarding.dto";
+import { OnboardingDeployDto, OnboardingPreviewDto, ValidateAwsDto } from "./onboarding.dto";
 
 @Controller("onboarding")
 export class OnboardingController {
@@ -23,6 +23,11 @@ export class OnboardingController {
   @Post("preview")
   async preview(@Body() dto: OnboardingPreviewDto) {
     return this.onboardingService.preview(dto);
+  }
+
+  @Post("validate-aws")
+  async validateAwsCredentials(@Body() dto: ValidateAwsDto) {
+    return this.onboardingService.validateAwsCredentials(dto);
   }
 
   @Post("deploy")

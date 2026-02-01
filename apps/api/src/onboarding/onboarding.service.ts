@@ -26,6 +26,31 @@ export class OnboardingService {
     return { hasInstances: count > 0 };
   }
 
+  /** Validate AWS credentials using STS GetCallerIdentity */
+  async validateAwsCredentials(params: {
+    accessKeyId: string;
+    secretAccessKey: string;
+    region: string;
+  }): Promise<{ valid: boolean; accountId?: string; error?: string }> {
+    try {
+      const { STSClient, GetCallerIdentityCommand } = await import("@aws-sdk/client-sts");
+      const client = new STSClient({
+        region: params.region,
+        credentials: {
+          accessKeyId: params.accessKeyId,
+          secretAccessKey: params.secretAccessKey,
+        },
+      });
+      const result = await client.send(new GetCallerIdentityCommand({}));
+      return { valid: true, accountId: result.Account };
+    } catch (error) {
+      return {
+        valid: false,
+        error: error instanceof Error ? error.message : "Invalid AWS credentials",
+      };
+    }
+  }
+
   /** List templates for the wizard */
   getTemplates() {
     return BUILTIN_TEMPLATES.map((t) => ({
@@ -216,6 +241,8 @@ export class OnboardingService {
 
     // Auto-assign gateway port (spaced 20 apart for OpenClaw derived ports)
     const assignedPort = await this.allocateGatewayPort();
+    // For AWS deployments, always use the default OpenClaw port (single container per task)
+    const effectivePort = targetType === "ecs-fargate" ? 18789 : assignedPort;
 
     const targetConfig =
       targetType === "ecs-fargate"
@@ -223,10 +250,8 @@ export class OnboardingService {
             region: dto.deploymentTarget?.region,
             accessKeyId: dto.deploymentTarget?.accessKeyId,
             secretAccessKey: dto.deploymentTarget?.secretAccessKey,
-            subnetIds: dto.deploymentTarget?.subnetIds,
-            securityGroupId: dto.deploymentTarget?.securityGroupId,
-            executionRoleArn: dto.deploymentTarget?.executionRoleArn,
-            clusterName: `openclaw-${dto.botName}`,
+            tier: dto.deploymentTarget?.tier || "simple",
+            certificateArn: dto.deploymentTarget?.certificateArn,
           }
         : {
             containerName:
@@ -235,7 +260,7 @@ export class OnboardingService {
             dockerfilePath: path.join(__dirname, "../../../../../docker/openclaw"),
             configPath:
               dto.deploymentTarget?.configPath || path.join(os.homedir(), `.molthub/gateways/${dto.botName}`),
-            gatewayPort: assignedPort,
+            gatewayPort: effectivePort,
           };
 
     const deploymentTarget = await prisma.deploymentTarget.create({
@@ -257,7 +282,7 @@ export class OnboardingService {
         desiredManifest: JSON.stringify(manifest),
         deploymentType: deploymentType,
         deploymentTargetId: deploymentTarget.id,
-        gatewayPort: assignedPort,
+        gatewayPort: effectivePort,
         templateId: resolvedTemplateId,
         tags: JSON.stringify({}),
         metadata: JSON.stringify({
@@ -344,8 +369,9 @@ export class OnboardingService {
       throw new BadRequestException("Instance not found");
     }
 
-    // Staleness detection: if stuck in CREATING or RECONCILING for >3 minutes
-    const STALE_THRESHOLD_MS = 3 * 60 * 1000;
+    // Staleness detection: if stuck in CREATING or RECONCILING for >15 minutes
+    // (ECS zero-upload deploys need ~3-5 min for CF stack + ~3 min for npm install)
+    const STALE_THRESHOLD_MS = 15 * 60 * 1000;
     const updatedAt = new Date(instance.updatedAt).getTime();
     const isStale =
       (instance.status === "CREATING" || instance.status === "RECONCILING") &&

@@ -79,7 +79,7 @@ export default async function BotsPage() {
                     <TableCell><StatusBadge status={bot.status} /></TableCell>
                     <TableCell><HealthIndicator health={bot.health} /></TableCell>
                     <TableCell>
-                      {Math.floor(bot.uptimeSeconds / 3600)}h {Math.floor((bot.uptimeSeconds % 3600) / 60)}m
+                      {(() => { const s = bot.runningSince ? Math.max(0, Math.floor((Date.now() - new Date(bot.runningSince).getTime()) / 1000)) : 0; return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; })()}
                     </TableCell>
                     <TableCell>
                       {bot.lastHealthCheckAt ? (

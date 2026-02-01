@@ -118,10 +118,22 @@ export class OpenClawHealthService {
 
       // Derive BotHealth from snapshot
       let health: string;
+      let healthReason: string | null = null;
       if (!snapshot.ok) {
         health = "UNHEALTHY";
+        healthReason = "Gateway reported unhealthy";
       } else if (degradedChannels > 0) {
         health = "DEGRADED";
+        // Build reason from actual channel data
+        const channelsMap = Array.isArray(snapshot.channels)
+          ? snapshot.channels
+          : Object.entries(snapshot.channels ?? {}).map(([name, ch]) => ({ name, ...(ch as Record<string, unknown>) }));
+        const failedNames = channelsMap
+          .filter((ch: Record<string, unknown>) => !ch.ok)
+          .map((ch: Record<string, unknown>) => (ch.name as string) || (ch.type as string) || "unknown");
+        healthReason = failedNames.length > 0
+          ? `${failedNames.length} channel${failedNames.length > 1 ? "s" : ""} not ready: ${failedNames.join(", ")}`
+          : `${degradedChannels} channel${degradedChannels > 1 ? "s" : ""} not ready`;
       } else {
         health = "HEALTHY";
       }
@@ -132,7 +144,8 @@ export class OpenClawHealthService {
           health,
           lastHealthCheckAt: new Date(),
           errorCount: 0,
-          lastError: null,
+          lastError: healthReason,
+          uptimeSeconds: Math.floor(snapshot.uptime ?? 0),
         },
       });
 

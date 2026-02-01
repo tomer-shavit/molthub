@@ -113,7 +113,7 @@ export const PROVISIONING_STEPS: Record<string, string[]> = {
 // Service
 // ---------------------------------------------------------------------------
 
-const PROVISIONING_TIMEOUT_MS = 5 * 60 * 1000;
+const PROVISIONING_TIMEOUT_MS = 15 * 60 * 1000;
 
 @Injectable()
 export class ProvisioningEventsService {

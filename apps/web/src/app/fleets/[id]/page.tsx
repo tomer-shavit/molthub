@@ -311,7 +311,7 @@ export default async function FleetDetailPage({ params }: { params: { id: string
                           </div>
                         </TableCell>
                         <TableCell>
-                          {Math.floor(instance.uptimeSeconds / 3600)}h {Math.floor((instance.uptimeSeconds % 3600) / 60)}m
+                          {(() => { const s = instance.runningSince ? Math.max(0, Math.floor((Date.now() - new Date(instance.runningSince).getTime()) / 1000)) : 0; return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; })()}
                         </TableCell>
                         <TableCell>
                           {instance.lastHealthCheckAt ? (

@@ -129,9 +129,8 @@ export class DashboardService {
     // Estimate message volume (traces in last hour)
     const messageVolume = totalTraces;
 
-    // Estimate cost (mock calculation based on instance count)
-    const totalBots = Object.values(healthCounts).reduce((a, b) => a + b, 0);
-    const costPerHour = totalBots * 0.05; // $0.05 per bot per hour
+    // Total bots includes all instances (including UNKNOWN health)
+    const totalBots = await prisma.botInstance.count();
 
     // Count unreachable bots from gateway connection status
     const unreachableBots = await prisma.gatewayConnection.count({
@@ -155,7 +154,7 @@ export class DashboardService {
       latencyP95: p95 || 0,
       latencyP99: p99 || 0,
       failureRate: Math.round(failureRate * 100) / 100,
-      costPerHour: Math.round(costPerHour * 100) / 100,
+      costPerHour: 0,
       activeChangeSets,
       failedDeployments,
       activeAlerts,
