@@ -78,6 +78,7 @@ export function BotDetailClient({ bot, traces, metrics, changeSets, events, evol
   const [activeTab, setActiveTab] = useState("overview");
   const [isApplyingConfig, setIsApplyingConfig] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isLifecycleAction, setIsLifecycleAction] = useState(false);
   const [pairingChannel, setPairingChannel] = useState<string | null>(null);
   const [pairingState, setPairingState] = useState<PairingState>("loading");
   const [pairingQr, setPairingQr] = useState<string | undefined>();
@@ -96,6 +97,31 @@ export function BotDetailClient({ bot, traces, metrics, changeSets, events, evol
     }
   }, [bot.id, bot.name, router]);
 
+
+  const handleStop = useCallback(async () => {
+    if (!confirm(`Are you sure you want to stop "${bot.name}"?`)) return;
+    setIsLifecycleAction(true);
+    try {
+      await api.stopBotInstance(bot.id);
+      router.refresh();
+    } catch (err) {
+      console.error("Failed to stop bot:", err);
+    } finally {
+      setIsLifecycleAction(false);
+    }
+  }, [bot.id, bot.name, router]);
+
+  const handleStart = useCallback(async () => {
+    setIsLifecycleAction(true);
+    try {
+      await api.startBotInstance(bot.id);
+      router.refresh();
+    } catch (err) {
+      console.error("Failed to start bot:", err);
+    } finally {
+      setIsLifecycleAction(false);
+    }
+  }, [bot.id, router]);
   const handleSyncEvolution = useCallback(async () => {
     setIsSyncingEvolution(true);
     try {
@@ -301,17 +327,17 @@ export function BotDetailClient({ bot, traces, metrics, changeSets, events, evol
               <Stethoscope className="w-4 h-4 mr-2" />
               Diagnose
             </Button>
-            {bot.status === "RUNNING" ? (
-              <Button variant="outline" size="sm">
+            {bot.status === "RUNNING" || bot.status === "DEGRADED" ? (
+              <Button variant="outline" size="sm" onClick={handleStop} disabled={isLifecycleAction}>
                 <Pause className="w-4 h-4 mr-2" />
-                Stop
+                {isLifecycleAction ? "Stopping..." : "Stop"}
               </Button>
-            ) : (
-              <Button variant="outline" size="sm">
+            ) : bot.status === "STOPPED" || bot.status === "PAUSED" || bot.status === "ERROR" ? (
+              <Button variant="outline" size="sm" onClick={handleStart} disabled={isLifecycleAction}>
                 <Play className="w-4 h-4 mr-2" />
-                Start
+                {isLifecycleAction ? "Starting..." : "Start"}
               </Button>
-            )}
+            ) : null}
             <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isDeleting}>
               <Trash2 className="w-4 h-4 mr-2" />
               {isDeleting ? "Deleting..." : "Delete"}

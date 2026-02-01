@@ -210,12 +210,8 @@ export class BotInstancesService {
   }
 
   async stop(id: string): Promise<void> {
-    const instance = await this.findOne(id);
-    
-    await prisma.botInstance.update({
-      where: { id },
-      data: { status: "STOPPED" },
-    });
+    await this.findOne(id);
+    await this.reconciler.stop(id);
   }
 
   async remove(id: string): Promise<void> {

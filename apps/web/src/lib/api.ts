@@ -650,6 +650,14 @@ class ApiClient {
     await this.fetch(`/bot-instances/${id}`, { method: 'DELETE' });
   }
 
+  async stopBotInstance(id: string): Promise<void> {
+    await this.fetch(`/bot-instances/${id}/stop`, { method: 'POST' });
+  }
+
+  async startBotInstance(id: string): Promise<void> {
+    await this.fetch(`/bot-instances/${id}/resume`, { method: 'POST' });
+  }
+
   async getBotInstanceMetrics(id: string, from: Date, to: Date): Promise<TraceStats> {
     return this.fetch(`/traces/stats/${id}?from=${from.toISOString()}&to=${to.toISOString()}`);
   }
