@@ -15,6 +15,7 @@ export interface SimpleTemplateParams {
   memory?: number;
   gatewayAuthToken: string;
   containerEnv?: Record<string, string>;
+  allowedCidr?: string;
 }
 
 export function generateSimpleTemplate(
@@ -29,7 +30,10 @@ export function generateSimpleTemplate(
     memory = 2048,
     gatewayAuthToken,
     containerEnv = {},
+    allowedCidr: rawAllowedCidr,
   } = params;
+
+  const allowedCidr = rawAllowedCidr || "0.0.0.0/0";
 
   // When using a public base image, install OpenClaw at container startup.
   // The OPENCLAW_CONFIG env var is injected from Secrets Manager by ECS.
@@ -51,9 +55,6 @@ export function generateSimpleTemplate(
   const environment: Array<{ Name: string; Value: string }> = [
     { Name: "OPENCLAW_GATEWAY_PORT", Value: String(gatewayPort) },
     { Name: "OPENCLAW_PROFILE", Value: botName },
-    ...(gatewayAuthToken
-      ? [{ Name: "OPENCLAW_GATEWAY_TOKEN", Value: gatewayAuthToken }]
-      : []),
     ...Object.entries(containerEnv).map(([Name, Value]) => ({
       Name,
       Value,
@@ -140,7 +141,7 @@ export function generateSimpleTemplate(
                     ],
                     Resource: {
                       "Fn::Sub":
-                        "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:clawster/*",
+                        `arn:aws:secretsmanager:\${AWS::Region}:\${AWS::AccountId}:secret:clawster/${botName}/*`,
                     },
                   },
                 ],
@@ -183,8 +184,8 @@ export function generateSimpleTemplate(
               IpProtocol: "tcp",
               FromPort: gatewayPort,
               ToPort: gatewayPort,
-              CidrIp: "0.0.0.0/0",
-              Description: "OpenClaw gateway port",
+              CidrIp: allowedCidr,
+              Description: `OpenClaw gateway – allowed: ${allowedCidr}`,
             },
           ],
           SecurityGroupEgress: [
@@ -203,6 +204,23 @@ export function generateSimpleTemplate(
           ],
         },
       },
+
+      // ── Gateway Token Secret ──
+      ...(gatewayAuthToken
+        ? {
+            GatewayTokenSecret: {
+              Type: "AWS::SecretsManager::Secret",
+              Properties: {
+                Name: { "Fn::Sub": `clawster/${botName}/gateway-token` },
+                Description: {
+                  "Fn::Sub": `Gateway auth token for bot "${botName}"`,
+                },
+                SecretString: gatewayAuthToken,
+                Tags: [tag],
+              },
+            },
+          }
+        : {}),
 
       // ── ECS Task Definition ──
       TaskDefinition: {
@@ -237,6 +255,14 @@ export function generateSimpleTemplate(
                       `arn:aws:secretsmanager:\${AWS::Region}:\${AWS::AccountId}:secret:clawster/${botName}/config`,
                   },
                 },
+                ...(gatewayAuthToken
+                  ? [
+                      {
+                        Name: "OPENCLAW_GATEWAY_TOKEN",
+                        ValueFrom: { Ref: "GatewayTokenSecret" },
+                      },
+                    ]
+                  : []),
               ],
               LogConfiguration: {
                 LogDriver: "awslogs",

@@ -23,4 +23,6 @@ export interface EcsFargateConfig {
   image?: string;
   /** Bot/profile name — used to derive resource names on re-instantiation */
   profileName?: string;
+  /** CIDR block for security group ingress (e.g. "203.0.113.0/24"). Defaults to "0.0.0.0/0" */
+  allowedCidr?: string;
 }

@@ -17,6 +17,7 @@ export interface AwsConfig {
   region: string;
   tier: "simple" | "production";
   certificateArn?: string;
+  allowedCidr?: string;
   savedCredentialId?: string;
   saveForFuture?: { save: boolean; name: string };
 }
@@ -218,6 +219,42 @@ export function AwsConfigPanel({ config, onChange }: AwsConfigPanelProps) {
           })}
         </div>
       </div>
+
+      {config.tier === "simple" && (
+        <div className="space-y-2">
+          <label htmlFor="aws-allowed-cidr" className="text-sm font-medium">Allowed IP / CIDR (optional)</label>
+          <div className="flex gap-2">
+            <Input
+              id="aws-allowed-cidr"
+              placeholder="0.0.0.0/0 (open to all)"
+              value={config.allowedCidr || ""}
+              onChange={(e) => update({ allowedCidr: e.target.value || undefined })}
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const res = await fetch("https://api.ipify.org?format=json");
+                  const data = await res.json();
+                  if (data.ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(data.ip)) {
+                    update({ allowedCidr: `${data.ip}/32` });
+                  }
+                } catch {
+                  // IP lookup unavailable — user can enter manually
+                }
+              }}
+            >
+              Use my IP
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Restrict gateway access to a specific IP or CIDR range. Leave empty to allow all traffic.
+          </p>
+        </div>
+      )}
 
       {config.tier === "production" && (
         <div className="space-y-2">

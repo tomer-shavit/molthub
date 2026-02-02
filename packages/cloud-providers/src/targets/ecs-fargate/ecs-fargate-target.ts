@@ -141,6 +141,7 @@ export class EcsFargateTarget implements DeploymentTarget {
         memory: this.memory,
         gatewayAuthToken: options.gatewayAuthToken ?? "",
         containerEnv: options.containerEnv ?? {},
+        allowedCidr: this.config.allowedCidr,
       };
 
       const template =
