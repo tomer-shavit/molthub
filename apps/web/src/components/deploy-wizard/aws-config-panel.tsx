@@ -173,9 +173,11 @@ export function AwsConfigPanel({ config, onChange }: AwsConfigPanelProps) {
                 try {
                   const res = await fetch("https://api.ipify.org?format=json");
                   const data = await res.json();
-                  update({ allowedCidr: `${data.ip}/32` });
+                  if (data.ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(data.ip)) {
+                    update({ allowedCidr: `${data.ip}/32` });
+                  }
                 } catch {
-                  // silently fail
+                  // IP lookup unavailable — user can enter manually
                 }
               }}
             >

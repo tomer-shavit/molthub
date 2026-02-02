@@ -301,7 +301,7 @@ export class OnboardingService {
         templateId: resolvedTemplateId,
         tags: JSON.stringify({}),
         metadata: JSON.stringify({
-          gatewayAuthToken, // stored encrypted in practice
+          gatewayAuthToken, // TODO: encrypt sensitive metadata fields
           ...targetConfig,
           ...(Object.keys(containerEnv).length > 0 ? { containerEnv } : {}),
         }),

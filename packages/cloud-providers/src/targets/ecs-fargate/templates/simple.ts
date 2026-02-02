@@ -141,7 +141,7 @@ export function generateSimpleTemplate(
                     ],
                     Resource: {
                       "Fn::Sub":
-                        "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:clawster/*",
+                        `arn:aws:secretsmanager:\${AWS::Region}:\${AWS::AccountId}:secret:clawster/${botName}/*`,
                     },
                   },
                 ],
