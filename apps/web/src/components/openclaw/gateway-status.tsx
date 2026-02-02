@@ -4,8 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Wifi, WifiOff, Clock, Activity } from "lucide-react";
-import { ConnectionStatus } from "@/components/ui/connection-status";
-import { useGatewayWebSocket } from "@/hooks/use-gateway-websocket";
 
 export interface GatewayStatusData {
   connected: boolean;
@@ -23,8 +21,6 @@ interface GatewayStatusProps {
 
 export function GatewayStatus({ data, instanceId, className }: GatewayStatusProps) {
   const { connected, latencyMs, lastHeartbeat, port, host } = data;
-  const { status: wsStatus } = useGatewayWebSocket(instanceId ?? "");
-  const wsConnected = wsStatus === "connected";
 
   const heartbeatDisplay = lastHeartbeat
     ? formatTimeSince(new Date(lastHeartbeat))
@@ -42,7 +38,6 @@ export function GatewayStatus({ data, instanceId, className }: GatewayStatusProp
             )}
             Gateway Connection
           </CardTitle>
-          {instanceId && <ConnectionStatus status={wsStatus} />}
         </div>
       </CardHeader>
       <CardContent>
@@ -83,15 +78,6 @@ export function GatewayStatus({ data, instanceId, className }: GatewayStatusProp
               {host ? `${host}:` : ""}{port}
             </span>
           </div>
-
-          {instanceId && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">WebSocket</span>
-              <Badge variant={wsConnected ? "success" : "secondary"}>
-                {wsConnected ? "Live" : "Not Connected"}
-              </Badge>
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>

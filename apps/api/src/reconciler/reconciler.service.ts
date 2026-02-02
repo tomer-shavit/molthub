@@ -219,6 +219,7 @@ export class ReconcilerService {
           lastReconcileAt: new Date(),
           lastHealthCheckAt: new Date(),
           lastError: null,
+          errorCount: 0,
         },
       });
 

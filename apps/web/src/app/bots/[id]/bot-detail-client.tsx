@@ -716,7 +716,9 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
           <div>
             <p className="font-medium text-gray-700">Instance stopped</p>
             <p className="text-sm text-gray-600">
-              This instance has been manually stopped. Click <strong>Start</strong> to bring it back online.
+              {bot.lastError === "Container no longer running" || bot.lastError?.startsWith("Container is ")
+                ? <>The Docker container was detected as no longer running. Click <strong>Start</strong> to re-provision it.</>
+                : <>This instance has been manually stopped. Click <strong>Start</strong> to bring it back online.</>}
               {bot.deploymentType === "ECS_FARGATE" && " The ECS task has been scaled down to zero."}
             </p>
           </div>
@@ -756,33 +758,38 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
       )}
 
       {/* Status Bar */}
-      <div className="flex flex-wrap gap-4 mb-8">
+      <div className="flex flex-wrap gap-4 mb-4">
         <HealthIndicator health={bot.health} />
-        {bot.lastError && (
-          <div className="relative group">
-            <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1 rounded-full text-sm cursor-default">
-              <AlertCircle className="w-4 h-4" />
-              Error state
-            </div>
-            <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block">
-              <div className="bg-popover text-popover-foreground border rounded-md shadow-md px-3 py-2 text-xs max-w-sm whitespace-pre-wrap">
-                {bot.lastError}
-              </div>
-            </div>
-          </div>
-        )}
-        {bot.errorCount > 0 && (
-          <div className="flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-1 rounded-full text-sm">
-            <AlertCircle className="w-4 h-4" />
-            {bot.errorCount} errors
-          </div>
-        )}
         {bot.configHash && (
           <div className="flex items-center gap-2 text-gray-600 bg-gray-100 px-3 py-1 rounded-full text-sm font-mono">
             Config: {bot.configHash.slice(0, 8)}
           </div>
         )}
       </div>
+
+      {/* Error Details Banner */}
+      {(bot.lastError || bot.errorCount > 0) && bot.status !== "ERROR" && (
+        <div className="flex items-start gap-3 p-4 mb-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="font-medium text-amber-800">
+              {bot.errorCount > 0
+                ? `${bot.errorCount} consecutive health check ${bot.errorCount === 1 ? "failure" : "failures"}`
+                : "Last operation failed"}
+            </p>
+            {bot.lastError && (
+              <p className="text-sm text-amber-700 mt-1">
+                <span className="font-medium">Last error:</span> {bot.lastError}
+              </p>
+            )}
+            {bot.errorCount >= 5 && bot.status === "RUNNING" && (
+              <p className="text-sm text-amber-600 mt-1">
+                The gateway has been unreachable for ~{Math.round(bot.errorCount * 30 / 60)} minutes. The container may have stopped.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="w-full">
@@ -903,7 +910,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Version</span>
-                    <span className="font-mono text-xs">{bot.openclawVersion || "unknown"}</span>
+                    <span className="font-mono text-xs">{bot.openclawVersion || "—"}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Profile</span>
@@ -1110,7 +1117,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
 
         {/* Dashboard Tab */}
         <TabsContent active={activeTab === "dashboard"} className="mt-6">
-          {bot.status === "RUNNING" && bot.health !== "UNHEALTHY" ? (() => {
+          {bot.status === "RUNNING" && bot.health === "HEALTHY" ? (() => {
             const gatewayPort = bot.gatewayPort || 18789;
             const gatewayConfig = openclawConfig?.gateway as Record<string, unknown> | undefined;
             const gatewayAuth = gatewayConfig?.auth as Record<string, unknown> | undefined;
@@ -1154,7 +1161,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
           })() : (
             <Card>
               <CardContent className="py-12 text-center">
-                {bot.status === "RUNNING" && bot.health === "UNHEALTHY" ? (
+                {bot.status === "RUNNING" && bot.health !== "HEALTHY" ? (
                   <div className="space-y-3">
                     <AlertCircle className="w-10 h-10 mx-auto text-amber-500" />
                     <p className="font-medium">Gateway Unreachable</p>
