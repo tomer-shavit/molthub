@@ -35,7 +35,7 @@ describe("ConfigGeneratorService", () => {
       const config = service.generateOpenClawConfig(createManifest());
       expect(config.gateway).toBeDefined();
       expect(config.gateway!.port).toBe(18789);
-      expect(config.gateway!.host).toBe("127.0.0.1");
+      expect(config.gateway!.host).toBeUndefined();
     });
 
     it("preserves explicit gateway settings", () => {
@@ -47,7 +47,7 @@ describe("ConfigGeneratorService", () => {
         }),
       );
       expect(config.gateway!.port).toBe(19000);
-      expect(config.gateway!.host).toBe("0.0.0.0");
+      // host is stripped (OpenClaw uses bind, not host)
     });
 
     it("sets log level to debug for dev", () => {
@@ -106,7 +106,11 @@ describe("ConfigGeneratorService", () => {
           openclawConfig: { sandbox: { mode: "off" } } as Partial<OpenClawFullConfig>,
         }),
       );
-      expect(config.sandbox?.mode).toBe("all");
+      // Sandbox is relocated from top-level to agents.defaults.sandbox
+      expect((config.agents as Record<string, unknown>)?.defaults).toBeDefined();
+      const defaults = (config.agents as Record<string, unknown>).defaults as Record<string, unknown>;
+      const sandbox = defaults.sandbox as Record<string, unknown>;
+      expect(sandbox.mode).toBe("all");
     });
 
     it("forces sandbox to 'all' in staging when mode is 'off'", () => {
@@ -116,7 +120,9 @@ describe("ConfigGeneratorService", () => {
           openclawConfig: { sandbox: { mode: "off" } } as Partial<OpenClawFullConfig>,
         }),
       );
-      expect(config.sandbox?.mode).toBe("all");
+      const defaults = (config.agents as Record<string, unknown>)?.defaults as Record<string, unknown>;
+      const sandbox = defaults.sandbox as Record<string, unknown>;
+      expect(sandbox.mode).toBe("all");
     });
 
     it("does not force sandbox in dev environment", () => {
@@ -126,7 +132,10 @@ describe("ConfigGeneratorService", () => {
           openclawConfig: { sandbox: { mode: "off" } } as Partial<OpenClawFullConfig>,
         }),
       );
-      expect(config.sandbox?.mode).toBe("off");
+      // In dev, sandbox stays at whatever was set — relocated to agents.defaults.sandbox
+      const defaults = (config.agents as Record<string, unknown>)?.defaults as Record<string, unknown>;
+      const sandbox = defaults.sandbox as Record<string, unknown>;
+      expect(sandbox.mode).toBe("off");
     });
 
     it("disables elevated tools when allowFrom is empty", () => {

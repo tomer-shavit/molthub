@@ -1,10 +1,11 @@
 /**
- * CloudFormation template generator for Production ECS Fargate deployments.
+ * CloudFormation template generator for Production ECS EC2 deployments.
  *
- * Creates a production-ready Fargate setup (~$66/mo) with a dedicated VPC,
+ * Creates a production-ready EC2-backed ECS setup (~$66/mo) with a dedicated VPC,
  * public/private subnets across 2 AZs, NAT Gateway, Application Load Balancer,
- * and optional HTTPS termination. Suitable for production bots requiring high
- * availability, private networking, and TLS.
+ * and optional HTTPS termination. EC2 launch type enables Docker socket mounting
+ * for sandbox isolation. Suitable for production bots requiring high availability,
+ * private networking, and TLS.
  */
 
 export interface ProductionTemplateParams {
@@ -34,16 +35,16 @@ export function generateProductionTemplate(
     certificateArn,
   } = params;
 
-  // When using a public base image, install OpenClaw at container startup.
-  // The OPENCLAW_CONFIG env var is injected from Secrets Manager by ECS.
-  // We must write it to ~/.openclaw/openclaw.json before starting the gateway,
-  // because OpenClaw reads config from disk (not from env vars).
+  // When using a public base image, install OpenClaw + Docker CLI at container
+  // startup.  docker.io is required for sandbox isolation (tool execution in
+  // isolated containers).  The Docker socket is mounted from the EC2 host.
   const command = usePublicImage
     ? ["sh", "-c", [
-        `apt-get update && apt-get install -y git`,
+        `apt-get update && apt-get install -y git docker.io`,
         `npm install -g openclaw@latest`,
         `mkdir -p ~/.openclaw`,
         `if [ -n "$OPENCLAW_CONFIG" ]; then printenv OPENCLAW_CONFIG > ~/.openclaw/openclaw.json; fi`,
+        `chmod 666 /var/run/docker.sock 2>/dev/null || true`,
         `exec openclaw gateway --port ${gatewayPort} --allow-unconfigured`,
       ].join(" && ")]
     : undefined;
@@ -59,6 +60,16 @@ export function generateProductionTemplate(
       Value,
     })),
   ];
+
+  // Base64-encoded UserData script that configures the ECS agent on first boot
+  const userData = Buffer.from(
+    [
+      `#!/bin/bash`,
+      `echo "ECS_CLUSTER=clawster-${botName}" >> /etc/ecs/ecs.config`,
+      `echo "ECS_ENABLE_TASK_IAM_ROLE=true" >> /etc/ecs/ecs.config`,
+      `echo "ECS_ENABLE_TASK_ENI=true" >> /etc/ecs/ecs.config`,
+    ].join("\n"),
+  ).toString("base64");
 
   // ── ALB Listener configuration ──
   // If a certificate ARN is provided, create HTTPS on 443 + HTTP redirect.
@@ -122,7 +133,15 @@ export function generateProductionTemplate(
 
   return {
     AWSTemplateFormatVersion: "2010-09-09",
-    Description: `Clawster Production ECS Fargate stack for bot "${botName}"`,
+    Description: `Clawster Production ECS stack for bot "${botName}"`,
+
+    Parameters: {
+      LatestEcsAmiId: {
+        Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+        Default: "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id",
+        Description: "Latest ECS-optimized AMI (auto-resolved via SSM)",
+      },
+    },
 
     Resources: {
       // ================================================================
@@ -344,20 +363,8 @@ export function generateProductionTemplate(
       },
 
       // ================================================================
-      // ECR, ECS Cluster, CloudWatch
+      // ECS Cluster, CloudWatch
       // ================================================================
-
-      EcrRepository: {
-        Type: "AWS::ECR::Repository",
-        Properties: {
-          RepositoryName: { "Fn::Sub": `clawster/${botName}` },
-          ImageScanningConfiguration: {
-            ScanOnPush: true,
-          },
-          ImageTagMutability: "MUTABLE",
-          Tags: [tag],
-        },
-      },
 
       EcsCluster: {
         Type: "AWS::ECS::Cluster",
@@ -380,6 +387,36 @@ export function generateProductionTemplate(
       // IAM Roles
       // ================================================================
 
+      // ── EC2 Instance Role (ECS agent, CloudWatch, SSM) ──
+      Ec2InstanceRole: {
+        Type: "AWS::IAM::Role",
+        Properties: {
+          RoleName: { "Fn::Sub": `clawster-${botName}-ec2` },
+          AssumeRolePolicyDocument: {
+            Version: "2012-10-17",
+            Statement: [
+              {
+                Effect: "Allow",
+                Principal: { Service: "ec2.amazonaws.com" },
+                Action: "sts:AssumeRole",
+              },
+            ],
+          },
+          ManagedPolicyArns: [
+            "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role",
+            "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+          ],
+          Tags: [tag],
+        },
+      },
+      Ec2InstanceProfile: {
+        Type: "AWS::IAM::InstanceProfile",
+        Properties: {
+          Roles: [{ Ref: "Ec2InstanceRole" }],
+        },
+      },
+
+      // ── Task Execution Role (pull images, read secrets, push logs) ──
       TaskExecutionRole: {
         Type: "AWS::IAM::Role",
         Properties: {
@@ -419,6 +456,7 @@ export function generateProductionTemplate(
         },
       },
 
+      // ── Task Role (empty — least privilege) ──
       TaskRole: {
         Type: "AWS::IAM::Role",
         Properties: {
@@ -573,6 +611,97 @@ export function generateProductionTemplate(
         : {}),
 
       // ================================================================
+      // EC2 Auto Scaling for ECS
+      // ================================================================
+
+      // ── EC2 Launch Template ──
+      LaunchTemplate: {
+        Type: "AWS::EC2::LaunchTemplate",
+        Properties: {
+          LaunchTemplateName: { "Fn::Sub": `clawster-${botName}-lt` },
+          LaunchTemplateData: {
+            ImageId: { Ref: "LatestEcsAmiId" },
+            InstanceType: "t3.small",
+            IamInstanceProfile: {
+              Arn: { "Fn::GetAtt": ["Ec2InstanceProfile", "Arn"] },
+            },
+            SecurityGroupIds: [{ Ref: "TaskSecurityGroup" }],
+            UserData: userData,
+            TagSpecifications: [
+              {
+                ResourceType: "instance",
+                Tags: [
+                  { ...tag },
+                  {
+                    Key: "Name",
+                    Value: { "Fn::Sub": `clawster-${botName}` },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+
+      // ── Auto Scaling Group (private subnets for production) ──
+      AutoScalingGroup: {
+        Type: "AWS::AutoScaling::AutoScalingGroup",
+        Properties: {
+          AutoScalingGroupName: { "Fn::Sub": `clawster-${botName}-asg` },
+          LaunchTemplate: {
+            LaunchTemplateId: { Ref: "LaunchTemplate" },
+            Version: { "Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"] },
+          },
+          MinSize: 0,
+          MaxSize: 1,
+          DesiredCapacity: 0,
+          VPCZoneIdentifier: [
+            { Ref: "PrivateSubnet1" },
+            { Ref: "PrivateSubnet2" },
+          ],
+          NewInstancesProtectedFromScaleIn: true,
+          Tags: [
+            {
+              Key: "clawster:bot",
+              Value: botName,
+              PropagateAtLaunch: true,
+            },
+          ],
+        },
+      },
+
+      // ── ECS Capacity Provider (links ASG to cluster) ──
+      EcsCapacityProvider: {
+        Type: "AWS::ECS::CapacityProvider",
+        Properties: {
+          Name: { "Fn::Sub": `clawster-${botName}-cp` },
+          AutoScalingGroupProvider: {
+            AutoScalingGroupArn: { Ref: "AutoScalingGroup" },
+            ManagedScaling: {
+              Status: "ENABLED",
+              TargetCapacity: 100,
+              MinimumScalingStepSize: 1,
+              MaximumScalingStepSize: 1,
+            },
+            ManagedTerminationProtection: "ENABLED",
+          },
+        },
+      },
+      ClusterCapacityProviderAssociation: {
+        Type: "AWS::ECS::ClusterCapacityProviderAssociations",
+        Properties: {
+          Cluster: { Ref: "EcsCluster" },
+          CapacityProviders: [{ Ref: "EcsCapacityProvider" }],
+          DefaultCapacityProviderStrategy: [
+            {
+              CapacityProvider: { Ref: "EcsCapacityProvider" },
+              Weight: 1,
+            },
+          ],
+        },
+      },
+
+      // ================================================================
       // ECS Task Definition & Service
       // ================================================================
 
@@ -583,9 +712,15 @@ export function generateProductionTemplate(
           Cpu: String(cpu),
           Memory: String(memory),
           NetworkMode: "awsvpc",
-          RequiresCompatibilities: ["FARGATE"],
+          RequiresCompatibilities: ["EC2"],
           ExecutionRoleArn: { "Fn::GetAtt": ["TaskExecutionRole", "Arn"] },
           TaskRoleArn: { "Fn::GetAtt": ["TaskRole", "Arn"] },
+          Volumes: [
+            {
+              Name: "docker-socket",
+              Host: { SourcePath: "/var/run/docker.sock" },
+            },
+          ],
           ContainerDefinitions: [
             {
               Name: "openclaw",
@@ -597,6 +732,13 @@ export function generateProductionTemplate(
                   ContainerPort: gatewayPort,
                   HostPort: gatewayPort,
                   Protocol: "tcp",
+                },
+              ],
+              MountPoints: [
+                {
+                  SourceVolume: "docker-socket",
+                  ContainerPath: "/var/run/docker.sock",
+                  ReadOnly: false,
                 },
               ],
               Environment: environment,
@@ -635,13 +777,18 @@ export function generateProductionTemplate(
 
       EcsService: {
         Type: "AWS::ECS::Service",
-        DependsOn: [listenerDependency],
+        DependsOn: [listenerDependency, "ClusterCapacityProviderAssociation"],
         Properties: {
           ServiceName: { "Fn::Sub": `clawster-${botName}` },
           Cluster: { Ref: "EcsCluster" },
           TaskDefinition: { Ref: "TaskDefinition" },
           DesiredCount: 0,
-          LaunchType: "FARGATE",
+          CapacityProviderStrategy: [
+            {
+              CapacityProvider: { Ref: "EcsCapacityProvider" },
+              Weight: 1,
+            },
+          ],
           NetworkConfiguration: {
             AwsvpcConfiguration: {
               Subnets: [
@@ -684,10 +831,6 @@ export function generateProductionTemplate(
       LogGroupName: {
         Description: "CloudWatch Log Group name",
         Value: { Ref: "LogGroup" },
-      },
-      EcrRepositoryUri: {
-        Description: "ECR Repository URI",
-        Value: { "Fn::GetAtt": ["EcrRepository", "RepositoryUri"] },
       },
       VpcId: {
         Description: "VPC ID",
