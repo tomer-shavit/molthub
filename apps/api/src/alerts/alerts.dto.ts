@@ -5,9 +5,11 @@ import {
   IsInt,
   Min,
   Max,
+  IsArray,
+  ArrayMaxSize,
 } from "class-validator";
 import { Type } from "class-transformer";
-import { ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 // AlertSeverity, AlertStatus were enums, now plain strings after SQLite migration
 
 // ---------------------------------------------------------------------------
@@ -72,6 +74,23 @@ export class AlertQueryDto {
 
 export class AcknowledgeAlertDto {
   @ApiPropertyOptional({ description: "User or system that acknowledged the alert" })
+  @IsOptional()
+  @IsString()
+  acknowledgedBy?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk Action DTO
+// ---------------------------------------------------------------------------
+
+export class BulkAlertActionDto {
+  @ApiProperty({ description: "Array of alert IDs to act on", type: [String] })
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMaxSize(200)
+  ids: string[];
+
+  @ApiPropertyOptional({ description: "User or system performing the action" })
   @IsOptional()
   @IsString()
   acknowledgedBy?: string;

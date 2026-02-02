@@ -12,7 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiParam } from "@nestjs/swagger";
 import { AlertsService } from "./alerts.service";
 import { RemediationService } from "./remediation.service";
-import { AlertQueryDto, AcknowledgeAlertDto } from "./alerts.dto";
+import { AlertQueryDto, AcknowledgeAlertDto, BulkAlertActionDto } from "./alerts.dto";
 
 @ApiTags("alerts")
 @Controller("alerts")
@@ -41,6 +41,27 @@ export class AlertsController {
   async getActiveAlertCount() {
     const count = await this.alertsService.getActiveAlertCount();
     return { count };
+  }
+
+  // ---- Bulk actions (must be before :id to avoid param conflicts) ----------
+
+  @Post("bulk-acknowledge")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Bulk acknowledge multiple alerts" })
+  async bulkAcknowledge(@Body() body: BulkAlertActionDto) {
+    const result = await this.alertsService.bulkAcknowledge(
+      body.ids,
+      body.acknowledgedBy,
+    );
+    return { updated: result.count };
+  }
+
+  @Post("bulk-resolve")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Bulk resolve multiple alerts" })
+  async bulkResolve(@Body() body: BulkAlertActionDto) {
+    const result = await this.alertsService.bulkResolve(body.ids);
+    return { updated: result.count };
   }
 
   @Get(":id")

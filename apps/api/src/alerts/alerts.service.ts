@@ -126,6 +126,33 @@ export class AlertsService {
     });
   }
 
+  /**
+   * Bulk acknowledge multiple alerts.
+   */
+  async bulkAcknowledge(ids: string[], acknowledgedBy?: string) {
+    return prisma.healthAlert.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        status: "ACKNOWLEDGED",
+        acknowledgedAt: new Date(),
+        acknowledgedBy: acknowledgedBy ?? "system",
+      },
+    });
+  }
+
+  /**
+   * Bulk resolve multiple alerts.
+   */
+  async bulkResolve(ids: string[]) {
+    return prisma.healthAlert.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        status: "RESOLVED",
+        resolvedAt: new Date(),
+      },
+    });
+  }
+
   // ---- Upsert (used by the evaluator / alerting service) -------------------
 
   /**
