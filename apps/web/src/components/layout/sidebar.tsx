@@ -103,7 +103,7 @@ export function Sidebar() {
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <Bot className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="text-lg font-semibold">Molthub</span>
+            <span className="text-lg font-semibold">Clawster</span>
           </div>
 
           {/* Navigation */}
@@ -191,7 +191,7 @@ export function Sidebar() {
               </div>
             )}
             <p className="text-xs text-muted-foreground text-center">
-              Molthub v0.1.0
+              Clawster v0.1.0
             </p>
           </div>
         </div>

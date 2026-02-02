@@ -4,7 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from "@nestjs/common";
-import { prisma, Prisma } from "@molthub/database";
+import { prisma, Prisma } from "@clawster/database";
 import type {
   CreateBotRoutingRuleDto,
   UpdateBotRoutingRuleDto,

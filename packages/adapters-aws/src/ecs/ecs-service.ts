@@ -8,7 +8,7 @@ import {
   DescribeServicesCommand,
   DescribeTaskDefinitionCommand,
 } from "@aws-sdk/client-ecs";
-import { InstanceManifest } from "@molthub/core";
+import { InstanceManifest } from "@clawster/core";
 
 export interface ECSDeploymentConfig {
   clusterArn: string;
@@ -64,7 +64,7 @@ export class ECSService {
         logConfiguration: {
           logDriver: "awslogs",
           options: {
-            "awslogs-group": `/molthub/${manifest.metadata.workspace}/${manifest.metadata.name}`,
+            "awslogs-group": `/clawster/${manifest.metadata.workspace}/${manifest.metadata.name}`,
             "awslogs-region": process.env.AWS_REGION || "us-east-1",
             "awslogs-stream-prefix": "openclaw",
           },

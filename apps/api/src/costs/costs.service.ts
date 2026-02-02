@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma, CostEvent, Prisma } from "@molthub/database";
+import { prisma, CostEvent, Prisma } from "@clawster/database";
 import { CreateCostEventDto, CostQueryDto, CostSummaryQueryDto } from "./costs.dto";
 
 export interface CostSummaryByProvider {

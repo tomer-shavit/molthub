@@ -13,7 +13,7 @@ import {
   LogResult,
   LogEvent,
 } from "../../interface/provider";
-import { InstanceManifest } from "@molthub/core";
+import { InstanceManifest } from "@clawster/core";
 import { ServicesClient } from "@google-cloud/run";
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { Logging } from "@google-cloud/logging";
@@ -164,7 +164,7 @@ export class GCPProvider implements CloudProvider {
 
     const serviceName = this.sanitizeServiceName(config.name);
     const parent = `projects/${this.resources.projectId}/locations/${this.region}`;
-    const instanceId = config.labels?.["molthub.io/instance-id"] || serviceName;
+    const instanceId = config.labels?.["clawster.io/instance-id"] || serviceName;
 
     // Build environment variables
     const envs = Object.entries(config.environment || {}).map(([name, value]) => ({
@@ -209,7 +209,7 @@ export class GCPProvider implements CloudProvider {
         metadata: {
           labels: {
             ...config.labels,
-            managedBy: "molthub",
+            managedBy: "clawster",
           },
           annotations: {
             "run.googleapis.com/execution-environment": "gen2",
@@ -223,7 +223,7 @@ export class GCPProvider implements CloudProvider {
         },
       },
       labels: {
-        managedBy: "molthub",
+        managedBy: "clawster",
       },
     };
 
@@ -262,7 +262,7 @@ export class GCPProvider implements CloudProvider {
               automatic: {},
             },
             labels: {
-              managedBy: "molthub",
+              managedBy: "clawster",
             },
           },
         });
@@ -290,7 +290,7 @@ export class GCPProvider implements CloudProvider {
       throw new Error("GCP provider not initialized");
     }
 
-    const serviceName = this.sanitizeServiceName(`molthub-${instanceId}`);
+    const serviceName = this.sanitizeServiceName(`clawster-${instanceId}`);
     const name = `projects/${this.resources.projectId}/locations/${this.region}/services/${serviceName}`;
 
     // Get current service
@@ -364,7 +364,7 @@ export class GCPProvider implements CloudProvider {
       throw new Error("GCP provider not initialized");
     }
 
-    const serviceName = this.sanitizeServiceName(`molthub-${instanceId}`);
+    const serviceName = this.sanitizeServiceName(`clawster-${instanceId}`);
     const name = `projects/${this.resources.projectId}/locations/${this.region}/services/${serviceName}`;
 
     // Get current service
@@ -395,7 +395,7 @@ export class GCPProvider implements CloudProvider {
       throw new Error("GCP provider not initialized");
     }
 
-    const serviceName = this.sanitizeServiceName(`molthub-${instanceId}`);
+    const serviceName = this.sanitizeServiceName(`clawster-${instanceId}`);
     const name = `projects/${this.resources.projectId}/locations/${this.region}/services/${serviceName}`;
 
     // Update to set min instances to 1 (always running)
@@ -423,7 +423,7 @@ export class GCPProvider implements CloudProvider {
       throw new Error("GCP provider not initialized");
     }
 
-    const serviceName = this.sanitizeServiceName(`molthub-${instanceId}`);
+    const serviceName = this.sanitizeServiceName(`clawster-${instanceId}`);
     const name = `projects/${this.resources.projectId}/locations/${this.region}/services/${serviceName}`;
 
     await this.resources.runClient.deleteService({ name });
@@ -434,7 +434,7 @@ export class GCPProvider implements CloudProvider {
       throw new Error("GCP provider not initialized");
     }
 
-    const serviceName = this.sanitizeServiceName(`molthub-${instanceId}`);
+    const serviceName = this.sanitizeServiceName(`clawster-${instanceId}`);
     const name = `projects/${this.resources.projectId}/locations/${this.region}/services/${serviceName}`;
 
     try {
@@ -460,8 +460,8 @@ export class GCPProvider implements CloudProvider {
     });
 
     let containers = services
-      .filter((s) => s.labels?.managedBy === "molthub")
-      .map((s) => this.mapServiceToContainer(s as GCPServiceInfo, s.labels?.["molthub.io/instance-id"] || s.name?.split('/').pop() || ''));
+      .filter((s) => s.labels?.managedBy === "clawster")
+      .map((s) => this.mapServiceToContainer(s as GCPServiceInfo, s.labels?.["clawster.io/instance-id"] || s.name?.split('/').pop() || ''));
 
     if (filters?.status) {
       containers = containers.filter((c) => c.status === filters.status);
@@ -475,7 +475,7 @@ export class GCPProvider implements CloudProvider {
       throw new Error("GCP provider not initialized");
     }
 
-    const serviceName = this.sanitizeServiceName(`molthub-${instanceId}`);
+    const serviceName = this.sanitizeServiceName(`clawster-${instanceId}`);
     const limit = options?.limit || 100;
 
     // Query Cloud Logging

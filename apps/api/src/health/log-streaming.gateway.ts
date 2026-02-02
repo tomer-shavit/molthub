@@ -9,14 +9,14 @@ import {
 } from "@nestjs/websockets";
 import { Logger } from "@nestjs/common";
 import { Server, Socket } from "socket.io";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 import {
   GatewayClient,
-} from "@molthub/gateway-client";
+} from "@clawster/gateway-client";
 import type {
   GatewayConnectionOptions,
   GatewayAuth,
-} from "@molthub/gateway-client";
+} from "@clawster/gateway-client";
 
 // ---- Types -----------------------------------------------------------------
 

@@ -7,13 +7,13 @@ const mockConfigGet = jest.fn();
 const mockConfigPatch = jest.fn();
 const mockGetClient = jest.fn();
 
-jest.mock("@molthub/gateway-client", () => ({
+jest.mock("@clawster/gateway-client", () => ({
   GatewayManager: jest.fn().mockImplementation(() => ({
     getClient: mockGetClient,
   })),
 }));
 
-jest.mock("@molthub/database", () => ({
+jest.mock("@clawster/database", () => ({
   prisma: {
     devicePairing: {
       findMany: jest.fn(),
@@ -35,7 +35,7 @@ jest.mock("@molthub/database", () => ({
   },
 }));
 
-const { prisma } = require("@molthub/database");
+const { prisma } = require("@clawster/database");
 
 describe("PairingService", () => {
   let service: PairingService;

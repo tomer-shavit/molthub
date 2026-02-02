@@ -10,9 +10,9 @@ import {
 const HAS_AWS_CREDS = !!(
   process.env.AWS_ACCESS_KEY_ID &&
   process.env.AWS_SECRET_ACCESS_KEY &&
-  process.env.MOLTHUB_TEST_ECS_CLUSTER &&
-  process.env.MOLTHUB_TEST_VPC_SUBNETS &&
-  process.env.MOLTHUB_TEST_SECURITY_GROUP
+  process.env.CLAWSTER_TEST_ECS_CLUSTER &&
+  process.env.CLAWSTER_TEST_VPC_SUBNETS &&
+  process.env.CLAWSTER_TEST_SECURITY_GROUP
 );
 
 (HAS_AWS_CREDS ? describe : describe.skip)(
@@ -30,11 +30,11 @@ const HAS_AWS_CREDS = !!(
         region: process.env.AWS_REGION || "us-east-1",
         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-        clusterName: process.env.MOLTHUB_TEST_ECS_CLUSTER!,
-        subnetIds: process.env.MOLTHUB_TEST_VPC_SUBNETS!.split(","),
-        securityGroupId: process.env.MOLTHUB_TEST_SECURITY_GROUP!,
-        taskRoleArn: process.env.MOLTHUB_TEST_TASK_ROLE_ARN,
-        executionRoleArn: process.env.MOLTHUB_TEST_EXECUTION_ROLE_ARN,
+        clusterName: process.env.CLAWSTER_TEST_ECS_CLUSTER!,
+        subnetIds: process.env.CLAWSTER_TEST_VPC_SUBNETS!.split(","),
+        securityGroupId: process.env.CLAWSTER_TEST_SECURITY_GROUP!,
+        taskRoleArn: process.env.CLAWSTER_TEST_TASK_ROLE_ARN,
+        executionRoleArn: process.env.CLAWSTER_TEST_EXECUTION_ROLE_ARN,
       });
     });
 

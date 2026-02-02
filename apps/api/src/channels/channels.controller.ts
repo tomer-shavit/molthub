@@ -14,7 +14,7 @@ import {
   GenerateConfigDto,
 } from "./channels.dto";
 import { ChannelTypeMeta } from "./channel-types";
-import { CommunicationChannel, BotChannelBinding } from "@molthub/database";
+import { CommunicationChannel, BotChannelBinding } from "@clawster/database";
 
 @Controller("channels")
 export class ChannelsController {

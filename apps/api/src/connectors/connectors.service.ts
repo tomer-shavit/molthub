@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, IntegrationConnector } from "@molthub/database";
+import { prisma, IntegrationConnector } from "@clawster/database";
 import { CreateConnectorDto, UpdateConnectorDto, ListConnectorsQueryDto, TestConnectionDto } from "./connectors.dto";
 
 @Injectable()

@@ -1,17 +1,17 @@
 {
-  "name": "molthub",
+  "name": "clawster",
   "version": "0.1.0",
   "private": true,
   "description": "Self-hosted control plane for managing fleets of OpenClaw instances",
   "license": "MIT",
-  "author": "Molthub Contributors",
-  "homepage": "https://github.com/tomer-shavit/molthub",
+  "author": "Clawster Contributors",
+  "homepage": "https://github.com/tomer-shavit/clawster",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tomer-shavit/molthub.git"
+    "url": "git+https://github.com/tomer-shavit/clawster.git"
   },
   "bugs": {
-    "url": "https://github.com/tomer-shavit/molthub/issues"
+    "url": "https://github.com/tomer-shavit/clawster/issues"
   },
   "keywords": [
     "openclaw",

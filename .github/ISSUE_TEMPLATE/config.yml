@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & Support
-    url: https://github.com/tomer-shavit/molthub/discussions
+    url: https://github.com/tomer-shavit/clawster/discussions
     about: Ask questions and get help from the community
   - name: Security Vulnerabilities
-    url: https://github.com/tomer-shavit/molthub/security/advisories/new
+    url: https://github.com/tomer-shavit/clawster/security/advisories/new
     about: Report security vulnerabilities privately

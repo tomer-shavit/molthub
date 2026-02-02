@@ -13,7 +13,7 @@ import {
   LogResult,
   LogEvent,
 } from "../../interface/provider";
-import { InstanceManifest } from "@molthub/core";
+import { InstanceManifest } from "@clawster/core";
 import { DefaultAzureCredential, ClientSecretCredential } from "@azure/identity";
 import { ResourceManagementClient } from "@azure/arm-resources";
 import { ContainerInstanceManagementClient } from "@azure/arm-containerinstance";
@@ -94,7 +94,7 @@ export class AzureProvider implements CloudProvider {
       credential = new DefaultAzureCredential();
     }
 
-    const resourceGroup = azureConfig.resourceGroup || `molthub-${this.region}`;
+    const resourceGroup = azureConfig.resourceGroup || `clawster-${this.region}`;
 
     this.resources = {
       credential,
@@ -184,7 +184,7 @@ export class AzureProvider implements CloudProvider {
         {
           location: this.region,
           tags: {
-            managedBy: "molthub",
+            managedBy: "clawster",
             workspace: options.workspace,
           },
         }
@@ -226,7 +226,7 @@ export class AzureProvider implements CloudProvider {
 
     const containerGroupName = this.sanitizeName(config.name);
     const containerName = "openclaw";
-    const instanceId = config.labels?.["molthub.io/instance-id"] || containerGroupName;
+    const instanceId = config.labels?.["clawster.io/instance-id"] || containerGroupName;
 
     // Build environment variables
     const environmentVariables = Object.entries(config.environment || {}).map(([name, value]) => ({
@@ -278,7 +278,7 @@ export class AzureProvider implements CloudProvider {
       restartPolicy: "Always" as const,
       tags: {
         ...config.labels,
-        managedBy: "molthub",
+        managedBy: "clawster",
       },
     };
 
@@ -408,8 +408,8 @@ export class AzureProvider implements CloudProvider {
     }
 
     let containers = groups
-      .filter((g) => g.tags?.managedBy === "molthub")
-      .map((g) => this.mapContainerInstance(g, g.tags?.["molthub.io/instance-id"] || g.name!));
+      .filter((g) => g.tags?.managedBy === "clawster")
+      .map((g) => this.mapContainerInstance(g, g.tags?.["clawster.io/instance-id"] || g.name!));
 
     if (filters?.status) {
       containers = containers.filter((c) => c.status === filters.status);
@@ -564,7 +564,7 @@ export class AzureProvider implements CloudProvider {
   }
 
   private getContainerGroupName(instanceId: string): string {
-    return this.sanitizeName(`molthub-${instanceId}`);
+    return this.sanitizeName(`clawster-${instanceId}`);
   }
 
   private mapContainerInstance(group: AzureContainerGroup, instanceId: string): ContainerInstance {

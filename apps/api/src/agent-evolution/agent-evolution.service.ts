@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { prisma } from "@molthub/database";
-import { GatewayManager } from "@molthub/gateway-client";
-import type { GatewayConnectionOptions } from "@molthub/gateway-client";
+import { prisma } from "@clawster/database";
+import { GatewayManager } from "@clawster/gateway-client";
+import type { GatewayConnectionOptions } from "@clawster/gateway-client";
 import {
   computeEvolutionDiff,
   extractSkills,
@@ -9,7 +9,7 @@ import {
   extractEnabledChannels,
   extractToolProfile,
   summarizeEvolution,
-} from "@molthub/core";
+} from "@clawster/core";
 import { createHash } from "crypto";
 
 @Injectable()
@@ -188,7 +188,7 @@ export class AgentEvolutionService {
     const options: GatewayConnectionOptions = {
       host,
       port,
-      auth: token ? { mode: "token", token } : { mode: "token", token: "molthub" },
+      auth: token ? { mode: "token", token } : { mode: "token", token: "clawster" },
       timeoutMs: 10_000,
     };
 

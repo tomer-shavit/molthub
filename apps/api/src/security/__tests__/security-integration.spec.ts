@@ -8,8 +8,8 @@
  * provisioning checklists, and template compliance.
  */
 
-// Mock @molthub/database to avoid Prisma initialization requirement
-jest.mock("@molthub/database", () => ({
+// Mock @clawster/database to avoid Prisma initialization requirement
+jest.mock("@clawster/database", () => ({
   prisma: {
     botInstance: {
       findUnique: jest.fn(),
@@ -115,7 +115,7 @@ describe("Suite 2 — Config Generator Security Enforcement", () => {
     securityOverrides?: Record<string, unknown>;
   }) {
     return {
-      apiVersion: "molthub/v2" as const,
+      apiVersion: "clawster/v2" as const,
       kind: "OpenClawInstance" as const,
       metadata: {
         name: "test-bot",
@@ -581,7 +581,7 @@ describe("Suite 8 — Security Audit Service", () => {
   describe("preProvisioningAudit", () => {
     it("blocks an insecure manifest", async () => {
       const insecureManifest = {
-        apiVersion: "molthub/v2",
+        apiVersion: "clawster/v2",
         kind: "OpenClawInstance",
         metadata: {
           name: "insecure-bot",
@@ -604,7 +604,7 @@ describe("Suite 8 — Security Audit Service", () => {
 
     it("allows a secure manifest", async () => {
       const secureManifest = {
-        apiVersion: "molthub/v2",
+        apiVersion: "clawster/v2",
         kind: "OpenClawInstance",
         metadata: {
           name: "secure-bot",

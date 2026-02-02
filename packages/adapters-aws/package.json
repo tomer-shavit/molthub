@@ -1,5 +1,5 @@
 {
-  "name": "@molthub/adapters-aws",
+  "name": "@clawster/adapters-aws",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -13,7 +13,7 @@
     "@aws-sdk/client-ecs": "^3.490.0",
     "@aws-sdk/client-secrets-manager": "^3.490.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.490.0",
-    "@molthub/core": "workspace:*"
+    "@clawster/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

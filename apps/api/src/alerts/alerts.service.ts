@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import {
   prisma,
   Prisma,
-} from "@molthub/database";
+} from "@clawster/database";
 import type { AlertQueryDto, AlertSummaryResponse } from "./alerts.dto";
 
 // ---------------------------------------------------------------------------

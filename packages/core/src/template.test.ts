@@ -21,7 +21,7 @@ describe('Template', () => {
     isBuiltin: false,
     workspaceId: 'workspace-123',
     manifestTemplate: {
-      apiVersion: 'molthub/v1' as const,
+      apiVersion: 'clawster/v1' as const,
       kind: 'OpenClawInstance' as const,
       spec: {
         runtime: {
@@ -378,7 +378,7 @@ describe('Overlay', () => {
 
 describe('Config Resolution', () => {
   const baseConfig = {
-    apiVersion: 'molthub/v1' as const,
+    apiVersion: 'clawster/v1' as const,
     kind: 'OpenClawInstance' as const,
     metadata: {
       name: 'test-bot',

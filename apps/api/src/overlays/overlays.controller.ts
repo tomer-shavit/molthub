@@ -12,7 +12,7 @@ import {
 } from "@nestjs/common";
 import { OverlaysService } from "./overlays.service";
 import { CreateOverlayDto, UpdateOverlayDto, ListOverlaysQueryDto } from "./overlays.dto";
-import { Overlay } from "@molthub/database";
+import { Overlay } from "@clawster/database";
 
 @Controller("overlays")
 export class OverlaysController {

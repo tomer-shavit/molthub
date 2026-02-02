@@ -1,16 +1,16 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   prisma,
-} from "@molthub/database";
+} from "@clawster/database";
 import {
   GatewayClient,
   PROTOCOL_VERSION,
-} from "@molthub/gateway-client";
+} from "@clawster/gateway-client";
 import type {
   GatewayConnectionOptions,
   GatewayAuth,
   ConfigGetResult,
-} from "@molthub/gateway-client";
+} from "@clawster/gateway-client";
 import type {
   ProcessInfo,
   GatewayProbeResult,

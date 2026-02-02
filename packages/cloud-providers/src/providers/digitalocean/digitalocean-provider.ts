@@ -13,7 +13,7 @@ import {
   LogResult,
   LogEvent,
 } from "../../interface/provider";
-import { InstanceManifest } from "@molthub/core";
+import { InstanceManifest } from "@clawster/core";
 
 export interface DigitalOceanConfig extends CloudProviderConfig {
   credentials?: {
@@ -176,7 +176,7 @@ export class DigitalOceanProvider implements CloudProvider {
     manifest: InstanceManifest
   ): Promise<ContainerInstance> {
     const appName = this.sanitizeAppName(config.name);
-    const instanceId = config.labels?.["molthub.io/instance-id"] || appName;
+    const instanceId = config.labels?.["clawster.io/instance-id"] || appName;
 
     // Build environment variables
     const envs: DOEnvVar[] = Object.entries(config.environment || {}).map(([key, value]) => ({
@@ -309,7 +309,7 @@ export class DigitalOceanProvider implements CloudProvider {
     instanceId: string,
     config: Partial<ContainerDeploymentConfig>
   ): Promise<ContainerInstance> {
-    const appName = this.sanitizeAppName(`molthub-${instanceId}`);
+    const appName = this.sanitizeAppName(`clawster-${instanceId}`);
     const app = await this.findAppByName(appName);
 
     if (!app) {
@@ -364,7 +364,7 @@ export class DigitalOceanProvider implements CloudProvider {
   }
 
   async stopContainer(instanceId: string): Promise<void> {
-    const appName = this.sanitizeAppName(`molthub-${instanceId}`);
+    const appName = this.sanitizeAppName(`clawster-${instanceId}`);
     const app = await this.findAppByName(appName);
 
     if (!app) {
@@ -384,7 +384,7 @@ export class DigitalOceanProvider implements CloudProvider {
   }
 
   async startContainer(instanceId: string): Promise<void> {
-    const appName = this.sanitizeAppName(`molthub-${instanceId}`);
+    const appName = this.sanitizeAppName(`clawster-${instanceId}`);
     const app = await this.findAppByName(appName);
 
     if (!app) {
@@ -406,7 +406,7 @@ export class DigitalOceanProvider implements CloudProvider {
   }
 
   async deleteContainer(instanceId: string): Promise<void> {
-    const appName = this.sanitizeAppName(`molthub-${instanceId}`);
+    const appName = this.sanitizeAppName(`clawster-${instanceId}`);
     const app = await this.findAppByName(appName);
 
     if (!app) {
@@ -419,7 +419,7 @@ export class DigitalOceanProvider implements CloudProvider {
   }
 
   async getContainer(instanceId: string): Promise<ContainerInstance | null> {
-    const appName = this.sanitizeAppName(`molthub-${instanceId}`);
+    const appName = this.sanitizeAppName(`clawster-${instanceId}`);
     const app = await this.findAppByName(appName);
 
     if (!app) {
@@ -433,9 +433,9 @@ export class DigitalOceanProvider implements CloudProvider {
     const { apps } = await this.fetch<{ apps: DOApp[] }>("/apps");
 
     let containers = apps
-      .filter((app) => app.spec.name.startsWith("molthub-"))
+      .filter((app) => app.spec.name.startsWith("clawster-"))
       .map((app) => {
-        const instanceId = app.spec.name.replace("molthub-", "");
+        const instanceId = app.spec.name.replace("clawster-", "");
         return this.mapAppToContainer(app, instanceId);
       });
 
@@ -447,7 +447,7 @@ export class DigitalOceanProvider implements CloudProvider {
   }
 
   async getLogs(instanceId: string, options?: LogOptions): Promise<LogResult> {
-    const appName = this.sanitizeAppName(`molthub-${instanceId}`);
+    const appName = this.sanitizeAppName(`clawster-${instanceId}`);
     const app = await this.findAppByName(appName);
 
     if (!app) {

@@ -1,7 +1,7 @@
 # Plan: A2A Protocol Integration for Bot-to-Bot Delegation
 
 ## Goal
-Modify Molthub's bot-to-bot delegation to follow the A2A (Agent-to-Agent) protocol. Each OpenClaw bot managed by Molthub becomes an A2A-compliant agent with an Agent Card, and inter-bot communication uses A2A JSON-RPC 2.0 methods (`message/send`, `tasks/get`, `tasks/cancel`).
+Modify Clawster's bot-to-bot delegation to follow the A2A (Agent-to-Agent) protocol. Each OpenClaw bot managed by Clawster becomes an A2A-compliant agent with an Agent Card, and inter-bot communication uses A2A JSON-RPC 2.0 methods (`message/send`, `tasks/get`, `tasks/cancel`).
 
 ## Current State
 - `BotDelegationService.attemptDelegation()` checks routing rules, then calls `BotInstancesService.chat()` directly
@@ -13,11 +13,11 @@ Modify Molthub's bot-to-bot delegation to follow the A2A (Agent-to-Agent) protoc
 
 ### How OpenClaw Actually Works (Must-Know for This Plan)
 
-1. **Gateway WebSocket `agent` method** accepts: `message`, `idempotencyKey` (required), `agentId`, `sessionId`, `sessionKey`, `to`, `replyTo`, `channel`, `attachments` (max 5MB), `extraSystemPrompt`, `timeout`, `thinking`. Molthub's `GatewayClient` wrapper currently uses a simplified `AgentRequest { prompt, context?, timeoutMs? }` — this wrapper will need extending.
+1. **Gateway WebSocket `agent` method** accepts: `message`, `idempotencyKey` (required), `agentId`, `sessionId`, `sessionKey`, `to`, `replyTo`, `channel`, `attachments` (max 5MB), `extraSystemPrompt`, `timeout`, `thinking`. Clawster's `GatewayClient` wrapper currently uses a simplified `AgentRequest { prompt, context?, timeoutMs? }` — this wrapper will need extending.
 
 2. **Two-phase response**: Gateway ACKs immediately with `{ runId, status: "accepted" }`, then streams `AgentEvent` frames (`{ runId, seq, stream, ts, data }`) with monotonic `seq` for gap detection, and finally sends completion `{ runId, status: "ok"|"error", result }`.
 
-3. **OpenClaw's native A2A is intra-gateway only**: `sessions_send`, `sessions_list`, `sessions_history` tools let agents within the *same* gateway talk to each other. There is NO cross-gateway federation. Molthub builds the cross-instance A2A layer.
+3. **OpenClaw's native A2A is intra-gateway only**: `sessions_send`, `sessions_list`, `sessions_history` tools let agents within the *same* gateway talk to each other. There is NO cross-gateway federation. Clawster builds the cross-instance A2A layer.
 
 4. **OpenClaw has HTTP APIs** on the same gateway port:
    - `POST /v1/chat/completions` — OpenAI-compatible (supports streaming via SSE)
@@ -27,21 +27,21 @@ Modify Molthub's bot-to-bot delegation to follow the A2A (Agent-to-Agent) protoc
 
 5. **Multi-agent per gateway**: OpenClaw supports multiple agents per gateway via the `agents.list` config and channel bindings. The `agent` RPC method accepts an `agentId` parameter to target a specific agent.
 
-6. **Skills come from config**, not from Molthub's SkillPack table. Live skills are in `openclaw.json` under `skills.entries` and `skills.allowBundled`. Molthub's SkillPacks represent *desired* state; actual loaded skills may differ.
+6. **Skills come from config**, not from Clawster's SkillPack table. Live skills are in `openclaw.json` under `skills.entries` and `skills.allowBundled`. Clawster's SkillPacks represent *desired* state; actual loaded skills may differ.
 
 ### Design Implications
 
 - **v1 scope**: Single default agent per BotInstance. Multi-agent targeting is a future enhancement.
 - **Transport choice**: `message/send` (one-shot) will use the HTTP `/v1/chat/completions` endpoint for simplicity and reliability (no WebSocket setup/teardown per request). `message/stream` will use WebSocket via GatewayClient for real streaming.
-- **Agent Card skills**: Generated from both Molthub SkillPacks (desired state) AND live config via `configGet()` when the gateway is connected. Falls back to SkillPacks-only when gateway is offline.
-- **Co-located bots**: When source and target bots share the same OpenClaw gateway, Molthub still routes through the A2A layer (not OpenClaw's native `sessions_send`) for consistency and auditability. Native routing is a future optimization.
+- **Agent Card skills**: Generated from both Clawster SkillPacks (desired state) AND live config via `configGet()` when the gateway is connected. Falls back to SkillPacks-only when gateway is offline.
+- **Co-located bots**: When source and target bots share the same OpenClaw gateway, Clawster still routes through the A2A layer (not OpenClaw's native `sessions_send`) for consistency and auditability. Native routing is a future optimization.
 
 ## Architecture
 
-Molthub acts as the A2A server for all its managed bots. Each bot gets its own A2A endpoint URL. External A2A clients (or other Molthub bots) send JSON-RPC 2.0 requests to Molthub, which translates them into OpenClaw gateway calls.
+Clawster acts as the A2A server for all its managed bots. Each bot gets its own A2A endpoint URL. External A2A clients (or other Clawster bots) send JSON-RPC 2.0 requests to Clawster, which translates them into OpenClaw gateway calls.
 
 ```
-External A2A Client (or Molthub bot-to-bot)
+External A2A Client (or Clawster bot-to-bot)
         │
         ▼
 POST /a2a/:botId  (JSON-RPC 2.0)
@@ -71,7 +71,7 @@ POST /a2a/:botId  (JSON-RPC 2.0)
 3. **Traces as Task store**: A2A Task lifecycle maps to Trace records (no new DB model). Trace `type` field is a plain String so `"A2A_TASK"` needs no migration.
 4. **Dual transport**: HTTP for `message/send` (simpler, no connection management), WebSocket for `message/stream` (real streaming)
 5. **Backward compatible**: Existing `POST /bot-instances/:id/chat` continues to work; delegation service gets a new A2A-native path
-6. **Dual auth**: JWT for internal Molthub clients, API keys for external A2A clients
+6. **Dual auth**: JWT for internal Clawster clients, API keys for external A2A clients
 7. **v1 = single agent per instance**: Multi-agent targeting (`agentId`) deferred to v2
 
 ---
@@ -144,9 +144,9 @@ Types to define:
   - Extracts identity info from `desiredManifest` (name, description from system prompt)
   - **Skills resolution** (hybrid approach):
     1. If gateway is connected → call `configGet()` and extract `skills.entries` + `skills.allowBundled` for live skills
-    2. Fall back to Molthub SkillPacks as desired-state skills
+    2. Fall back to Clawster SkillPacks as desired-state skills
     3. Merge both sources, deduplicate by skill name
-  - Sets `url` to `${MOLTHUB_BASE_URL}/a2a/${botInstanceId}`
+  - Sets `url` to `${CLAWSTER_BASE_URL}/a2a/${botInstanceId}`
   - Sets capabilities: `{ streaming: true, pushNotifications: false, stateTransitionHistory: true }`
   - Sets authentication: `{ schemes: ["bearer"], apiKeyEndpoint: "/a2a/${botInstanceId}/api-key" }` (both JWT and API key accepted)
   - Returns `AgentCard`
@@ -155,7 +155,7 @@ Types to define:
 **New file**: `apps/api/src/a2a/a2a-auth.guard.ts`
 
 - Custom guard that accepts EITHER:
-  - Standard Molthub JWT (for internal bot-to-bot and dashboard calls)
+  - Standard Clawster JWT (for internal bot-to-bot and dashboard calls)
   - Per-bot API key (for external A2A clients)
 - API keys stored in `BotInstance.metadata` or a new `a2aApiKey` field
 - Guard extracts bearer token from `Authorization` header, tries JWT first, falls back to API key lookup
@@ -215,7 +215,7 @@ Inject: `BotInstancesService`, `BotRoutingService`, `TracesService`, `PrismaServ
 1. Look up Trace by ID
 2. **Active streaming task**: Check A2aTaskStore — if task has an active GatewayClient, disconnect it to force-stop the agent
 3. If PENDING → mark Trace as ERROR with `{ a2aTaskState: "canceled" }` metadata
-4. **Note**: Cancel is best-effort. For non-streaming (HTTP) calls already in-flight, the OpenClaw agent may complete even after Molthub marks the task as canceled. The Trace will reflect the cancel intent regardless.
+4. **Note**: Cancel is best-effort. For non-streaming (HTTP) calls already in-flight, the OpenClaw agent may complete even after Clawster marks the task as canceled. The Trace will reflect the cancel intent regardless.
 5. Return updated task
 
 ### 2b. Create in-memory task store for active streaming tasks

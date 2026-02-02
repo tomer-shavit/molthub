@@ -48,12 +48,12 @@ export class TokenRotationService {
   }
 
   /**
-   * List all secrets in the /molthub/ namespace that are older than maxAgeDays.
+   * List all secrets in the /clawster/ namespace that are older than maxAgeDays.
    */
   async listStaleSecrets(maxAgeDays: number): Promise<StaleSecret[]> {
     const stale: StaleSecret[] = [];
     const response = await this.client.send(new ListSecretsCommand({
-      Filters: [{ Key: "name", Values: ["/molthub/"] }],
+      Filters: [{ Key: "name", Values: ["/clawster/"] }],
     }));
 
     for (const secret of response.SecretList ?? []) {

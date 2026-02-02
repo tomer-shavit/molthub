@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 
 interface MetricValue {
   name: string;
@@ -21,10 +21,10 @@ export class MetricsService {
       _count: { id: true },
     });
 
-    lines.push("# HELP molthub_instances_total Total number of bot instances");
-    lines.push("# TYPE molthub_instances_total gauge");
+    lines.push("# HELP clawster_instances_total Total number of bot instances");
+    lines.push("# TYPE clawster_instances_total gauge");
     for (const row of botInstancesByStatus) {
-      lines.push(`molthub_instances_total{status="${row.status}"} ${row._count.id}`);
+      lines.push(`clawster_instances_total{status="${row.status}"} ${row._count.id}`);
     }
 
     // Audit events in last hour
@@ -34,23 +34,23 @@ export class MetricsService {
     });
 
     lines.push("");
-    lines.push("# HELP molthub_audit_events_total Audit events in last hour");
-    lines.push("# TYPE molthub_audit_events_total counter");
-    lines.push(`molthub_audit_events_total ${auditEvents}`);
+    lines.push("# HELP clawster_audit_events_total Audit events in last hour");
+    lines.push("# TYPE clawster_audit_events_total counter");
+    lines.push(`clawster_audit_events_total ${auditEvents}`);
 
     // Template counts
     const templateCount = await prisma.template.count();
     lines.push("");
-    lines.push("# HELP molthub_templates_total Total number of templates");
-    lines.push("# TYPE molthub_templates_total gauge");
-    lines.push(`molthub_templates_total ${templateCount}`);
+    lines.push("# HELP clawster_templates_total Total number of templates");
+    lines.push("# TYPE clawster_templates_total gauge");
+    lines.push(`clawster_templates_total ${templateCount}`);
 
     // Workspace counts
     const workspaceCount = await prisma.workspace.count();
     lines.push("");
-    lines.push("# HELP molthub_workspaces_total Total number of workspaces");
-    lines.push("# TYPE molthub_workspaces_total gauge");
-    lines.push(`molthub_workspaces_total ${workspaceCount}`);
+    lines.push("# HELP clawster_workspaces_total Total number of workspaces");
+    lines.push("# TYPE clawster_workspaces_total gauge");
+    lines.push(`clawster_workspaces_total ${workspaceCount}`);
 
     return lines.join("\n");
   }

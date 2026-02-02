@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 import { HealthAggregatorService } from "../health/health-aggregator.service";
 import { AlertingService } from "../health/alerting.service";
 

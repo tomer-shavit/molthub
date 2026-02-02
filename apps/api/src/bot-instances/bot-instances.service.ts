@@ -3,14 +3,14 @@ import {
   prisma,
   BotInstance,
   Prisma
-} from "@molthub/database";
+} from "@clawster/database";
 import {
   PolicyEngine
-} from "@molthub/core";
+} from "@clawster/core";
 import {
   GatewayClient,
-} from "@molthub/gateway-client";
-import type { GatewayConnectionOptions } from "@molthub/gateway-client";
+} from "@clawster/gateway-client";
+import type { GatewayConnectionOptions } from "@clawster/gateway-client";
 import { CreateBotInstanceDto, UpdateBotInstanceDto, UpdateAiGatewaySettingsDto, ListBotInstancesQueryDto } from "./bot-instances.dto";
 import { BulkActionType, BulkActionResultItem } from "./bot-compare.dto";
 import { ReconcilerService } from "../reconciler/reconciler.service";
@@ -442,7 +442,7 @@ export class BotInstancesService {
       port: gwConn.port,
       auth: gwConn.authToken
         ? { mode: "token", token: gwConn.authToken }
-        : { mode: "token", token: "molthub" },
+        : { mode: "token", token: "clawster" },
       reconnect: { enabled: false, maxAttempts: 0, baseDelayMs: 0, maxDelayMs: 0 },
     };
 
@@ -520,7 +520,7 @@ export class BotInstancesService {
       port: gwConn.port,
       auth: gwConn.authToken
         ? { mode: "token", token: gwConn.authToken }
-        : { mode: "token", token: "molthub" },
+        : { mode: "token", token: "clawster" },
       reconnect: { enabled: false, maxAttempts: 0, baseDelayMs: 0, maxDelayMs: 0 },
     };
 

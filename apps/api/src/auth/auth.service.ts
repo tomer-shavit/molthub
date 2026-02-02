@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException, BadRequestException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 
 type UserRole = string;
 

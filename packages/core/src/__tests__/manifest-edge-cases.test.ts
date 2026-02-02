@@ -21,14 +21,14 @@ describe('Manifest - Edge Cases and Boundary Conditions', () => {
 
     it('rejects apiVersion with wrong format', () => {
       const manifest = createValidManifest();
-      (manifest as any).apiVersion = 'molthub-v1';
+      (manifest as any).apiVersion = 'clawster-v1';
       expect(() => validateManifest(manifest)).toThrow();
     });
 
-    it('accepts only molthub/v1', () => {
+    it('accepts only clawster/v1', () => {
       const manifest = createValidManifest();
-      const validVersions = ['molthub/v1'];
-      const invalidVersions = ['molthub/v2', 'v1', '1.0', 'molthub'];
+      const validVersions = ['clawster/v1'];
+      const invalidVersions = ['clawster/v2', 'v1', '1.0', 'clawster'];
 
       for (const version of validVersions) {
         const testManifest = { ...manifest, apiVersion: version };
@@ -623,7 +623,7 @@ describe('Manifest - Edge Cases and Boundary Conditions', () => {
   describe('complex scenarios', () => {
     it('validates complete production manifest', () => {
       const manifest = {
-        apiVersion: 'molthub/v1',
+        apiVersion: 'clawster/v1',
         kind: 'OpenClawInstance',
         metadata: {
           name: 'customer-service-bot',
@@ -679,7 +679,7 @@ describe('Manifest - Edge Cases and Boundary Conditions', () => {
 
     it('validates minimal development manifest', () => {
       const manifest = {
-        apiVersion: 'molthub/v1',
+        apiVersion: 'clawster/v1',
         kind: 'OpenClawInstance',
         metadata: {
           name: 'dev-bot',

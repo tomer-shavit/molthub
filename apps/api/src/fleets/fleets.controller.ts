@@ -17,7 +17,7 @@ import {
   UpdateFleetStatusDto, 
   ListFleetsQueryDto 
 } from "./fleets.dto";
-import { Fleet } from "@molthub/database";
+import { Fleet } from "@clawster/database";
 
 @Controller("fleets")
 export class FleetController {

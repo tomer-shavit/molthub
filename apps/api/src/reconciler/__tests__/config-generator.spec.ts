@@ -1,5 +1,5 @@
 import { ConfigGeneratorService } from "../config-generator.service";
-import type { OpenClawManifest, OpenClawFullConfig } from "@molthub/core";
+import type { OpenClawManifest, OpenClawFullConfig } from "@clawster/core";
 
 describe("ConfigGeneratorService", () => {
   let service: ConfigGeneratorService;
@@ -16,7 +16,7 @@ describe("ConfigGeneratorService", () => {
     } = {},
   ): OpenClawManifest {
     return {
-      apiVersion: "molthub/v2",
+      apiVersion: "clawster/v2",
       metadata: {
         name: "test-bot",
         environment: (overrides.environment ?? "dev") as "dev" | "staging" | "prod" | "local",

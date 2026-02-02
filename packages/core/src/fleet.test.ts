@@ -107,7 +107,7 @@ describe('Fleet', () => {
 
 describe('BotInstance', () => {
   const validManifest = {
-    apiVersion: 'molthub/v1' as const,
+    apiVersion: 'clawster/v1' as const,
     kind: 'OpenClawInstance' as const,
     metadata: {
       name: 'test-bot',
@@ -280,7 +280,7 @@ describe('BotInstance', () => {
 
 describe('ResolvedBotConfig', () => {
   const validManifest = {
-    apiVersion: 'molthub/v1' as const,
+    apiVersion: 'clawster/v1' as const,
     kind: 'OpenClawInstance' as const,
     metadata: {
       name: 'test-bot',

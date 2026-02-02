@@ -1,5 +1,5 @@
 import { Injectable, Logger, BadRequestException } from "@nestjs/common";
-import { prisma, Prisma } from "@molthub/database";
+import { prisma, Prisma } from "@clawster/database";
 import { ReconcilerService } from "../reconciler/reconciler.service";
 import { ConfigGeneratorService } from "../reconciler/config-generator.service";
 import {
@@ -216,7 +216,7 @@ export class OnboardingService {
 
     // 5. Build manifest
     const manifest = {
-      apiVersion: "molthub/v2",
+      apiVersion: "clawster/v2",
       kind: "OpenClawInstance",
       metadata: {
         name: dto.botName,
@@ -259,7 +259,7 @@ export class OnboardingService {
             imageName: "openclaw:local",
             dockerfilePath: path.join(__dirname, "../../../../../docker/openclaw"),
             configPath:
-              dto.deploymentTarget?.configPath || path.join(os.homedir(), `.molthub/gateways/${dto.botName}`),
+              dto.deploymentTarget?.configPath || path.join(os.homedir(), `.clawster/gateways/${dto.botName}`),
             gatewayPort: effectivePort,
           };
 

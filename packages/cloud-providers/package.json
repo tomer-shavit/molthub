@@ -1,5 +1,5 @@
 {
-  "name": "@molthub/cloud-providers",
+  "name": "@clawster/cloud-providers",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -30,7 +30,7 @@
     "@google-cloud/logging": "^11.0.0",
     "@google-cloud/run": "^1.2.0",
     "@google-cloud/secret-manager": "^5.0.0",
-    "@molthub/core": "workspace:*"
+    "@clawster/core": "workspace:*"
   },
   "optionalDependencies": {
     "axios": "^1.6.0"

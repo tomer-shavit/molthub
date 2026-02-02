@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException, HttpException, HttpStatus } from "@nestjs/common";
-import { prisma } from "@molthub/database";
-import { GatewayManager } from "@molthub/gateway-client";
-import type { GatewayConnectionOptions, GatewayClient } from "@molthub/gateway-client";
+import { prisma } from "@clawster/database";
+import { GatewayManager } from "@clawster/gateway-client";
+import type { GatewayConnectionOptions, GatewayClient } from "@clawster/gateway-client";
 import { TracesService } from "../traces/traces.service";
 import type { SendMessageParams, A2aTask, A2aMessage, TextPart } from "./a2a.types";
 import * as crypto from "crypto";
@@ -151,7 +151,7 @@ export class A2aMessageService {
         port: gwConn.port,
         auth: {
           mode: "token",
-          token: gwConn.authToken || "molthub",
+          token: gwConn.authToken || "clawster",
         },
         timeoutMs: 5_000,
       };

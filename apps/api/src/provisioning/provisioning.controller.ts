@@ -1,5 +1,5 @@
 import { Controller, Get, Param } from "@nestjs/common";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 import { Public } from "../auth/public.decorator";
 import { ProvisioningEventsService } from "./provisioning-events.service";
 

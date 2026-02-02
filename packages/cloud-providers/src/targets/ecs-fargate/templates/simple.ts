@@ -45,7 +45,7 @@ export function generateSimpleTemplate(
       ].join(" && ")]
     : undefined;
 
-  const tag = { Key: "molthub:bot", Value: botName };
+  const tag = { Key: "clawster:bot", Value: botName };
 
   // Build container environment variables
   const environment: Array<{ Name: string; Value: string }> = [
@@ -62,7 +62,7 @@ export function generateSimpleTemplate(
 
   return {
     AWSTemplateFormatVersion: "2010-09-09",
-    Description: `Molthub Simple ECS Fargate stack for bot "${botName}"`,
+    Description: `Clawster Simple ECS Fargate stack for bot "${botName}"`,
 
     Parameters: {
       VpcId: {
@@ -81,7 +81,7 @@ export function generateSimpleTemplate(
       EcrRepository: {
         Type: "AWS::ECR::Repository",
         Properties: {
-          RepositoryName: { "Fn::Sub": `molthub/${botName}` },
+          RepositoryName: { "Fn::Sub": `clawster/${botName}` },
           ImageScanningConfiguration: {
             ScanOnPush: true,
           },
@@ -94,7 +94,7 @@ export function generateSimpleTemplate(
       EcsCluster: {
         Type: "AWS::ECS::Cluster",
         Properties: {
-          ClusterName: { "Fn::Sub": `molthub-${botName}` },
+          ClusterName: { "Fn::Sub": `clawster-${botName}` },
           Tags: [tag],
         },
       },
@@ -103,7 +103,7 @@ export function generateSimpleTemplate(
       LogGroup: {
         Type: "AWS::Logs::LogGroup",
         Properties: {
-          LogGroupName: { "Fn::Sub": `/ecs/molthub-${botName}` },
+          LogGroupName: { "Fn::Sub": `/ecs/clawster-${botName}` },
           RetentionInDays: 30,
           Tags: [tag],
         },
@@ -113,7 +113,7 @@ export function generateSimpleTemplate(
       TaskExecutionRole: {
         Type: "AWS::IAM::Role",
         Properties: {
-          RoleName: { "Fn::Sub": `molthub-${botName}-exec` },
+          RoleName: { "Fn::Sub": `clawster-${botName}-exec` },
           AssumeRolePolicyDocument: {
             Version: "2012-10-17",
             Statement: [
@@ -140,7 +140,7 @@ export function generateSimpleTemplate(
                     ],
                     Resource: {
                       "Fn::Sub":
-                        "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:molthub/*",
+                        "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:clawster/*",
                     },
                   },
                 ],
@@ -155,7 +155,7 @@ export function generateSimpleTemplate(
       TaskRole: {
         Type: "AWS::IAM::Role",
         Properties: {
-          RoleName: { "Fn::Sub": `molthub-${botName}-task` },
+          RoleName: { "Fn::Sub": `clawster-${botName}-task` },
           AssumeRolePolicyDocument: {
             Version: "2012-10-17",
             Statement: [
@@ -175,7 +175,7 @@ export function generateSimpleTemplate(
         Type: "AWS::EC2::SecurityGroup",
         Properties: {
           GroupDescription: {
-            "Fn::Sub": `Molthub ${botName} ECS Fargate security group`,
+            "Fn::Sub": `Clawster ${botName} ECS Fargate security group`,
           },
           VpcId: { Ref: "VpcId" },
           SecurityGroupIngress: [
@@ -198,7 +198,7 @@ export function generateSimpleTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-sg` },
+              Value: { "Fn::Sub": `clawster-${botName}-sg` },
             },
           ],
         },
@@ -208,7 +208,7 @@ export function generateSimpleTemplate(
       TaskDefinition: {
         Type: "AWS::ECS::TaskDefinition",
         Properties: {
-          Family: { "Fn::Sub": `molthub-${botName}` },
+          Family: { "Fn::Sub": `clawster-${botName}` },
           Cpu: String(cpu),
           Memory: String(memory),
           NetworkMode: "awsvpc",
@@ -234,7 +234,7 @@ export function generateSimpleTemplate(
                   Name: "OPENCLAW_CONFIG",
                   ValueFrom: {
                     "Fn::Sub":
-                      `arn:aws:secretsmanager:\${AWS::Region}:\${AWS::AccountId}:secret:molthub/${botName}/config`,
+                      `arn:aws:secretsmanager:\${AWS::Region}:\${AWS::AccountId}:secret:clawster/${botName}/config`,
                   },
                 },
               ],
@@ -242,7 +242,7 @@ export function generateSimpleTemplate(
                 LogDriver: "awslogs",
                 Options: {
                   "awslogs-group": {
-                    "Fn::Sub": `/ecs/molthub-${botName}`,
+                    "Fn::Sub": `/ecs/clawster-${botName}`,
                   },
                   "awslogs-region": { Ref: "AWS::Region" },
                   "awslogs-stream-prefix": "ecs",
@@ -259,7 +259,7 @@ export function generateSimpleTemplate(
         Type: "AWS::ECS::Service",
         DependsOn: ["TaskDefinition"],
         Properties: {
-          ServiceName: { "Fn::Sub": `molthub-${botName}` },
+          ServiceName: { "Fn::Sub": `clawster-${botName}` },
           Cluster: { Ref: "EcsCluster" },
           TaskDefinition: { Ref: "TaskDefinition" },
           DesiredCount: 0,

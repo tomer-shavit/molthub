@@ -19,5 +19,5 @@ EXPOSE 18789
 # Run as non-root user (node user comes with node:22-slim)
 USER node
 
-# --allow-unconfigured lets the gateway start before Molthub pushes a config
+# --allow-unconfigured lets the gateway start before Clawster pushes a config
 CMD ["openclaw", "gateway", "--port", "18789", "--allow-unconfigured"]

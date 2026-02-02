@@ -3,27 +3,27 @@ import ora from "ora";
 import fs from "fs-extra";
 import path from "path";
 import os from "os";
-import { CloudProviderFactory } from "@molthub/cloud-providers";
+import { CloudProviderFactory } from "@clawster/cloud-providers";
 
-const MOLTHUB_DIR = path.join(os.homedir(), ".molthub");
+const CLAWSTER_DIR = path.join(os.homedir(), ".clawster");
 
 interface StatusOptions {
   workspace?: string;
 }
 
 export async function status(options: StatusOptions) {
-  console.log(chalk.blue.bold("📊 Molthub Status\n"));
+  console.log(chalk.blue.bold("📊 Clawster Status\n"));
 
   // Find workspace config
   let workspace = options.workspace;
   
   if (!workspace) {
     // Try to find a workspace config
-    const files = await fs.readdir(MOLTHUB_DIR).catch(() => []);
+    const files = await fs.readdir(CLAWSTER_DIR).catch(() => []);
     const configs = files.filter(f => f.endsWith(".json") && f !== "users.json");
     
     if (configs.length === 0) {
-      console.log(chalk.yellow("No workspace configured. Run 'molthub init' first."));
+      console.log(chalk.yellow("No workspace configured. Run 'clawster init' first."));
       return;
     }
     
@@ -42,10 +42,10 @@ export async function status(options: StatusOptions) {
     }
   }
 
-  const configPath = path.join(MOLTHUB_DIR, `${workspace}.json`);
+  const configPath = path.join(CLAWSTER_DIR, `${workspace}.json`);
   
   if (!(await fs.pathExists(configPath))) {
-    console.log(chalk.red(`Workspace '${workspace}' not found. Run 'molthub init' first.`));
+    console.log(chalk.red(`Workspace '${workspace}' not found. Run 'clawster init' first.`));
     return;
   }
 
@@ -122,5 +122,5 @@ export async function status(options: StatusOptions) {
   }
 
   console.log();
-  console.log(chalk.gray("Use 'molthub doctor' for detailed diagnostics"));
+  console.log(chalk.gray("Use 'clawster doctor' for detailed diagnostics"));
 }

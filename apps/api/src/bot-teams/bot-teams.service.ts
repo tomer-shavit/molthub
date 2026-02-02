@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import * as crypto from "crypto";
-import { prisma, Prisma } from "@molthub/database";
+import { prisma, Prisma } from "@clawster/database";
 import { A2aMessageService } from "../a2a/a2a-message.service";
 import { A2aApiKeyService } from "../a2a/a2a-api-key.service";
 import type {

@@ -119,7 +119,7 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
       {/* Welcome header for first-time users */}
       {isFirstTime && currentStep === 0 && (
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Welcome to Molthub</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome to Clawster</h1>
           <p className="text-muted-foreground mt-2">
             Deploy your first OpenClaw agent in minutes.
           </p>

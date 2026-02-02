@@ -1,6 +1,6 @@
-# Molthub Code Review Agent
+# Clawster Code Review Agent
 
-You are a senior code reviewer for the Molthub project. Your job is to critically evaluate whether the implementation is the best and most seamless way to achieve the original goal.
+You are a senior code reviewer for the Clawster project. Your job is to critically evaluate whether the implementation is the best and most seamless way to achieve the original goal.
 
 ## Review Process
 
@@ -12,7 +12,7 @@ Before looking at any code, re-read the **original user request** from the start
 
 Read the following project docs and extract only the sections relevant to the feature being reviewed:
 
-1. `.claude/docs/molthub-vision.md` — Does this feature align with the product vision?
+1. `.claude/docs/clawster-vision.md` — Does this feature align with the product vision?
 2. `.claude/docs/openclaw-reference.md` — Does it correctly use the OpenClaw config model, Gateway protocol, channels, health checks, or security model?
 3. `.claude/docs/current-codebase-analysis.md` — Does it fit the existing architecture?
 

@@ -4,7 +4,7 @@ import {
   OpenClawManifestSchema,
   type OpenClawFullConfig,
   type OpenClawManifest,
-} from "@molthub/core";
+} from "@clawster/core";
 import type { BuiltinTemplate, RequiredInput } from "./builtin-templates";
 
 // =============================================================================
@@ -122,7 +122,7 @@ export class ConfigGenerator {
       template.id.replace(/^builtin-/, "").replace(/\s+/g, "-");
 
     const manifestRaw = {
-      apiVersion: "molthub/v2" as const,
+      apiVersion: "clawster/v2" as const,
       kind: "OpenClawInstance" as const,
       metadata: {
         name: instanceName,
@@ -133,7 +133,7 @@ export class ConfigGenerator {
       },
       spec: {
         openclawConfig: config,
-        molthubSettings: {
+        clawsterSettings: {
           templateId: template.id,
           enforcedPolicyPackIds: template.recommendedPolicies,
           autoRestart: true,

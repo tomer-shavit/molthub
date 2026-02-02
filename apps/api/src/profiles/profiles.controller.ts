@@ -12,7 +12,7 @@ import {
 } from "@nestjs/common";
 import { ProfilesService } from "./profiles.service";
 import { CreateProfileDto, UpdateProfileDto, ListProfilesQueryDto } from "./profiles.dto";
-import { Profile } from "@molthub/database";
+import { Profile } from "@clawster/database";
 
 @Controller("profiles")
 export class ProfilesController {

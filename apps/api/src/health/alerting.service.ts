@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import {
   prisma,
-} from "@molthub/database";
+} from "@clawster/database";
 import { AlertsService } from "../alerts/alerts.service";
 import { NotificationDeliveryService } from "../notification-channels/notification-delivery.service";
 

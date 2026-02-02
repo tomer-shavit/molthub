@@ -17,9 +17,9 @@ module.exports = {
   coverageDirectory: './coverage',
   testEnvironment: 'node',
   moduleNameMapper: {
-    '^@molthub/core$': '<rootDir>/../../packages/core/src',
-    '^@molthub/database$': '<rootDir>/../../packages/database/src',
-    '^@molthub/adapters-aws$': '<rootDir>/../../packages/adapters-aws/src',
+    '^@clawster/core$': '<rootDir>/../../packages/core/src',
+    '^@clawster/database$': '<rootDir>/../../packages/database/src',
+    '^@clawster/adapters-aws$': '<rootDir>/../../packages/adapters-aws/src',
   },
   setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
   testTimeout: 30000,

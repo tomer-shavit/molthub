@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { prisma } from "@molthub/database";
-import type { GatewayHealthSnapshot, ChannelHealth } from "@molthub/gateway-client";
+import { prisma } from "@clawster/database";
+import type { GatewayHealthSnapshot, ChannelHealth } from "@clawster/gateway-client";
 
 // ---- Response types --------------------------------------------------------
 

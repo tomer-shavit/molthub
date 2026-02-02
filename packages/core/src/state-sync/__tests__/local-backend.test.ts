@@ -13,9 +13,9 @@ describe("LocalStateSyncBackend", () => {
   let backend: LocalStateSyncBackend;
 
   beforeEach(async () => {
-    backupDir = await mkdtemp(join(tmpdir(), "molthub-backup-"));
-    sourceDir = await mkdtemp(join(tmpdir(), "molthub-source-"));
-    restoreDir = await mkdtemp(join(tmpdir(), "molthub-restore-"));
+    backupDir = await mkdtemp(join(tmpdir(), "clawster-backup-"));
+    sourceDir = await mkdtemp(join(tmpdir(), "clawster-source-"));
+    restoreDir = await mkdtemp(join(tmpdir(), "clawster-restore-"));
     backend = new LocalStateSyncBackend({ type: "local", basePath: backupDir });
   });
 

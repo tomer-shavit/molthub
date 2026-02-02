@@ -5,7 +5,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConnectorsService } from './connectors.service';
 
-jest.mock('@molthub/database', () => ({
+jest.mock('@clawster/database', () => ({
   prisma: {
     integrationConnector: {
       findUnique: jest.fn(),
@@ -26,7 +26,7 @@ jest.mock('@molthub/database', () => ({
   },
 }));
 
-import { prisma } from '@molthub/database';
+import { prisma } from '@clawster/database';
 
 describe('ConnectorsService', () => {
   let service: ConnectorsService;

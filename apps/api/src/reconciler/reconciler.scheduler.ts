@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 import { DriftDetectionService } from "./drift-detection.service";
 import { ReconcilerService } from "./reconciler.service";
 

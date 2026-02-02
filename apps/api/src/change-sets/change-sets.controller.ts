@@ -9,7 +9,7 @@ import {
 } from "@nestjs/common";
 import { ChangeSetsService } from "./change-sets.service";
 import { CreateChangeSetDto, RollbackChangeSetDto, ListChangeSetsQueryDto } from "./change-sets.dto";
-import { ChangeSet } from "@molthub/database";
+import { ChangeSet } from "@clawster/database";
 
 @Controller("change-sets")
 export class ChangeSetsController {

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { createHash, randomBytes } from "crypto";
-import type { OpenClawManifest, OpenClawFullConfig, SecurityOverrides, AiGatewaySettings } from "@molthub/core";
-import { injectGatewayIntoConfig } from "@molthub/core";
+import type { OpenClawManifest, OpenClawFullConfig, SecurityOverrides, AiGatewaySettings } from "@clawster/core";
+import { injectGatewayIntoConfig } from "@clawster/core";
 
 /**
  * ConfigGeneratorService — transforms a v2 OpenClawManifest into a
@@ -76,7 +76,7 @@ export class ConfigGeneratorService {
     }
 
     // Strip fields that OpenClaw's strict Zod schema does not recognize.
-    // OpenClaw uses `gateway.bind` (not `host`); `host` is a Molthub-internal
+    // OpenClaw uses `gateway.bind` (not `host`); `host` is a Clawster-internal
     // concept used for GatewayConnection options.
     if (config.gateway && "host" in config.gateway) {
       const { host: _host, ...gwRest } = config.gateway as Record<string, unknown>;

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, ChangeSet, BotInstance } from "@molthub/database";
+import { prisma, ChangeSet, BotInstance } from "@clawster/database";
 import { CreateChangeSetDto, RollbackChangeSetDto, ListChangeSetsQueryDto } from "./change-sets.dto";
 
 @Injectable()

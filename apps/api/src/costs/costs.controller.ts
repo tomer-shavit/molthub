@@ -10,7 +10,7 @@ import {
   HttpCode,
   HttpStatus,
 } from "@nestjs/common";
-import { CostEvent, BudgetConfig } from "@molthub/database";
+import { CostEvent, BudgetConfig } from "@clawster/database";
 import { CostsService, CostSummaryResult, PaginatedCostEvents } from "./costs.service";
 import { BudgetService } from "./budget.service";
 import {

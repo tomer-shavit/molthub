@@ -1,4 +1,4 @@
-import { InstanceManifest } from "@molthub/core";
+import { InstanceManifest } from "@clawster/core";
 
 /**
  * Represents a container instance running on a cloud provider
@@ -88,7 +88,7 @@ export interface LoggingConfig {
 }
 
 /**
- * Cloud provider types supported by Molthub
+ * Cloud provider types supported by Clawster
  */
 export type CloudProviderType = 
   | "aws"
@@ -152,7 +152,7 @@ export interface CloudProvider {
   validate(): Promise<ValidationResult>;
   
   /**
-   * Bootstrap cloud infrastructure for Molthub
+   * Bootstrap cloud infrastructure for Clawster
    */
   bootstrap(options: BootstrapOptions, onProgress?: ProgressCallback): Promise<CloudResources>;
   

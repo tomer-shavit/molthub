@@ -164,7 +164,7 @@ export function DeploymentTargetSelector({
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Image</label>
               <Input
-                placeholder="molthub/openclaw:latest"
+                placeholder="clawster/openclaw:latest"
                 value={value.image || ""}
                 onChange={(e) => handleFieldChange("image", e.target.value)}
                 className="h-8 text-sm"
@@ -186,7 +186,7 @@ export function DeploymentTargetSelector({
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Image</label>
                 <Input
-                  placeholder="molthub/openclaw:latest"
+                  placeholder="clawster/openclaw:latest"
                   value={value.image || ""}
                   onChange={(e) => handleFieldChange("image", e.target.value)}
                   className="h-8 text-sm"

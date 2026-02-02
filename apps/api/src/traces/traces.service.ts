@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma, Trace } from "@molthub/database";
+import { prisma, Trace } from "@clawster/database";
 import { CreateTraceDto, ListTracesQueryDto } from "./traces.dto";
 
 @Injectable()

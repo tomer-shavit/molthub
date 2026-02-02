@@ -97,7 +97,7 @@ export class CloudflareWorkersTarget implements DeploymentTarget {
     const os = await import("os");
 
     // Create a temporary project directory
-    this.projectDir = path.join(os.tmpdir(), `molthub-cf-${this.config.workerName}`);
+    this.projectDir = path.join(os.tmpdir(), `clawster-cf-${this.config.workerName}`);
 
     try {
       // Ensure project directory exists

@@ -2,19 +2,19 @@
 
 ## Goal
 
-Let users configure bot-to-bot relationships in Molthub's UI so that Bot A (team lead) can autonomously delegate tasks to Bot B (marketing expert), Bot C (DevOps), etc. during its reasoning. The bot itself decides when to delegate — not Molthub.
+Let users configure bot-to-bot relationships in Clawster's UI so that Bot A (team lead) can autonomously delegate tasks to Bot B (marketing expert), Bot C (DevOps), etc. during its reasoning. The bot itself decides when to delegate — not Clawster.
 
 ## How It Works (End-to-End)
 
 ```
-1. User configures in Molthub UI:
+1. User configures in Clawster UI:
    "Bot A can delegate to Bot B (Marketing Expert) and Bot C (DevOps)"
 
-2. Molthub generates a delegation skill for Bot A:
+2. Clawster generates a delegation skill for Bot A:
    - SKILL.md with team member descriptions + delegation instructions
-   - delegate.js script that calls Molthub's API
+   - delegate.js script that calls Clawster's API
 
-3. On next reconcile, Molthub writes these files to Bot A's workspace
+3. On next reconcile, Clawster writes these files to Bot A's workspace
    and updates Bot A's OpenClaw config to load the skill
 
 4. Bot A now has team knowledge in its context + a delegation tool
@@ -22,7 +22,7 @@ Let users configure bot-to-bot relationships in Molthub's UI so that Bot A (team
 5. User chats with Bot A: "Create a marketing campaign for our new product"
    → Bot A reasons: "This is a marketing task, I should delegate to Bot B"
    → Bot A runs: node delegate.js "Bot B" "Create a marketing campaign..."
-   → delegate.js POSTs to Molthub API → A2aMessageService → Bot B
+   → delegate.js POSTs to Clawster API → A2aMessageService → Bot B
    → Bot B responds → response flows back to Bot A
    → Bot A incorporates the response and replies to user
 ```
@@ -36,7 +36,7 @@ Let users configure bot-to-bot relationships in Molthub's UI so that Bot A (team
 - **Bot decides** — The LLM reasons about when to delegate (not regex pattern matching)
 - **Uses existing A2A** — Delegation flows through `A2aMessageService` we already built
 - **OpenClaw-native** — Uses OpenClaw's skill system (SKILL.md) + exec tools (group:runtime)
-- **No MCP server needed** — A simple Node.js script handles the HTTP call to Molthub
+- **No MCP server needed** — A simple Node.js script handles the HTTP call to Clawster
 - **Traceable** — Every delegation creates traces via the existing A2A trace hierarchy
 
 ### Components
@@ -125,7 +125,7 @@ Generates the delegation skill files for a bot based on its team members:
 - **`SKILL.md`** — Markdown file with YAML frontmatter:
   ```markdown
   ---
-  name: molthub-delegation
+  name: clawster-delegation
   description: Delegate tasks to your team members
   ---
 
@@ -145,7 +145,7 @@ Generates the delegation skill files for a bot based on its team members:
   delegate it by running this command:
 
   ```bash
-  node /path/to/skills/molthub-delegation/delegate.js "<team member name>" "<task description>"
+  node /path/to/skills/clawster-delegation/delegate.js "<team member name>" "<task description>"
   ```
 
   The command will send the task to the team member and return their response.
@@ -161,8 +161,8 @@ Generates the delegation skill files for a bot based on its team members:
 - **`delegate.js`** — Node.js script (~50 lines):
   ```js
   // Reads target bot name + message from argv
-  // POSTs to MOLTHUB_API_URL/bot-delegation/invoke
-  // Uses MOLTHUB_API_KEY for auth
+  // POSTs to CLAWSTER_API_URL/bot-delegation/invoke
+  // Uses CLAWSTER_API_KEY for auth
   // Prints the response text to stdout
   // Exits with error code on failure
   ```
@@ -192,12 +192,12 @@ When generating config for a bot that has team members:
 2. If any exist, call `DelegationSkillGenerator.generateSkillFiles()`
 3. Add `group:runtime` to `tools.allow` (needed for `exec` to run the delegate script)
 4. Add the delegation skill directory to `skills.load.extraDirs`
-5. Set env vars in the skill config: `MOLTHUB_API_URL`, `MOLTHUB_API_KEY`, `MOLTHUB_BOT_ID`
+5. Set env vars in the skill config: `CLAWSTER_API_URL`, `CLAWSTER_API_KEY`, `CLAWSTER_BOT_ID`
 
 ### 8. `apps/api/src/reconciler/lifecycle-manager.service.ts` (MODIFY)
 
 During provision/update, write the delegation skill files to the bot's workspace:
-- Create `<workspace>/skills/molthub-delegation/` directory
+- Create `<workspace>/skills/clawster-delegation/` directory
 - Write `SKILL.md` and `delegate.js`
 - These files are regenerated on every reconcile (so team changes take effect)
 
@@ -260,7 +260,7 @@ Import `BotTeamsModule`.
 
 ## Key Design Decisions
 
-1. **New model, not routing rules** — `BotTeamMember` is conceptually different from `BotRoutingRule`. Routing rules are a switchboard (Molthub decides). Team members are tools (the bot decides). Keeping them separate avoids confusion.
+1. **New model, not routing rules** — `BotTeamMember` is conceptually different from `BotRoutingRule`. Routing rules are a switchboard (Clawster decides). Team members are tools (the bot decides). Keeping them separate avoids confusion.
 
 2. **delegate.js script over MCP server** — A simple Node.js script that the agent runs via `exec` is far simpler than setting up a full MCP server. The agent calls `node delegate.js "Bot B" "do this task"` and gets the response on stdout. Can upgrade to MCP later if needed.
 
@@ -268,7 +268,7 @@ Import `BotTeamsModule`.
 
 4. **group:runtime required** — The agent needs `exec` tools to run the delegate script. This is automatically added to the config when team members are configured.
 
-5. **Auth via A2A API key** — The delegate script authenticates to Molthub using the bot's existing A2A API key. No new auth mechanism needed.
+5. **Auth via A2A API key** — The delegate script authenticates to Clawster using the bot's existing A2A API key. No new auth mechanism needed.
 
 ---
 
@@ -280,7 +280,7 @@ Import `BotTeamsModule`.
 4. Verify Bot A's OpenClaw config now includes:
    - `skills.load.extraDirs` pointing to delegation skill directory
    - `tools.allow` includes `group:runtime`
-5. Check Bot A's workspace has `skills/molthub-delegation/SKILL.md` and `delegate.js`
+5. Check Bot A's workspace has `skills/clawster-delegation/SKILL.md` and `delegate.js`
 6. Chat with Bot A about a marketing topic → Bot A delegates to Bot B → response comes back
 7. Check traces → delegation trace with A2A child trace visible
 8. Remove Bot B from team → verify skill files are cleaned up on next reconcile

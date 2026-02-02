@@ -24,7 +24,7 @@ export const TemplateSchema = z.object({
   
   // The base manifest template
   manifestTemplate: z.object({
-    apiVersion: z.literal("molthub/v1"),
+    apiVersion: z.literal("clawster/v1"),
     kind: z.literal("OpenClawInstance"),
     spec: z.object({
       runtime: RuntimeConfigSchema.partial().optional(),

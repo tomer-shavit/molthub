@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from "@nestjs/common";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 import {
   OpenClawChannelType,
   CHANNEL_TYPE_META,

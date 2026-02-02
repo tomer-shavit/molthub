@@ -26,7 +26,7 @@ export class DelegationSkillGeneratorService {
   /**
    * Generate the two files that make up a bot's delegation skill:
    *  - SKILL.md  — describes the team and how to delegate
-   *  - delegate.js — Node.js script that calls the Molthub delegation API
+   *  - delegate.js — Node.js script that calls the Clawster delegation API
    */
   generateSkillFiles(
     bot: BotRef,
@@ -65,12 +65,12 @@ export class DelegationSkillGeneratorService {
       .slice(0, 2)
       .map(
         (m) =>
-          `node /home/node/.openclaw/skills/molthub-delegation/delegate.js "${m.memberBot.name}" "Your task description here"`,
+          `node /home/node/.openclaw/skills/clawster-delegation/delegate.js "${m.memberBot.name}" "Your task description here"`,
       )
       .join("\n");
 
     return `---
-name: molthub-delegation
+name: clawster-delegation
 description: "Delegate tasks to your team: ${teamSummary}. Read this skill when a user's request matches any team member's specialty."
 ---
 
@@ -87,7 +87,7 @@ ${teamSection}
 Run this exact command using exec:
 
 \`\`\`bash
-node /home/node/.openclaw/skills/molthub-delegation/delegate.js "<bot-name>" "<task description>"
+node /home/node/.openclaw/skills/clawster-delegation/delegate.js "<bot-name>" "<task description>"
 \`\`\`
 
 For example:
@@ -133,14 +133,14 @@ The command prints the team member's response to stdout. Include their response 
 "use strict";
 
 // ---------------------------------------------------------------------------
-// delegate.js — Molthub delegation skill
+// delegate.js — Clawster delegation skill
 //
 // Usage:  node delegate.js "<Target Bot Name>" "<Message>"
 //
 // Environment variables (override baked-in defaults):
-//   MOLTHUB_API_URL  — Base URL of the Molthub API (e.g. http://localhost:4000)
-//   MOLTHUB_API_KEY  — Bearer token for authentication
-//   MOLTHUB_BOT_ID   — The ID of the bot executing this script (source bot)
+//   CLAWSTER_API_URL  — Base URL of the Clawster API (e.g. http://localhost:4000)
+//   CLAWSTER_API_KEY  — Bearer token for authentication
+//   CLAWSTER_BOT_ID   — The ID of the bot executing this script (source bot)
 // ---------------------------------------------------------------------------
 
 const http = require("http");
@@ -155,13 +155,13 @@ function fatal(msg) {
 
 // ---- validate inputs -------------------------------------------------------
 
-const apiUrl = process.env.MOLTHUB_API_URL || "${escapedApiUrl}";
-const apiKey = process.env.MOLTHUB_API_KEY || "${escapedApiKey}";
-const botId = process.env.MOLTHUB_BOT_ID || "${escapedBotId}";
+const apiUrl = process.env.CLAWSTER_API_URL || "${escapedApiUrl}";
+const apiKey = process.env.CLAWSTER_API_KEY || "${escapedApiKey}";
+const botId = process.env.CLAWSTER_BOT_ID || "${escapedBotId}";
 
-if (!apiUrl) fatal("MOLTHUB_API_URL is not set and no default was baked in");
-if (!apiKey) fatal("MOLTHUB_API_KEY is not set and no default was baked in");
-if (!botId) fatal("MOLTHUB_BOT_ID is not set and no default was baked in");
+if (!apiUrl) fatal("CLAWSTER_API_URL is not set and no default was baked in");
+if (!apiKey) fatal("CLAWSTER_API_KEY is not set and no default was baked in");
+if (!botId) fatal("CLAWSTER_BOT_ID is not set and no default was baked in");
 
 const targetBotName = process.argv[2];
 const message = process.argv[3];

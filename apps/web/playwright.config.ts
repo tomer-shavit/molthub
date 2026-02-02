@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright configuration for Molthub E2E tests
+ * Playwright configuration for Clawster E2E tests
  * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
@@ -69,13 +69,13 @@ export default defineConfig({
   /* Run local dev server before starting the tests */
   webServer: [
     {
-      command: 'pnpm --filter @molthub/api dev',
+      command: 'pnpm --filter @clawster/api dev',
       url: 'http://localhost:4000/health',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
     },
     {
-      command: 'pnpm --filter @molthub/web dev',
+      command: 'pnpm --filter @clawster/web dev',
       url: 'http://localhost:3000',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,

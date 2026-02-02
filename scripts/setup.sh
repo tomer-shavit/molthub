@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Molthub CLI — setup, test, and manage your dev environment
+# Clawster CLI — setup, test, and manage your dev environment
 #
 # Usage:
 #   bash scripts/setup.sh [COMMAND] [OPTIONS]
@@ -209,7 +209,7 @@ require_api() {
         printf "  Start it with one of:\n"
         printf "\n"
         printf "    ${BOLD}pnpm dev${RESET}                           # Both API + Web\n"
-        printf "    ${BOLD}pnpm --filter @molthub/api dev${RESET}     # API only\n"
+        printf "    ${BOLD}pnpm --filter @clawster/api dev${RESET}     # API only\n"
         printf "\n"
         printf "  Or run full setup:  ${BOLD}bash scripts/setup.sh${RESET}\n"
         printf "\n"
@@ -285,7 +285,7 @@ parse_args() {
 print_usage() {
     cat <<'EOF'
 
-  Molthub CLI
+  Clawster CLI
 
   Usage:
     bash scripts/setup.sh [COMMAND] [OPTIONS]
@@ -327,7 +327,7 @@ EOF
 print_banner() {
     printf "\n"
     printf "${BOLD}  ╔══════════════════════════════════════╗${RESET}\n"
-    printf "${BOLD}  ║           Molthub CLI                 ║${RESET}\n"
+    printf "${BOLD}  ║           Clawster CLI                 ║${RESET}\n"
     printf "${BOLD}  ╚══════════════════════════════════════╝${RESET}\n"
     printf "\n"
 
@@ -487,7 +487,7 @@ cmd_doctor() {
         fi
     else
         log_warn "API server not running (port 4000 free)"
-        printf "         Start: ${BOLD}pnpm --filter @molthub/api dev${RESET}\n"
+        printf "         Start: ${BOLD}pnpm --filter @clawster/api dev${RESET}\n"
         all_ok=false
     fi
 
@@ -506,7 +506,7 @@ cmd_doctor() {
         fi
     else
         log_warn "Web UI not running (port 3000 free)"
-        printf "         Start: ${BOLD}pnpm --filter @molthub/web dev${RESET}\n"
+        printf "         Start: ${BOLD}pnpm --filter @clawster/web dev${RESET}\n"
         all_ok=false
     fi
 
@@ -525,7 +525,7 @@ cmd_doctor() {
         log_ok "Prisma client generated"
     else
         log_warn "Prisma client may not be generated"
-        printf "         Fix: ${BOLD}pnpm --filter @molthub/database db:generate${RESET}\n"
+        printf "         Fix: ${BOLD}pnpm --filter @clawster/database db:generate${RESET}\n"
     fi
 
     # ── Check 6: Environment files ──
@@ -1086,7 +1086,7 @@ EOF
 
     if [ -z "$api_pid" ]; then
         log_fail "API server process not found"
-        printf "  Start the API first: ${BOLD}pnpm --filter @molthub/api dev${RESET}\n\n"
+        printf "  Start the API first: ${BOLD}pnpm --filter @clawster/api dev${RESET}\n\n"
         exit 1
     fi
 
@@ -1100,7 +1100,7 @@ EOF
     else
         printf "  ${YELLOW}Cannot access process output directly.${RESET}\n"
         printf "  ${YELLOW}Run the API in the foreground to see logs:${RESET}\n"
-        printf "    ${BOLD}pnpm --filter @molthub/api dev${RESET}\n\n"
+        printf "    ${BOLD}pnpm --filter @clawster/api dev${RESET}\n\n"
     fi
 }
 
@@ -1256,7 +1256,7 @@ ENVEOF
     else
         cat > "$PROJECT_ROOT/apps/api/.env" <<'ENVEOF'
 DATABASE_URL=file:./dev.db
-JWT_SECRET=molthub-dev-jwt-secret-change-in-production-min32chars
+JWT_SECRET=clawster-dev-jwt-secret-change-in-production-min32chars
 PORT=4000
 DEFAULT_DEPLOYMENT_TARGET=docker
 ENVEOF
@@ -1283,7 +1283,7 @@ start_postgres() {
             log_debug "Existing postgres container: $container_id (status: $container_status)"
 
             if [ "$container_status" = "running" ]; then
-                if $COMPOSE_CMD -f "$PROJECT_ROOT/docker-compose.yml" exec -T postgres pg_isready -U molthub &>/dev/null; then
+                if $COMPOSE_CMD -f "$PROJECT_ROOT/docker-compose.yml" exec -T postgres pg_isready -U clawster &>/dev/null; then
                     log_skip "PostgreSQL is already running and healthy"
                     return 0
                 else
@@ -1320,7 +1320,7 @@ start_postgres() {
     local attempt=0
     log_info "Waiting for PostgreSQL to accept connections..."
     while [ $attempt -lt $max_attempts ]; do
-        if $COMPOSE_CMD -f "$PROJECT_ROOT/docker-compose.yml" exec -T postgres pg_isready -U molthub &>/dev/null; then
+        if $COMPOSE_CMD -f "$PROJECT_ROOT/docker-compose.yml" exec -T postgres pg_isready -U clawster &>/dev/null; then
             log_ok "PostgreSQL is ready (took ~${attempt}s)"
             return 0
         fi
@@ -1412,7 +1412,7 @@ setup_database() {
 
     export DATABASE_URL="$db_url"
 
-    run_cmd "Generating Prisma client" pnpm --filter @molthub/database db:generate --dir "$PROJECT_ROOT"
+    run_cmd "Generating Prisma client" pnpm --filter @clawster/database db:generate --dir "$PROJECT_ROOT"
 
     log_info "Pushing database schema..."
     log_debug "Running: npx prisma db push --skip-generate (in packages/database)"
@@ -1478,7 +1478,7 @@ start_dev_servers() {
     printf "  ${GREEN}${BOLD}Setup complete!${RESET}\n"
     printf "\n"
     printf "  ${BOLD}Services:${RESET}\n"
-    printf "    PostgreSQL   ${DIM}postgresql://localhost:5432/molthub${RESET}\n"
+    printf "    PostgreSQL   ${DIM}postgresql://localhost:5432/clawster${RESET}\n"
     printf "    Gateway      ${DIM}ws://localhost:18789${RESET}\n"
     printf "    API          ${DIM}http://localhost:4000${RESET}\n"
     printf "    Web UI       ${DIM}http://localhost:3000${RESET}\n"
@@ -1489,8 +1489,8 @@ start_dev_servers() {
         printf "  ${BOLD}To start development servers:${RESET}\n"
         printf "\n"
         printf "    ${BOLD}pnpm dev${RESET}                           # Both API + Web\n"
-        printf "    ${BOLD}pnpm --filter @molthub/api dev${RESET}     # API only\n"
-        printf "    ${BOLD}pnpm --filter @molthub/web dev${RESET}     # Web only\n"
+        printf "    ${BOLD}pnpm --filter @clawster/api dev${RESET}     # API only\n"
+        printf "    ${BOLD}pnpm --filter @clawster/web dev${RESET}     # Web only\n"
         printf "\n"
         printf "  ${BOLD}Then test deployment:${RESET}\n"
         printf "    ${BOLD}bash scripts/setup.sh doctor${RESET}       # Verify everything works\n"

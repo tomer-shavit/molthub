@@ -34,7 +34,7 @@ async function bootstrap() {
 
   if (process.env.NODE_ENV !== "production") {
     const config = new DocumentBuilder()
-      .setTitle("Molthub API")
+      .setTitle("Clawster API")
       .setDescription("Control plane for OpenClaw instances")
       .setVersion("0.1.0")
       .addBearerAuth()
@@ -47,7 +47,7 @@ async function bootstrap() {
   const port = process.env.PORT || 4000;
   await app.listen(port);
 
-  console.log(`Molthub API running on port ${port}`);
+  console.log(`Clawster API running on port ${port}`);
   if (process.env.NODE_ENV !== "production") {
     console.log(`Swagger docs at http://localhost:${port}/api/docs`);
   }

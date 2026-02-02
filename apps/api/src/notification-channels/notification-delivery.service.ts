@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 import { NotificationChannelsService } from "./notification-channels.service";
 
 // ---------------------------------------------------------------------------
@@ -286,7 +286,7 @@ export class NotificationDeliveryService {
 
     const body = {
       event: "alert",
-      source: "molthub",
+      source: "clawster",
       severity: alert.severity,
       rule: alert.rule,
       botName: alert.botName,

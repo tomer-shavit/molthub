@@ -21,7 +21,7 @@ import { ReconcilerService } from '../reconciler/reconciler.service';
 import { ConfigGeneratorService } from '../reconciler/config-generator.service';
 
 // Mock the database module
-jest.mock('@molthub/database', () => ({
+jest.mock('@clawster/database', () => ({
   prisma: {
     botInstance: {
       count: jest.fn(),
@@ -75,7 +75,7 @@ jest.mock('crypto', () => {
   };
 });
 
-import { prisma } from '@molthub/database';
+import { prisma } from '@clawster/database';
 
 describe('OnboardingService', () => {
   let service: OnboardingService;

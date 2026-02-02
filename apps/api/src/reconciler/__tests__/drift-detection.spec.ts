@@ -1,7 +1,7 @@
 import { DriftDetectionService } from "../drift-detection.service";
 import { ConfigGeneratorService } from "../config-generator.service";
 
-jest.mock("@molthub/database", () => ({
+jest.mock("@clawster/database", () => ({
   prisma: {
     botInstance: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn().mockResolvedValue({}) },
     gatewayConnection: { findUnique: jest.fn().mockResolvedValue(null), updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
@@ -13,7 +13,7 @@ jest.mock("@molthub/database", () => ({
 
 const mockGatewayClient = { configGet: jest.fn(), health: jest.fn(), status: jest.fn() };
 
-jest.mock("@molthub/gateway-client", () => ({
+jest.mock("@clawster/gateway-client", () => ({
   GatewayManager: jest.fn().mockImplementation(() => ({
     getClient: jest.fn().mockResolvedValue(mockGatewayClient),
   })),
@@ -21,7 +21,7 @@ jest.mock("@molthub/gateway-client", () => ({
 
 function createManifest(openclawConfig: Record<string, unknown> = {}) {
   return {
-    apiVersion: "molthub/v2",
+    apiVersion: "clawster/v2",
     metadata: { name: "test-bot", environment: "dev" },
     spec: {
       openclawConfig: {
@@ -98,7 +98,7 @@ describe("DriftDetectionService", () => {
 
   describe("gateway unreachable", () => {
     it("adds CRITICAL finding when gateway is unreachable", async () => {
-      const { GatewayManager } = require("@molthub/gateway-client");
+      const { GatewayManager } = require("@clawster/gateway-client");
       GatewayManager.mockImplementationOnce(() => ({
         getClient: jest.fn().mockRejectedValue(new Error("Connection refused")),
       }));

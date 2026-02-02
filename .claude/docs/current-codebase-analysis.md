@@ -1,17 +1,17 @@
 ---
-description: "Analysis of Molthub's current architecture, modules, DB models, and cloud providers"
+description: "Analysis of Clawster's current architecture, modules, DB models, and cloud providers"
 globs: []
 alwaysApply: false
 ---
 
-# Molthub Current Codebase Analysis
+# Clawster Current Codebase Analysis
 
 ## Architecture Overview
 
 pnpm + Turbo monorepo with two apps and seven shared packages.
 
 ```
-molthub/
+clawster/
 ├── apps/
 │   ├── api/                  # NestJS 10.3 backend (port 4000)
 │   └── web/                  # Next.js 14 frontend (port 3000)
@@ -23,7 +23,7 @@ molthub/
 │   ├── gateway-client/       # WebSocket-based OpenClaw Gateway protocol client
 │   └── cli/                  # bootstrap, auth, doctor, status commands
 ├── scripts/                  # dev-start.sh, deploy.sh
-├── molthub/infra/terraform/  # Full AWS IaC
+├── clawster/infra/terraform/  # Full AWS IaC
 └── .github/workflows/        # CI/CD pipelines
 ```
 
@@ -194,7 +194,7 @@ Workspace → User, AuthUser, Fleet → BotInstance (status machine: CREATING �
 
 ### OpenClaw Config Schemas (40+ schemas)
 - `OpenClawConfigSchema`: Full OpenClaw config (agents, sessions, messages, tools, skills, plugins, gateway, logging, models, sandbox, bindings, credential guards, browser isolation)
-- `OpenClawManifestSchema`: v2 manifest wrapper (apiVersion "molthub/v2", kind "OpenClawInstance")
+- `OpenClawManifestSchema`: v2 manifest wrapper (apiVersion "clawster/v2", kind "OpenClawInstance")
 - `ChannelsConfigSchema`: Multi-channel config with DM access policies, pairing settings
 - `PolicySchema` / `PolicyPackSchema`: Policy evaluation engine, security rules
 - `ModelsConfigSchema`: AI provider + model configuration (AI Gateway)
@@ -251,7 +251,7 @@ Workspace → User, AuthUser, Fleet → BotInstance (status machine: CREATING �
 ## AWS Adapters
 
 - `EcsService`: createTaskDefinition (Fargate), createService (private subnets), updateService, deleteService, getServiceStatus
-- `SecretsManagerService`: ensureSecretsForInstance at `/molthub/{workspace}/{instance}/{key}`
+- `SecretsManagerService`: ensureSecretsForInstance at `/clawster/{workspace}/{instance}/{key}`
 - `CloudWatchLogsService`: createLogGroup, getLogs, getConsoleLink
 - `TokenRotationService`: Automated credential rotation with rollback
 

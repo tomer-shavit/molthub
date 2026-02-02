@@ -1,7 +1,7 @@
 import { Controller, Get, Query } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { AuditService } from "./audit.service";
-import { AuditEvent } from "@molthub/database";
+import { AuditEvent } from "@clawster/database";
 import { AuditEventResponseDto, ListAuditEventsQueryDto } from "./audit.dto";
 
 @ApiTags("audit")

@@ -3,23 +3,23 @@ import { Injectable, Logger } from "@nestjs/common";
 import {
   prisma,
   BotInstance,
-} from "@molthub/database";
-import type { OpenClawManifest, OpenClawFullConfig } from "@molthub/core";
+} from "@clawster/database";
+import type { OpenClawManifest, OpenClawFullConfig } from "@clawster/core";
 import {
   GatewayManager,
   GatewayClient,
-} from "@molthub/gateway-client";
-import type { GatewayConnectionOptions } from "@molthub/gateway-client";
+} from "@clawster/gateway-client";
+import type { GatewayConnectionOptions } from "@clawster/gateway-client";
 import {
   DeploymentTargetFactory,
   DeploymentTargetType,
-} from "@molthub/cloud-providers";
+} from "@clawster/cloud-providers";
 import type {
   DeploymentTarget,
   DeploymentTargetConfig,
   TargetStatus,
   GatewayEndpoint,
-} from "@molthub/cloud-providers";
+} from "@clawster/cloud-providers";
 import { ConfigGeneratorService } from "./config-generator.service";
 import { ProvisioningEventsService } from "../provisioning/provisioning-events.service";
 
@@ -596,7 +596,7 @@ export class LifecycleManagerService {
     const options: GatewayConnectionOptions = {
       host,
       port,
-      auth: token ? { mode: "token", token } : { mode: "token", token: "molthub" },
+      auth: token ? { mode: "token", token } : { mode: "token", token: "clawster" },
     };
 
     return this.gatewayManager.getClient(instance.id, options);

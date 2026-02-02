@@ -26,7 +26,7 @@ import {
  * Replace with proper auth-based workspace resolution later.
  */
 async function getDefaultWorkspaceId(): Promise<string> {
-  const { prisma } = await import("@molthub/database");
+  const { prisma } = await import("@clawster/database");
   const workspace = await prisma.workspace.findFirst();
   if (!workspace) {
     throw new NotFoundException("No workspace found. Complete onboarding first.");

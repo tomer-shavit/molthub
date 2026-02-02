@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma, Prisma, Overlay } from "@molthub/database";
+import { prisma, Prisma, Overlay } from "@clawster/database";
 import { CreateOverlayDto, UpdateOverlayDto, ListOverlaysQueryDto } from "./overlays.dto";
 
 @Injectable()

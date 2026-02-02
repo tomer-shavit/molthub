@@ -11,7 +11,7 @@ import {
   CloudResources,
   BootstrapOptions,
   ProgressCallback,
-} from "@molthub/cloud-providers";
+} from "@clawster/cloud-providers";
 
 interface CLIBootstrapOptions {
   provider?: CloudProviderType;
@@ -30,7 +30,7 @@ interface ConfigFile {
   createdAt: string;
 }
 
-const MOLTHUB_DIR = path.join(os.homedir(), ".molthub");
+const CLAWSTER_DIR = path.join(os.homedir(), ".clawster");
 const REGIONS: Record<CloudProviderType, string[]> = {
   aws: ["us-east-1", "us-west-2", "eu-west-1", "eu-central-1", "ap-southeast-1"],
   azure: ["eastus", "westus2", "westeurope", "southeastasia"],
@@ -41,7 +41,7 @@ const REGIONS: Record<CloudProviderType, string[]> = {
 };
 
 export async function bootstrap(options: CLIBootstrapOptions) {
-  console.log(chalk.blue.bold("🚀 Molthub Bootstrap"));
+  console.log(chalk.blue.bold("🚀 Clawster Bootstrap"));
   console.log(chalk.gray("Set up cloud infrastructure for your OpenClaw fleet\n"));
 
   // Interactive wizard if not all options provided
@@ -139,7 +139,7 @@ export async function bootstrap(options: CLIBootstrapOptions) {
       region: config.region,
       createVpc: true,
       tags: {
-        managedBy: "molthub",
+        managedBy: "clawster",
         workspace: config.workspace,
       },
     }, progressCallback);
@@ -154,13 +154,13 @@ export async function bootstrap(options: CLIBootstrapOptions) {
       createdAt: new Date().toISOString(),
     };
 
-    await fs.ensureDir(MOLTHUB_DIR);
-    const configPath = path.join(MOLTHUB_DIR, `${config.workspace}.json`);
+    await fs.ensureDir(CLAWSTER_DIR);
+    const configPath = path.join(CLAWSTER_DIR, `${config.workspace}.json`);
     await fs.writeJson(configPath, configFile, { spaces: 2 });
 
     // Save environment variables
     const envVars = generateEnvVars(configFile);
-    const envPath = path.join(MOLTHUB_DIR, `${config.workspace}.env`);
+    const envPath = path.join(CLAWSTER_DIR, `${config.workspace}.env`);
     await fs.writeFile(envPath, envVars, "utf-8");
 
     console.log();
@@ -174,10 +174,10 @@ export async function bootstrap(options: CLIBootstrapOptions) {
     console.log();
     console.log(chalk.white("Next steps:"));
     console.log(chalk.gray("  1. Source the environment: ") + chalk.cyan(`source ${envPath}`));
-    console.log(chalk.gray("  2. Start the database: ") + chalk.cyan("molthub db:start"));
-    console.log(chalk.gray("  3. Run migrations: ") + chalk.cyan("molthub db:migrate"));
-    console.log(chalk.gray("  4. Create admin user: ") + chalk.cyan("molthub auth:create-user"));
-    console.log(chalk.gray("  5. Start the API: ") + chalk.cyan("molthub dev:api"));
+    console.log(chalk.gray("  2. Start the database: ") + chalk.cyan("clawster db:start"));
+    console.log(chalk.gray("  3. Run migrations: ") + chalk.cyan("clawster db:migrate"));
+    console.log(chalk.gray("  4. Create admin user: ") + chalk.cyan("clawster auth:create-user"));
+    console.log(chalk.gray("  5. Start the API: ") + chalk.cyan("clawster dev:api"));
     console.log();
 
     if (config.provider === "aws") {
@@ -384,13 +384,13 @@ function generateRandomSecret(): string {
 
 function generateEnvVars(config: ConfigFile): string {
   const lines: string[] = [
-    `# Molthub Configuration - ${config.workspace}`,
+    `# Clawster Configuration - ${config.workspace}`,
     `# Generated: ${config.createdAt}`,
     "",
     `# Provider: ${config.provider}`,
-    `MOLTHUB_PROVIDER=${config.provider}`,
-    `MOLTHUB_REGION=${config.region}`,
-    `MOLTHUB_WORKSPACE=${config.workspace}`,
+    `CLAWSTER_PROVIDER=${config.provider}`,
+    `CLAWSTER_REGION=${config.region}`,
+    `CLAWSTER_WORKSPACE=${config.workspace}`,
     "",
   ];
 
@@ -416,14 +416,14 @@ function generateEnvVars(config: ConfigFile): string {
   } else if (config.provider === "selfhosted") {
     lines.push(
       `# Self-Hosted Configuration`,
-      `MOLTHUB_DATA_DIR=${config.resources.metadata.dataDir}`,
+      `CLAWSTER_DATA_DIR=${config.resources.metadata.dataDir}`,
     );
   }
 
   lines.push(
     "",
     `# Database (update with your settings)`,
-    `DATABASE_URL=postgresql://molthub:${generateRandomPassword()}@localhost:5432/molthub`,
+    `DATABASE_URL=postgresql://clawster:${generateRandomPassword()}@localhost:5432/clawster`,
     "",
     `# JWT Secret (generate with: openssl rand -base64 32)`,
     `JWT_SECRET=${generateRandomSecret()}`,

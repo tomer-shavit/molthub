@@ -58,7 +58,7 @@ export default function RegisterPage() {
           </div>
           <CardTitle>Create an account</CardTitle>
           <CardDescription>
-            Get started with Molthub
+            Get started with Clawster
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>

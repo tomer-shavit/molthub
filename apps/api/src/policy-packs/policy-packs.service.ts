@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, Prisma, PolicyPack } from "@molthub/database";
-import { validatePolicyPack, PolicyEngine, BUILTIN_POLICY_PACKS, PolicyRule, PolicyViolation } from "@molthub/core";
+import { prisma, Prisma, PolicyPack } from "@clawster/database";
+import { validatePolicyPack, PolicyEngine, BUILTIN_POLICY_PACKS, PolicyRule, PolicyViolation } from "@clawster/core";
 import { CreatePolicyPackDto, UpdatePolicyPackDto, ListPolicyPacksQueryDto, EvaluatePolicyDto } from "./policy-packs.dto";
 
 @Injectable()

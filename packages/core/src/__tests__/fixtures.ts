@@ -1,5 +1,5 @@
 /**
- * Test Fixtures and Factories for Molthub
+ * Test Fixtures and Factories for Clawster
  * 
  * Provides factory functions for creating test data with sensible defaults.
  * All IDs are deterministic based on a counter for reproducible tests.
@@ -99,7 +99,7 @@ export interface BotInstanceOptions {
 
 export function createValidManifest(options: { name?: string; environment?: 'dev' | 'staging' | 'prod' } = {}) {
   return {
-    apiVersion: 'molthub/v1',
+    apiVersion: 'clawster/v1',
     kind: 'OpenClawInstance',
     metadata: {
       name: options.name ?? 'test-bot',
@@ -285,7 +285,7 @@ export function createTemplate(options: TemplateOptions = {}) {
     isBuiltin: options.isBuiltin ?? false,
     workspaceId: options.isBuiltin ? undefined : (options.workspaceId ?? generateId('workspace')),
     manifestTemplate: {
-      apiVersion: 'molthub/v1',
+      apiVersion: 'clawster/v1',
       kind: 'OpenClawInstance',
       spec: {
         runtime: {

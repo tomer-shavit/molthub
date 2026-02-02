@@ -6,7 +6,7 @@ import { UserStageProviderWrapper } from "./user-stage-provider-wrapper";
 import { ToastProviderWrapper } from "./toast-provider-wrapper";
 
 export const metadata: Metadata = {
-  title: "Molthub - OpenClaw Control Plane",
+  title: "Clawster - OpenClaw Control Plane",
   description: "Self-hosted control plane for OpenClaw instances",
 };
 

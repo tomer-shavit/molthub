@@ -6,7 +6,7 @@ import os from "os";
 import { execSync } from "child_process";
 import { glob } from "glob";
 
-const MOLTHUB_DIR = path.join(os.homedir(), ".molthub");
+const CLAWSTER_DIR = path.join(os.homedir(), ".clawster");
 
 interface CheckResult {
   name: string;
@@ -23,10 +23,10 @@ export async function doctor(options: DoctorOptions = {}) {
   const securityOnly = options.security === true;
 
   if (securityOnly) {
-    console.log(chalk.blue.bold("🔒 Molthub Security Doctor\n"));
+    console.log(chalk.blue.bold("🔒 Clawster Security Doctor\n"));
     console.log(chalk.gray("Running security-focused diagnostics...\n"));
   } else {
-    console.log(chalk.blue.bold("🔧 Molthub Doctor\n"));
+    console.log(chalk.blue.bold("🔧 Clawster Doctor\n"));
     console.log(chalk.gray("Diagnosing common issues...\n"));
   }
 
@@ -96,7 +96,7 @@ export async function doctor(options: DoctorOptions = {}) {
   }
 
   // Check 4: AWS CLI (if AWS config exists)
-  const hasAwsConfig = await fs.pathExists(path.join(MOLTHUB_DIR, ".aws")) ||
+  const hasAwsConfig = await fs.pathExists(path.join(CLAWSTER_DIR, ".aws")) ||
                        process.env.AWS_ACCESS_KEY_ID;
   if (hasAwsConfig) {
     try {
@@ -128,20 +128,20 @@ export async function doctor(options: DoctorOptions = {}) {
     }
   }
 
-  // Check 5: Molthub configuration
-  const configFiles = await fs.readdir(MOLTHUB_DIR).catch(() => []);
+  // Check 5: Clawster configuration
+  const configFiles = await fs.readdir(CLAWSTER_DIR).catch(() => []);
   const workspaceConfigs = configFiles.filter(f => f.endsWith(".json") && f !== "users.json");
   
   if (workspaceConfigs.length > 0) {
     checks.push({
-      name: "Molthub configuration",
+      name: "Clawster configuration",
       status: "pass",
       message: `${workspaceConfigs.length} workspace(s) configured`,
     });
 
     // Check each workspace
     for (const configFile of workspaceConfigs) {
-      const configPath = path.join(MOLTHUB_DIR, configFile);
+      const configPath = path.join(CLAWSTER_DIR, configFile);
       try {
         const config = await fs.readJson(configPath);
         if (config.resources && config.provider) {
@@ -155,7 +155,7 @@ export async function doctor(options: DoctorOptions = {}) {
             name: `  └─ ${configFile.replace(".json", "")}`,
             status: "warn",
             message: "Incomplete configuration",
-            fix: "Run 'molthub init' to reconfigure",
+            fix: "Run 'clawster init' to reconfigure",
           });
         }
       } catch {
@@ -169,10 +169,10 @@ export async function doctor(options: DoctorOptions = {}) {
     }
   } else {
     checks.push({
-      name: "Molthub configuration",
+      name: "Clawster configuration",
       status: "warn",
       message: "No workspaces configured",
-      fix: "Run 'molthub init' to set up a workspace",
+      fix: "Run 'clawster init' to set up a workspace",
     });
   }
 
@@ -333,8 +333,8 @@ export async function doctor(options: DoctorOptions = {}) {
   try {
     const secretPattern = /(?:token|secret|password|api[_-]?key)\s*[:=]\s*["']?[A-Za-z0-9_-]{20,}/i;
     const configGlobs = [
-      path.join(os.homedir(), ".molthub", "**", "*.json"),
-      path.join(os.homedir(), ".molthub", "**", "*.yaml"),
+      path.join(os.homedir(), ".clawster", "**", "*.json"),
+      path.join(os.homedir(), ".clawster", "**", "*.yaml"),
     ];
 
     const filesWithSecrets: string[] = [];

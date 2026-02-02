@@ -48,7 +48,7 @@ export function generateProductionTemplate(
       ].join(" && ")]
     : undefined;
 
-  const tag = { Key: "molthub:bot", Value: botName };
+  const tag = { Key: "clawster:bot", Value: botName };
 
   // Build container environment variables
   const environment: Array<{ Name: string; Value: string }> = [
@@ -125,7 +125,7 @@ export function generateProductionTemplate(
 
   return {
     AWSTemplateFormatVersion: "2010-09-09",
-    Description: `Molthub Production ECS Fargate stack for bot "${botName}"`,
+    Description: `Clawster Production ECS Fargate stack for bot "${botName}"`,
 
     Resources: {
       // ================================================================
@@ -141,7 +141,7 @@ export function generateProductionTemplate(
           EnableDnsHostnames: true,
           Tags: [
             { ...tag },
-            { Key: "Name", Value: { "Fn::Sub": `molthub-${botName}-vpc` } },
+            { Key: "Name", Value: { "Fn::Sub": `clawster-${botName}-vpc` } },
           ],
         },
       },
@@ -154,7 +154,7 @@ export function generateProductionTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-igw` },
+              Value: { "Fn::Sub": `clawster-${botName}-igw` },
             },
           ],
         },
@@ -181,7 +181,7 @@ export function generateProductionTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-public-1` },
+              Value: { "Fn::Sub": `clawster-${botName}-public-1` },
             },
           ],
         },
@@ -199,7 +199,7 @@ export function generateProductionTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-public-2` },
+              Value: { "Fn::Sub": `clawster-${botName}-public-2` },
             },
           ],
         },
@@ -214,7 +214,7 @@ export function generateProductionTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-public-rt` },
+              Value: { "Fn::Sub": `clawster-${botName}-public-rt` },
             },
           ],
         },
@@ -256,7 +256,7 @@ export function generateProductionTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-private-1` },
+              Value: { "Fn::Sub": `clawster-${botName}-private-1` },
             },
           ],
         },
@@ -273,7 +273,7 @@ export function generateProductionTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-private-2` },
+              Value: { "Fn::Sub": `clawster-${botName}-private-2` },
             },
           ],
         },
@@ -289,7 +289,7 @@ export function generateProductionTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-nat-eip` },
+              Value: { "Fn::Sub": `clawster-${botName}-nat-eip` },
             },
           ],
         },
@@ -303,7 +303,7 @@ export function generateProductionTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-nat` },
+              Value: { "Fn::Sub": `clawster-${botName}-nat` },
             },
           ],
         },
@@ -318,7 +318,7 @@ export function generateProductionTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-private-rt` },
+              Value: { "Fn::Sub": `clawster-${botName}-private-rt` },
             },
           ],
         },
@@ -353,7 +353,7 @@ export function generateProductionTemplate(
       EcrRepository: {
         Type: "AWS::ECR::Repository",
         Properties: {
-          RepositoryName: { "Fn::Sub": `molthub/${botName}` },
+          RepositoryName: { "Fn::Sub": `clawster/${botName}` },
           ImageScanningConfiguration: {
             ScanOnPush: true,
           },
@@ -365,7 +365,7 @@ export function generateProductionTemplate(
       EcsCluster: {
         Type: "AWS::ECS::Cluster",
         Properties: {
-          ClusterName: { "Fn::Sub": `molthub-${botName}` },
+          ClusterName: { "Fn::Sub": `clawster-${botName}` },
           Tags: [tag],
         },
       },
@@ -373,7 +373,7 @@ export function generateProductionTemplate(
       LogGroup: {
         Type: "AWS::Logs::LogGroup",
         Properties: {
-          LogGroupName: { "Fn::Sub": `/ecs/molthub-${botName}` },
+          LogGroupName: { "Fn::Sub": `/ecs/clawster-${botName}` },
           RetentionInDays: 30,
           Tags: [tag],
         },
@@ -386,7 +386,7 @@ export function generateProductionTemplate(
       TaskExecutionRole: {
         Type: "AWS::IAM::Role",
         Properties: {
-          RoleName: { "Fn::Sub": `molthub-${botName}-exec` },
+          RoleName: { "Fn::Sub": `clawster-${botName}-exec` },
           AssumeRolePolicyDocument: {
             Version: "2012-10-17",
             Statement: [
@@ -411,7 +411,7 @@ export function generateProductionTemplate(
                     Action: ["secretsmanager:GetSecretValue"],
                     Resource: {
                       "Fn::Sub":
-                        "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:molthub/*",
+                        "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:clawster/*",
                     },
                   },
                 ],
@@ -425,7 +425,7 @@ export function generateProductionTemplate(
       TaskRole: {
         Type: "AWS::IAM::Role",
         Properties: {
-          RoleName: { "Fn::Sub": `molthub-${botName}-task` },
+          RoleName: { "Fn::Sub": `clawster-${botName}-task` },
           AssumeRolePolicyDocument: {
             Version: "2012-10-17",
             Statement: [
@@ -449,7 +449,7 @@ export function generateProductionTemplate(
         Type: "AWS::EC2::SecurityGroup",
         Properties: {
           GroupDescription: {
-            "Fn::Sub": `Molthub ${botName} ALB security group`,
+            "Fn::Sub": `Clawster ${botName} ALB security group`,
           },
           VpcId: { Ref: "Vpc" },
           SecurityGroupIngress: [
@@ -479,7 +479,7 @@ export function generateProductionTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-alb-sg` },
+              Value: { "Fn::Sub": `clawster-${botName}-alb-sg` },
             },
           ],
         },
@@ -490,7 +490,7 @@ export function generateProductionTemplate(
         Type: "AWS::EC2::SecurityGroup",
         Properties: {
           GroupDescription: {
-            "Fn::Sub": `Molthub ${botName} ECS task security group`,
+            "Fn::Sub": `Clawster ${botName} ECS task security group`,
           },
           VpcId: { Ref: "Vpc" },
           SecurityGroupIngress: [
@@ -513,7 +513,7 @@ export function generateProductionTemplate(
             { ...tag },
             {
               Key: "Name",
-              Value: { "Fn::Sub": `molthub-${botName}-task-sg` },
+              Value: { "Fn::Sub": `clawster-${botName}-task-sg` },
             },
           ],
         },
@@ -526,7 +526,7 @@ export function generateProductionTemplate(
       Alb: {
         Type: "AWS::ElasticLoadBalancingV2::LoadBalancer",
         Properties: {
-          Name: { "Fn::Sub": `molthub-${botName}` },
+          Name: { "Fn::Sub": `clawster-${botName}` },
           Scheme: "internet-facing",
           Type: "application",
           Subnets: [{ Ref: "PublicSubnet1" }, { Ref: "PublicSubnet2" }],
@@ -538,7 +538,7 @@ export function generateProductionTemplate(
       AlbTargetGroup: {
         Type: "AWS::ElasticLoadBalancingV2::TargetGroup",
         Properties: {
-          Name: { "Fn::Sub": `molthub-${botName}-tg` },
+          Name: { "Fn::Sub": `clawster-${botName}-tg` },
           Port: gatewayPort,
           Protocol: "HTTP",
           VpcId: { Ref: "Vpc" },
@@ -565,7 +565,7 @@ export function generateProductionTemplate(
       TaskDefinition: {
         Type: "AWS::ECS::TaskDefinition",
         Properties: {
-          Family: { "Fn::Sub": `molthub-${botName}` },
+          Family: { "Fn::Sub": `clawster-${botName}` },
           Cpu: String(cpu),
           Memory: String(memory),
           NetworkMode: "awsvpc",
@@ -591,7 +591,7 @@ export function generateProductionTemplate(
                   Name: "OPENCLAW_CONFIG",
                   ValueFrom: {
                     "Fn::Sub":
-                      `arn:aws:secretsmanager:\${AWS::Region}:\${AWS::AccountId}:secret:molthub/${botName}/config`,
+                      `arn:aws:secretsmanager:\${AWS::Region}:\${AWS::AccountId}:secret:clawster/${botName}/config`,
                   },
                 },
               ],
@@ -599,7 +599,7 @@ export function generateProductionTemplate(
                 LogDriver: "awslogs",
                 Options: {
                   "awslogs-group": {
-                    "Fn::Sub": `/ecs/molthub-${botName}`,
+                    "Fn::Sub": `/ecs/clawster-${botName}`,
                   },
                   "awslogs-region": { Ref: "AWS::Region" },
                   "awslogs-stream-prefix": "ecs",
@@ -615,7 +615,7 @@ export function generateProductionTemplate(
         Type: "AWS::ECS::Service",
         DependsOn: [listenerDependency],
         Properties: {
-          ServiceName: { "Fn::Sub": `molthub-${botName}` },
+          ServiceName: { "Fn::Sub": `clawster-${botName}` },
           Cluster: { Ref: "EcsCluster" },
           TaskDefinition: { Ref: "TaskDefinition" },
           DesiredCount: 0,

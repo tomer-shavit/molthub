@@ -1,18 +1,18 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
   prisma,
-} from "@molthub/database";
+} from "@clawster/database";
 import {
   GatewayClient,
   GatewayConnectionError,
   GatewayTimeoutError,
-} from "@molthub/gateway-client";
+} from "@clawster/gateway-client";
 import type {
   GatewayConnectionOptions,
   GatewayAuth,
   GatewayHealthSnapshot,
   GatewayStatusSummary,
-} from "@molthub/gateway-client";
+} from "@clawster/gateway-client";
 
 // ---- Types -----------------------------------------------------------------
 

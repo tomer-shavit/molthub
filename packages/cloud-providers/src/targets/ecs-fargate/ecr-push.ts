@@ -48,7 +48,7 @@ function execCommand(
 export async function pushImageToEcr(
   options: EcrPushOptions,
 ): Promise<EcrPushResult> {
-  const repositoryName = options.repositoryName ?? "molthub-openclaw";
+  const repositoryName = options.repositoryName ?? "clawster-openclaw";
   const sourceImage = options.sourceImage ?? "openclaw:local";
   const tag = options.tag ?? "latest";
 

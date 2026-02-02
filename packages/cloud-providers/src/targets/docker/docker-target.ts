@@ -168,7 +168,7 @@ export class DockerContainerTarget implements DeploymentTarget {
       this.environmentVars = { ...this.environmentVars, ...config.environment };
     }
 
-    // Transform Molthub internal schema to valid OpenClaw config format
+    // Transform Clawster internal schema to valid OpenClaw config format
     const raw = { ...config.config } as Record<string, unknown>;
 
     // gateway.host -> gateway.bind (OpenClaw uses "bind" not "host")

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 import { AgentEvolutionService } from "./agent-evolution.service";
 
 @Injectable()

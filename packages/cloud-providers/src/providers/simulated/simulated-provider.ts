@@ -15,7 +15,7 @@ import {
   LogResult,
   LogEvent,
 } from "../../interface/provider";
-import { InstanceManifest } from "@molthub/core";
+import { InstanceManifest } from "@clawster/core";
 
 export interface SimulatedConfig extends CloudProviderConfig {
   simulateDelay?: number;
@@ -79,11 +79,11 @@ export class SimulatedProvider implements CloudProvider {
         securityGroupId: `sg-simulated-${Date.now()}`,
       },
       iam: {
-        executionRoleArn: `arn:aws:iam::123456789:role/molthub-${this.workspace}-execution`,
-        taskRoleArn: `arn:aws:iam::123456789:role/molthub-${this.workspace}-task`,
+        executionRoleArn: `arn:aws:iam::123456789:role/clawster-${this.workspace}-execution`,
+        taskRoleArn: `arn:aws:iam::123456789:role/clawster-${this.workspace}-task`,
       },
       logging: {
-        logGroupName: `/molthub/${this.workspace}`,
+        logGroupName: `/clawster/${this.workspace}`,
         logDriver: "json-file",
         logOptions: {
           "max-size": "10m",
@@ -264,20 +264,20 @@ export class SimulatedProvider implements CloudProvider {
 
   async storeSecret(name: string, value: string, metadata?: Record<string, string>): Promise<string> {
     await this.delay(this.simulateDelay / 2);
-    const key = `/molthub/${this.workspace}/${name}`;
+    const key = `/clawster/${this.workspace}/${name}`;
     this.secrets.set(key, value);
     return `arn:aws:secretsmanager:${this.region}:123456789:secret:${key}`;
   }
 
   async getSecret(name: string): Promise<string | null> {
     await this.delay(this.simulateDelay / 2);
-    const key = `/molthub/${this.workspace}/${name}`;
+    const key = `/clawster/${this.workspace}/${name}`;
     return this.secrets.get(key) || null;
   }
 
   async deleteSecret(name: string): Promise<void> {
     await this.delay(this.simulateDelay / 2);
-    const key = `/molthub/${this.workspace}/${name}`;
+    const key = `/clawster/${this.workspace}/${name}`;
     this.secrets.delete(key);
   }
 

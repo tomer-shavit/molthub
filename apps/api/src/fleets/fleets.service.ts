@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { prisma, Fleet, BotInstance } from "@molthub/database";
+import { prisma, Fleet, BotInstance } from "@clawster/database";
 import { CreateFleetDto, UpdateFleetDto, ListFleetsQueryDto } from "./fleets.dto";
 
 @Injectable()

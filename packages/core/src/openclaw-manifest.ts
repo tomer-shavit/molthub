@@ -2,10 +2,10 @@ import { z } from "zod";
 import { OpenClawConfigSchema } from "./openclaw-config";
 
 // =============================================================================
-// Molthub Settings (control-plane specific metadata)
+// Clawster Settings (control-plane specific metadata)
 // =============================================================================
 
-export const MolthubSettingsSchema = z.object({
+export const ClawsterSettingsSchema = z.object({
   /** Fleet this instance belongs to. */
   fleetId: z.string().optional(),
   /** Template used to seed initial config. */
@@ -16,10 +16,10 @@ export const MolthubSettingsSchema = z.object({
   autoRestart: z.boolean().default(true),
   /** Health-check interval in seconds. */
   healthCheckIntervalSec: z.number().int().positive().default(30),
-  /** Tags visible in the Molthub dashboard. */
+  /** Tags visible in the Clawster dashboard. */
   tags: z.record(z.string()).optional(),
 });
-export type MolthubSettings = z.infer<typeof MolthubSettingsSchema>;
+export type ClawsterSettings = z.infer<typeof ClawsterSettingsSchema>;
 
 // =============================================================================
 // v2 Environment enum (extends v1 with "local")
@@ -62,7 +62,7 @@ export type SecurityOverrides = z.infer<typeof SecurityOverridesSchema>;
 // =============================================================================
 
 export const OpenClawManifestSchema = z.object({
-  apiVersion: z.literal("molthub/v2"),
+  apiVersion: z.literal("clawster/v2"),
   kind: z.literal("OpenClawInstance"),
   metadata: z.object({
     name: z
@@ -82,7 +82,7 @@ export const OpenClawManifestSchema = z.object({
   }),
   spec: z.object({
     openclawConfig: OpenClawConfigSchema,
-    molthubSettings: MolthubSettingsSchema.optional(),
+    clawsterSettings: ClawsterSettingsSchema.optional(),
   }),
 });
 export type OpenClawManifest = z.infer<typeof OpenClawManifestSchema>;

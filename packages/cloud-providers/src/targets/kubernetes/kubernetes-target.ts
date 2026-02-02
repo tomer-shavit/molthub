@@ -90,7 +90,7 @@ export class KubernetesTarget implements DeploymentTarget {
         labels: {
           app: this.config.deploymentName,
           "app.kubernetes.io/name": "openclaw-gateway",
-          "app.kubernetes.io/managed-by": "molthub",
+          "app.kubernetes.io/managed-by": "clawster",
         },
       },
       data: {
@@ -121,7 +121,7 @@ export class KubernetesTarget implements DeploymentTarget {
         labels: {
           app: this.config.deploymentName,
           "app.kubernetes.io/name": "openclaw-gateway",
-          "app.kubernetes.io/managed-by": "molthub",
+          "app.kubernetes.io/managed-by": "clawster",
         },
       },
       spec: {
@@ -216,7 +216,7 @@ export class KubernetesTarget implements DeploymentTarget {
         labels: {
           app: this.config.deploymentName,
           "app.kubernetes.io/name": "openclaw-gateway",
-          "app.kubernetes.io/managed-by": "molthub",
+          "app.kubernetes.io/managed-by": "clawster",
         },
       },
       spec: {

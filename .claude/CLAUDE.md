@@ -1,10 +1,10 @@
 ---
-description: "Mandatory development workflow for all Claude Code sessions in Molthub"
+description: "Mandatory development workflow for all Claude Code sessions in Clawster"
 globs: []
 alwaysApply: true
 ---
 
-# Molthub Development Workflow
+# Clawster Development Workflow
 
 This document defines the **mandatory workflow** that Claude Code must follow for every coding session in this project. No code may be written without completing these steps in order.
 
@@ -14,7 +14,7 @@ This document defines the **mandatory workflow** that Claude Code must follow fo
 
 Before writing ANY code, you MUST read all documentation files in `.claude/docs/`. **Read all three docs in parallel** using concurrent tool calls:
 
-1. `.claude/docs/molthub-vision.md` — Product vision and platform goals
+1. `.claude/docs/clawster-vision.md` — Product vision and platform goals
 2. `.claude/docs/current-codebase-analysis.md` — Current architecture and module inventory
 3. `.claude/docs/openclaw-reference.md` — OpenClaw Gateway, config model, channels, health, security
 
@@ -34,7 +34,7 @@ These two steps are **independent** and MUST be launched **in parallel** using c
 
 ### Step 1.5: Research the OpenClaw Source (MANDATORY)
 
-Molthub integrates with **OpenClaw** (`https://github.com/openclaw/openclaw`), an open-source personal AI assistant. Before planning any feature or fix, you MUST check how OpenClaw itself implements the relevant functionality:
+Clawster integrates with **OpenClaw** (`https://github.com/openclaw/openclaw`), an open-source personal AI assistant. Before planning any feature or fix, you MUST check how OpenClaw itself implements the relevant functionality:
 
 1. Use `WebFetch` or `gh api` to browse the OpenClaw repo at `https://github.com/openclaw/openclaw`
 2. Key areas to check depending on the task:
@@ -44,10 +44,10 @@ Molthub integrates with **OpenClaw** (`https://github.com/openclaw/openclaw`), a
    - **CLI commands**: `src/cli/`, `src/commands/` — how `openclaw onboard`, `openclaw gateway`, etc. work
    - **Docker setup**: `docker-compose.yml`, `Dockerfile` — how OpenClaw runs in containers
    - **Protocol types**: `src/gateway/protocol/` — the WebSocket message schema
-3. Understand how the real OpenClaw works **before** designing how Molthub should integrate with it
+3. Understand how the real OpenClaw works **before** designing how Clawster should integrate with it
 4. If the task involves Gateway communication, config management, deployment, or health monitoring — this step is especially critical
 
-**Why**: Molthub is a management layer for OpenClaw. Building features without understanding the real OpenClaw implementation leads to wrong assumptions, broken integrations, and wasted effort.
+**Why**: Clawster is a management layer for OpenClaw. Building features without understanding the real OpenClaw implementation leads to wrong assumptions, broken integrations, and wasted effort.
 
 ---
 
@@ -165,7 +165,7 @@ Once everything passes verification:
 ## Project Structure Reference
 
 ```
-molthub/
+clawster/
 ├── apps/
 │   ├── api/          # NestJS backend (port 4000)
 │   └── web/          # Next.js frontend (port 3000)

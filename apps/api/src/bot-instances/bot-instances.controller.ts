@@ -10,7 +10,7 @@ import {
   HttpCode,
   HttpStatus,
 } from "@nestjs/common";
-import { BotInstance } from "@molthub/database";
+import { BotInstance } from "@clawster/database";
 import { BotInstancesService } from "./bot-instances.service";
 import {
   CreateBotInstanceDto,

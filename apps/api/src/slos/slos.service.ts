@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma, SloDefinition } from "@molthub/database";
+import { prisma, SloDefinition } from "@clawster/database";
 import { CreateSloDto, UpdateSloDto, SloQueryDto } from "./slos.dto";
 
 @Injectable()

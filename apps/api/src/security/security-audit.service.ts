@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 import {
   BUILTIN_OPENCLAW_POLICY_PACKS,
   OpenClawConfig,
   OpenClawEvaluationContext,
   OpenClawManifest,
   evaluateOpenClawPolicyPack,
-} from "@molthub/core";
+} from "@clawster/core";
 import * as crypto from "crypto";
 
 // ── Interfaces ──────────────────────────────────────────────────────────

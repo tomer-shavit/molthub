@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 
 export interface HealthCheckResult {
   status: "ok" | "error" | "degraded";

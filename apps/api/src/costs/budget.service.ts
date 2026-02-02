@@ -4,7 +4,7 @@ import {
   prisma,
   BudgetConfig,
   Prisma,
-} from "@molthub/database";
+} from "@clawster/database";
 import { CreateBudgetDto, UpdateBudgetDto, BudgetQueryDto } from "./costs.dto";
 
 @Injectable()

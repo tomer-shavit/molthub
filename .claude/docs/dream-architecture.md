@@ -1,23 +1,23 @@
 ---
-description: "Molthub system architecture — how all pieces fit together for local and cloud deployments"
+description: "Clawster system architecture — how all pieces fit together for local and cloud deployments"
 globs: []
 alwaysApply: false
 ---
 
-# Molthub Dream Architecture
+# Clawster Dream Architecture
 
-This document explains **exactly** how Molthub works, end to end, for both local and cloud deployments. If you're adding a feature, read this first.
+This document explains **exactly** how Clawster works, end to end, for both local and cloud deployments. If you're adding a feature, read this first.
 
 ---
 
 ## The Big Picture
 
-Molthub is a **control plane** for OpenClaw agents. It does NOT run inside OpenClaw. It sits alongside it and communicates over WebSocket.
+Clawster is a **control plane** for OpenClaw agents. It does NOT run inside OpenClaw. It sits alongside it and communicates over WebSocket.
 
 There are always **two separate things running**:
 
-1. **Molthub** (API + Web UI) — the management layer you interact with
-2. **OpenClaw Gateway(s)** — the actual agent runtime(s) that Molthub manages
+1. **Clawster** (API + Web UI) — the management layer you interact with
+2. **OpenClaw Gateway(s)** — the actual agent runtime(s) that Clawster manages
 
 They talk to each other over the **OpenClaw Gateway WebSocket Protocol** on port 18789 (default).
 
@@ -27,7 +27,7 @@ They talk to each other over the **OpenClaw Gateway WebSocket Protocol** on port
 │                      │                               │
 │                      ▼                               │
 │  ┌──────────────────────────────────┐                │
-│  │         Molthub Web UI           │                │
+│  │         Clawster Web UI           │                │
 │  │       (Next.js, port 3000)       │                │
 │  │                                  │                │
 │  │  - Deploy wizard                 │                │
@@ -39,7 +39,7 @@ They talk to each other over the **OpenClaw Gateway WebSocket Protocol** on port
 │                 │ HTTP                                │
 │                 ▼                                     │
 │  ┌──────────────────────────────────┐                │
-│  │         Molthub API              │                │
+│  │         Clawster API              │                │
 │  │     (NestJS, port 4000)          │                │
 │  │                                  │                │
 │  │  - Bot lifecycle (CRUD)          │                │
@@ -84,7 +84,7 @@ They talk to each other over the **OpenClaw Gateway WebSocket Protocol** on port
 
 ## How OpenClaw Gets Installed
 
-OpenClaw is **not bundled with Molthub**. It's an independent project installed separately:
+OpenClaw is **not bundled with Clawster**. It's an independent project installed separately:
 
 ```bash
 # Linux/macOS
@@ -105,7 +105,7 @@ openclaw onboard --install-daemon
 
 This sets up: model auth, gateway settings, channels, DM pairing, workspace, skills, and a background service (systemd on Linux, launchd on macOS).
 
-**Key point**: OpenClaw already runs in its own Docker container or as a system service. Molthub doesn't need to containerize it — it needs to **connect to it and manage it**.
+**Key point**: OpenClaw already runs in its own Docker container or as a system service. Clawster doesn't need to containerize it — it needs to **connect to it and manage it**.
 
 ---
 
@@ -120,7 +120,7 @@ In the wizard, Local is the only selectable platform. AWS, Azure, and Google Clo
 │              Single Machine / VM                  │
 │                                                   │
 │  ┌─────────────────────┐                          │
-│  │   Molthub            │                          │
+│  │   Clawster            │                          │
 │  │   (single Docker     │                          │
 │  │    container)        │     WebSocket             │
 │  │                      │────────────────┐         │
@@ -143,11 +143,11 @@ In the wizard, Local is the only selectable platform. AWS, Azure, and Google Clo
 
 1. User installs OpenClaw independently (script or npm)
 2. OpenClaw Gateway starts (as system service or Docker container)
-3. User runs Molthub (single Docker container with API + Web + SQLite)
-4. Molthub connects to the OpenClaw Gateway on `ws://localhost:18789`
-5. Molthub manages config, monitors health, provides the dashboard
+3. User runs Clawster (single Docker container with API + Web + SQLite)
+4. Clawster connects to the OpenClaw Gateway on `ws://localhost:18789`
+5. Clawster manages config, monitors health, provides the dashboard
 
-**Infrastructure management**: Molthub uses the `LocalMachineTarget` or `DockerContainerTarget`:
+**Infrastructure management**: Clawster uses the `LocalMachineTarget` or `DockerContainerTarget`:
 - **LocalMachineTarget**: Manages OpenClaw via systemd (Linux) or launchctl (macOS). Sends SIGUSR1 for config reload.
 - **DockerContainerTarget**: Manages OpenClaw running in a Docker container via Docker CLI. Mounts config as a volume.
 
@@ -163,16 +163,16 @@ Machine
 ├── OpenClaw Gateway (profile: support-bot, port 18789)
 ├── OpenClaw Gateway (profile: devops-bot, port 18809)
 ├── OpenClaw Gateway (profile: assistant, port 18829)
-└── Molthub (connects to all three via WebSocket)
+└── Clawster (connects to all three via WebSocket)
 ```
 
 ### Mode 2: Cloud Provider (Grayed Out in Wizard — Coming Soon)
 
-For deploying OpenClaw gateways to remote infrastructure. Molthub still runs locally (or on a management server) and connects to remote gateways. These options (AWS, Azure, GCP) are visible in the wizard but disabled until each provider's integration is hardened.
+For deploying OpenClaw gateways to remote infrastructure. Clawster still runs locally (or on a management server) and connects to remote gateways. These options (AWS, Azure, GCP) are visible in the wizard but disabled until each provider's integration is hardened.
 
 ```
 ┌─────────────────┐           ┌──────────────────────────┐
-│  Molthub         │           │  Cloud / Remote Infra     │
+│  Clawster         │           │  Cloud / Remote Infra     │
 │  (local or mgmt  │           │                           │
 │   server)        │           │  ┌─────────────────────┐  │
 │                  │  WebSocket│  │ OpenClaw Gateway     │  │
@@ -243,10 +243,10 @@ const target = DeploymentTargetFactory.create({
 
 ## The Gateway WebSocket Protocol
 
-This is how Molthub talks to running OpenClaw instances. It's the **only** runtime communication channel.
+This is how Clawster talks to running OpenClaw instances. It's the **only** runtime communication channel.
 
 ```
-Molthub API                          OpenClaw Gateway
+Clawster API                          OpenClaw Gateway
     │                                       │
     │  ── ws://host:18789 ──────────────▶   │
     │  { type: "connect",                   │
@@ -288,16 +288,16 @@ Molthub API                          OpenClaw Gateway
 
 **Concurrency control**: `config.apply` and `config.patch` require the current `baseHash`. If the hash doesn't match (someone else changed config), the call fails. This prevents lost updates.
 
-The `GatewayManager` in Molthub pools WebSocket connections by instance ID. One connection per bot instance, reused across health checks, config updates, and other operations.
+The `GatewayManager` in Clawster pools WebSocket connections by instance ID. One connection per bot instance, reused across health checks, config updates, and other operations.
 
 ---
 
-## Molthub Internal Architecture
+## Clawster Internal Architecture
 
 ### Monorepo Structure
 
 ```
-molthub/
+clawster/
 ├── apps/
 │   ├── api/                    # NestJS backend
 │   │   └── src/
@@ -339,7 +339,7 @@ molthub/
 
 ### The Reconciler — Core Orchestration Engine
 
-The reconciler is the brain of Molthub. It takes a desired state (manifest) and makes reality match.
+The reconciler is the brain of Clawster. It takes a desired state (manifest) and makes reality match.
 
 ```
 User clicks "Deploy" in wizard
@@ -508,7 +508,7 @@ WebSocketContext
 
 ## The Wizard: Template = Platform + Channels
 
-A **template** in Molthub is not just an agent personality — it's the **entire deployment configuration**: which platform to deploy on AND which channels to connect. The user picks everything in one flow and deploys.
+A **template** in Clawster is not just an agent personality — it's the **entire deployment configuration**: which platform to deploy on AND which channels to connect. The user picks everything in one flow and deploys.
 
 ### Wizard Flow
 
@@ -638,11 +638,11 @@ After provisioning completes:
 
 ---
 
-## Config Transformation: Molthub → OpenClaw
+## Config Transformation: Clawster → OpenClaw
 
-Molthub generates `openclaw.json` from its internal schema. Key transformations:
+Clawster generates `openclaw.json` from its internal schema. Key transformations:
 
-| Molthub Internal | OpenClaw Config | Notes |
+| Clawster Internal | OpenClaw Config | Notes |
 |-----------------|-----------------|-------|
 | `gateway.host` | `gateway.bind` | OpenClaw uses "bind" not "host" |
 | `sandbox` (root) | `agents.defaults.sandbox` | Different nesting |
@@ -663,7 +663,7 @@ The `ConfigGeneratorService` handles all transformations. The `DockerContainerTa
 4. **Tool Restrictions**: Allow/deny lists per tool. Elevated execution with `allowFrom` restrictions.
 5. **File Permissions**: Config 600, state dir 700.
 
-### Molthub additions
+### Clawster additions
 
 - **PolicyEngine**: Validates manifests against policy packs before deployment
 - **Secure defaults enforcement**: Gateway auth required, DM pairing by default, logging redaction
@@ -674,7 +674,7 @@ The `ConfigGeneratorService` handles all transformations. The `DockerContainerTa
 
 ## Bot-to-Bot Delegation Architecture
 
-When a user sends a message to Bot A and routing rules match, Molthub can delegate the message to Bot B before or instead of processing it with Bot A.
+When a user sends a message to Bot A and routing rules match, Clawster can delegate the message to Bot B before or instead of processing it with Bot A.
 
 ```
 User → Chat API (POST /bot-instances/:id/chat)
@@ -769,8 +769,8 @@ AlertingService.evaluateAlerts() (cron every 60s)
 
 These must always be true. If your change breaks any of these, something is wrong.
 
-1. **Molthub never runs inside OpenClaw.** They are separate processes communicating over WebSocket.
-2. **OpenClaw is installed independently.** Via its own installer script, npm, or Docker. Molthub doesn't bundle it.
+1. **Clawster never runs inside OpenClaw.** They are separate processes communicating over WebSocket.
+2. **OpenClaw is installed independently.** Via its own installer script, npm, or Docker. Clawster doesn't bundle it.
 3. **All runtime communication goes through the Gateway WebSocket Protocol.** No SSH, no exec into containers, no file reads from running instances.
 4. **Config changes use optimistic concurrency.** Always `config.get` for the hash before `config.apply`.
 5. **Port spacing of 20+ between instances.** Each OpenClaw gateway needs a range of derived ports.

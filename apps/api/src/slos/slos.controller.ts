@@ -10,7 +10,7 @@ import {
   HttpCode,
   HttpStatus,
 } from "@nestjs/common";
-import { SloDefinition } from "@molthub/database";
+import { SloDefinition } from "@clawster/database";
 import { SlosService } from "./slos.service";
 import { CreateSloDto, UpdateSloDto, SloQueryDto } from "./slos.dto";
 

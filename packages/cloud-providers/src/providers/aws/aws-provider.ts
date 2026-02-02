@@ -46,7 +46,7 @@ import {
   PutSecretValueCommand,
   DeleteSecretCommand,
 } from "@aws-sdk/client-secrets-manager";
-import { InstanceManifest } from "@molthub/core";
+import { InstanceManifest } from "@clawster/core";
 import {
   CloudProvider,
   CloudProviderConfig,
@@ -158,11 +158,11 @@ export class AWSProvider implements CloudProvider {
 
   async bootstrap(options: BootstrapOptions, onProgress?: ProgressCallback): Promise<CloudResources> {
     const workspace = options.workspace;
-    const tags = options.tags || { managedBy: "molthub", workspace };
+    const tags = options.tags || { managedBy: "clawster", workspace };
 
     // Step 1: Create ECS Cluster
     onProgress?.("cluster", "in_progress", "Creating ECS cluster...");
-    const clusterName = `molthub-${workspace}`;
+    const clusterName = `clawster-${workspace}`;
     const clusterResult = await this.ecsClient.send(new CreateClusterCommand({
       clusterName,
       tags: Object.entries(tags).map(([key, value]) => ({ key, value: String(value) })),
@@ -198,7 +198,7 @@ export class AWSProvider implements CloudProvider {
 
     // Step 4: Create CloudWatch log group
     onProgress?.("logging", "in_progress", "Creating CloudWatch log group...");
-    const logGroupName = `/molthub/${workspace}`;
+    const logGroupName = `/clawster/${workspace}`;
     try {
       await this.logsClient.send(new CreateLogGroupCommand({
         logGroupName,
@@ -255,7 +255,7 @@ export class AWSProvider implements CloudProvider {
       TagSpecifications: [{
         ResourceType: "vpc",
         Tags: [
-          { Key: "Name", Value: `molthub-${workspace}` },
+          { Key: "Name", Value: `clawster-${workspace}` },
           ...Object.entries(tags).map(([Key, Value]) => ({ Key, Value })),
         ],
       }],
@@ -273,7 +273,7 @@ export class AWSProvider implements CloudProvider {
         TagSpecifications: [{
           ResourceType: "subnet",
           Tags: [
-            { Key: "Name", Value: `molthub-${workspace}-${azs[i]}` },
+            { Key: "Name", Value: `clawster-${workspace}-${azs[i]}` },
             ...Object.entries(tags).map(([Key, Value]) => ({ Key, Value })),
           ],
         }],
@@ -285,13 +285,13 @@ export class AWSProvider implements CloudProvider {
 
     // Create security group
     const sgResult = await this.ec2Client.send(new CreateSecurityGroupCommand({
-      GroupName: `molthub-${workspace}`,
-      Description: "Security group for Molthub ECS tasks",
+      GroupName: `clawster-${workspace}`,
+      Description: "Security group for Clawster ECS tasks",
       VpcId: vpcId,
       TagSpecifications: [{
         ResourceType: "security-group",
         Tags: [
-          { Key: "Name", Value: `molthub-${workspace}` },
+          { Key: "Name", Value: `clawster-${workspace}` },
           ...Object.entries(tags).map(([Key, Value]) => ({ Key, Value })),
         ],
       }],
@@ -321,7 +321,7 @@ export class AWSProvider implements CloudProvider {
     const accountId = this.accountId || await this.getAccountId();
 
     // Execution role for ECS
-    const executionRoleName = `molthub-${workspace}-ecs-execution`;
+    const executionRoleName = `clawster-${workspace}-ecs-execution`;
     const executionAssumeRolePolicy = JSON.stringify({
       Version: "2012-10-17",
       Statement: [{
@@ -354,7 +354,7 @@ export class AWSProvider implements CloudProvider {
     }
 
     // Task role for OpenClaw
-    const taskRoleName = `molthub-${workspace}-ecs-task`;
+    const taskRoleName = `clawster-${workspace}-ecs-task`;
     const taskAssumeRolePolicy = JSON.stringify({
       Version: "2012-10-17",
       Statement: [{
@@ -374,7 +374,7 @@ export class AWSProvider implements CloudProvider {
       taskRoleArn = roleResult.Role?.Arn!;
 
       // Create and attach custom policy for Secrets Manager access
-      const policyName = `molthub-${workspace}-secrets-access`;
+      const policyName = `clawster-${workspace}-secrets-access`;
       const policyDocument = JSON.stringify({
         Version: "2012-10-17",
         Statement: [{
@@ -383,7 +383,7 @@ export class AWSProvider implements CloudProvider {
             "secretsmanager:GetSecretValue",
             "secretsmanager:DescribeSecret",
           ],
-          Resource: `arn:aws:secretsmanager:${this.region}:${accountId}:secret:/molthub/${workspace}/*`,
+          Resource: `arn:aws:secretsmanager:${this.region}:${accountId}:secret:/clawster/${workspace}/*`,
         }],
       });
 
@@ -449,7 +449,7 @@ export class AWSProvider implements CloudProvider {
         logConfiguration: {
           logDriver: "awslogs",
           options: {
-            "awslogs-group": `/molthub/${this.workspace}/${config.name}`,
+            "awslogs-group": `/clawster/${this.workspace}/${config.name}`,
             "awslogs-region": this.region,
             "awslogs-stream-prefix": "openclaw",
           },
@@ -649,7 +649,7 @@ export class AWSProvider implements CloudProvider {
       throw new Error(`Container ${instanceId} not found`);
     }
 
-    const logGroupName = `/molthub/${this.workspace}/${instance.name}`;
+    const logGroupName = `/clawster/${this.workspace}/${instance.name}`;
     
     // Get log streams
     const { DescribeLogStreamsCommand, GetLogEventsCommand } = await import("@aws-sdk/client-cloudwatch-logs");
@@ -682,7 +682,7 @@ export class AWSProvider implements CloudProvider {
   }
 
   async storeSecret(name: string, value: string, metadata?: Record<string, string>): Promise<string> {
-    const secretName = `/molthub/${this.workspace}/${name}`;
+    const secretName = `/clawster/${this.workspace}/${name}`;
     
     try {
       const result = await this.secretsClient.send(new CreateSecretCommand({
@@ -705,7 +705,7 @@ export class AWSProvider implements CloudProvider {
   }
 
   async getSecret(name: string): Promise<string | null> {
-    const secretName = `/molthub/${this.workspace}/${name}`;
+    const secretName = `/clawster/${this.workspace}/${name}`;
     
     try {
       const result = await this.secretsClient.send(new GetSecretValueCommand({
@@ -721,7 +721,7 @@ export class AWSProvider implements CloudProvider {
   }
 
   async deleteSecret(name: string): Promise<void> {
-    const secretName = `/molthub/${this.workspace}/${name}`;
+    const secretName = `/clawster/${this.workspace}/${name}`;
     
     await this.secretsClient.send(new DeleteSecretCommand({
       SecretId: secretName,

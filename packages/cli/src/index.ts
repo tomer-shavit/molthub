@@ -6,19 +6,19 @@ import { bootstrap } from "./commands/bootstrap";
 import { status } from "./commands/status";
 import { doctor } from "./commands/doctor";
 import { createUser, login, listUsers, deleteUser } from "./commands/auth";
-import { MOLTHUB_VERSION } from "@molthub/core";
+import { CLAWSTER_VERSION } from "@clawster/core";
 
 const program = new Command();
 
 program
-  .name("molthub")
-  .description("Molthub CLI - Control plane for OpenClaw instances")
-  .version(MOLTHUB_VERSION);
+  .name("clawster")
+  .description("Clawster CLI - Control plane for OpenClaw instances")
+  .version(CLAWSTER_VERSION);
 
 // Bootstrap command
 program
   .command("init")
-  .description("Initialize Molthub infrastructure with interactive wizard")
+  .description("Initialize Clawster infrastructure with interactive wizard")
   .option("-p, --provider <provider>", "Cloud provider (aws, azure, gcp, digitalocean, selfhosted)")
   .option("-r, --region <region>", "Cloud region")
   .option("-w, --workspace <name>", "Workspace name")
@@ -37,13 +37,13 @@ program
 // Status and diagnostics
 program
   .command("status")
-  .description("Check Molthub status and instance health")
+  .description("Check Clawster status and instance health")
   .option("-w, --workspace <name>", "Workspace name")
   .action(status);
 
 program
   .command("doctor")
-  .description("Diagnose common issues with Molthub setup")
+  .description("Diagnose common issues with Clawster setup")
   .action(doctor);
 
 // Authentication commands
@@ -115,7 +115,7 @@ dev
   .description("Start API server in development mode")
   .action(async () => {
     console.log(chalk.blue("Starting API server..."));
-    console.log(chalk.cyan("Run: pnpm dev --filter=@molthub/api"));
+    console.log(chalk.cyan("Run: pnpm dev --filter=@clawster/api"));
   });
 
 dev
@@ -123,7 +123,7 @@ dev
   .description("Start web UI in development mode")
   .action(async () => {
     console.log(chalk.blue("Starting web UI..."));
-    console.log(chalk.cyan("Run: pnpm dev --filter=@molthub/web"));
+    console.log(chalk.cyan("Run: pnpm dev --filter=@clawster/web"));
   });
 
 dev
@@ -143,7 +143,7 @@ provider
   .command("list")
   .description("List available cloud providers")
   .action(() => {
-    const { CloudProviderFactory } = require("@molthub/cloud-providers");
+    const { CloudProviderFactory } = require("@clawster/cloud-providers");
     const providers = CloudProviderFactory.getAvailableProviders();
     
     console.log(chalk.blue.bold("\nAvailable Cloud Providers\n"));

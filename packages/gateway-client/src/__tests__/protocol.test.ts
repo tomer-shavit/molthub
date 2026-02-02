@@ -83,7 +83,7 @@ describe("Connect frame structure", () => {
       type: "connect",
       protocolVersion: { min: 1, max: 1 },
       auth: { mode: "token", token: "test-token" },
-      clientMetadata: { name: "molthub", version: "0.1.0" },
+      clientMetadata: { name: "clawster", version: "0.1.0" },
       capabilities: ["health", "config"],
     };
     expect(frame.type).toBe("connect");

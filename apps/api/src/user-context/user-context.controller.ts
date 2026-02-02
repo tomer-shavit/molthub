@@ -1,6 +1,6 @@
 import { Controller, Get, Req } from "@nestjs/common";
 import { Request as ExpressRequest } from "express";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 import { UserContextService } from "./user-context.service";
 
 @Controller("user-context")

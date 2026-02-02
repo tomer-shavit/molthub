@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma, Template } from "@molthub/database";
+import { prisma, Template } from "@clawster/database";
 // Prisma namespace no longer needed after SQLite migration
 import {
   CreateTemplateDto,

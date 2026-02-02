@@ -1,22 +1,22 @@
 # Launch Demo Plan: "Zero to Autonomous Agent Team"
 
 ## Goal
-Build the missing features needed for a 3-4 minute launch video that demonstrates Molthub's full vision. The demo follows Sarah (a solo developer) from zero to running an autonomous agent team — deploying bots, seeing them evolve, watching them collaborate, and getting real-time alerts.
+Build the missing features needed for a 3-4 minute launch video that demonstrates Clawster's full vision. The demo follows Sarah (a solo developer) from zero to running an autonomous agent team — deploying bots, seeing them evolve, watching them collaborate, and getting real-time alerts.
 
 ---
 
 ## Demo Script (3:30)
 
 ### Opening Hook (0:00 - 0:15)
-*Empty browser, fresh Molthub URL*
+*Empty browser, fresh Clawster URL*
 > "What if you could deploy an autonomous AI agent — with its own personality, connected to your real messaging channels, secured by default — in under 2 minutes? And then deploy a second one, and have them work together?"
 
 ### Act 1: First Bot Deploy (0:15 - 1:15)
-1. Fresh Molthub opens → full-screen wizard
+1. Fresh Clawster opens → full-screen wizard
 2. Pick "Support Bot" template → toggle Telegram → name it → Deploy
 3. Real-time terminal streams docker build, config writes, gateway startup
 4. All steps go green → "Your OpenClaw agent is live!"
-5. **Open built-in chat panel** → talk to the bot inside Molthub → bot responds
+5. **Open built-in chat panel** → talk to the bot inside Clawster → bot responds
 6. Quick cut to Telegram → same bot responds there too
 
 ### Act 2: The Dashboard Comes Alive (1:15 - 1:45)
@@ -36,7 +36,7 @@ Build the missing features needed for a 3-4 minute launch video that demonstrate
 
 ### Closing (3:15 - 3:30)
 *Dashboard view: two bots, healthy, active*
-> "Two autonomous agents. Deployed in minutes. Talking to each other. Monitored. Secured. Evolving on their own. This is Molthub."
+> "Two autonomous agents. Deployed in minutes. Talking to each other. Monitored. Secured. Evolving on their own. This is Clawster."
 
 ---
 
@@ -108,7 +108,7 @@ Build the missing features needed for a 3-4 minute launch video that demonstrate
 ### Feature 3: Built-in Chat UI
 **Effort**: Medium | **Demo Impact**: Very High (demo is self-contained, no app switching)
 
-**What**: A chat panel in Molthub's bot detail page where Sarah can talk to any bot directly. Uses the Gateway WebSocket `agent` RPC method.
+**What**: A chat panel in Clawster's bot detail page where Sarah can talk to any bot directly. Uses the Gateway WebSocket `agent` RPC method.
 
 **Current state**: `GatewayClient` already has `agent()` method that sends messages and streams responses. No UI for it.
 
@@ -177,9 +177,9 @@ Build the missing features needed for a 3-4 minute launch video that demonstrate
 
 **4c. API: Delegation via OpenClaw tool/skill** (Depends on 4b)
 - Create an MCP tool or OpenClaw skill that the source bot can call: `delegate_to_bot({ botName, message })`
-- This tool calls back to Molthub API which executes the delegation
+- This tool calls back to Clawster API which executes the delegation
 - The bot autonomously decides when to delegate based on its system prompt
-- Alternative simpler approach: Molthub intercepts the user message, checks routing rules, and if matched, sends to target bot first, then feeds result as context to source bot
+- Alternative simpler approach: Clawster intercepts the user message, checks routing rules, and if matched, sends to target bot first, then feeds result as context to source bot
 
 **4d. Web: Routing rules configuration UI** (Depends on 4a)
 - New section in bot detail page or a dedicated `/routing` page
@@ -291,8 +291,8 @@ After implementation, these docs must be updated to reflect the new features:
   - Add `NotificationChannel`, `AlertNotificationRule`, `BotRoutingRule`
 - Update "What Still Needs Work" section — remove items that are now done
 
-### 2. `.claude/docs/molthub-vision.md`
-- Update "What Molthub Does → Monitor Everything" section:
+### 2. `.claude/docs/clawster-vision.md`
+- Update "What Clawster Does → Monitor Everything" section:
   - Add: "Alerts fire and notify via Slack, email, or webhook when health degrades, costs spike, or SLOs breach"
 - Update "Organize Bots into Teams" section:
   - Add concrete detail about routing rules and delegation now that it exists
@@ -313,18 +313,18 @@ After implementation, these docs must be updated to reflect the new features:
 
 ### 4. `.claude/docs/dream-architecture.md`
 - Add new section: "Bot-to-Bot Delegation Architecture"
-  - Diagram showing: User → Bot A Gateway → Molthub Delegation Service → Bot B Gateway → response flows back
+  - Diagram showing: User → Bot A Gateway → Clawster Delegation Service → Bot B Gateway → response flows back
   - Explain routing rules, trace creation, autonomous vs rule-based delegation
 - Add to "The Gateway WebSocket Protocol" section:
   - Mention `agent` method usage for chat relay
-- Update "Molthub Internal Architecture → Monorepo Structure":
+- Update "Clawster Internal Architecture → Monorepo Structure":
   - Add new modules/services
 - Add new section: "External Notifications Architecture"
   - Alert → NotificationDeliveryService → Slack/Webhook/Email
   - Diagram showing flow
 
 ### 5. `.claude/docs/openclaw-reference.md`
-- No changes needed (this documents OpenClaw itself, not Molthub features)
+- No changes needed (this documents OpenClaw itself, not Clawster features)
 
 ---
 

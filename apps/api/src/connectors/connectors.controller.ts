@@ -10,7 +10,7 @@ import {
   HttpCode,
   HttpStatus,
 } from "@nestjs/common";
-import { IntegrationConnector } from "@molthub/database";
+import { IntegrationConnector } from "@clawster/database";
 import { ConnectorsService } from "./connectors.service";
 import { CreateConnectorDto, UpdateConnectorDto, ListConnectorsQueryDto, TestConnectionDto } from "./connectors.dto";
 

@@ -35,7 +35,7 @@ const CLUSTER_AVAILABLE = hasKubeCluster();
     beforeAll(async () => {
       profile = generateTestProfile();
       port = generateTestPort();
-      namespace = `molthub-test-${profile}`;
+      namespace = `clawster-test-${profile}`;
 
       await runCommand("kubectl", ["create", "namespace", namespace]).catch(
         () => {

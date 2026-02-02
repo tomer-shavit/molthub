@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import {
   prisma,
   Prisma,
-} from "@molthub/database";
+} from "@clawster/database";
 import type {
   CreateNotificationChannelDto,
   UpdateNotificationChannelDto,
@@ -96,7 +96,7 @@ export class NotificationChannelsService {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            text: ":white_check_mark: Molthub notification channel test — this channel is working correctly.",
+            text: ":white_check_mark: Clawster notification channel test — this channel is working correctly.",
           }),
         });
         success = response.ok;
@@ -113,7 +113,7 @@ export class NotificationChannelsService {
           headers,
           body: JSON.stringify({
             event: "test",
-            source: "molthub",
+            source: "clawster",
             message: "Notification channel test — this channel is working correctly.",
             timestamp: new Date().toISOString(),
           }),

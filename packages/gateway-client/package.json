@@ -1,5 +1,5 @@
 {
-  "name": "@molthub/gateway-client",
+  "name": "@clawster/gateway-client",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",

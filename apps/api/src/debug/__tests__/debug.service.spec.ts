@@ -5,7 +5,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { NotFoundException } from "@nestjs/common";
 
 // Mock the gateway client before importing the service
-jest.mock("@molthub/gateway-client", () => {
+jest.mock("@clawster/gateway-client", () => {
   const mockHealth = jest.fn().mockResolvedValue({
     ok: true,
     channels: [
@@ -45,7 +45,7 @@ jest.mock("@molthub/gateway-client", () => {
 });
 
 // Mock the database module
-jest.mock("@molthub/database", () => ({
+jest.mock("@clawster/database", () => ({
   prisma: {
     botInstance: {
       findUnique: jest.fn(),
@@ -65,7 +65,7 @@ jest.mock("@molthub/database", () => ({
 }));
 
 import { DebugService } from "../debug.service";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 
 const mockPrisma = prisma as unknown as {
   botInstance: { findUnique: jest.Mock };

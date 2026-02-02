@@ -45,7 +45,7 @@ export default function LoginPage() {
             </div>
           </div>
           <CardTitle>Welcome back</CardTitle>
-          <CardDescription>Sign in to your Molthub account</CardDescription>
+          <CardDescription>Sign in to your Clawster account</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">

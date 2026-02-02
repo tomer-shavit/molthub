@@ -1,11 +1,11 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { prisma } from "@molthub/database";
-import { GatewayManager } from "@molthub/gateway-client";
+import { prisma } from "@clawster/database";
+import { GatewayManager } from "@clawster/gateway-client";
 import type {
   GatewayConnectionOptions,
   GatewayClient,
-} from "@molthub/gateway-client";
+} from "@clawster/gateway-client";
 import type { AgentCard, AgentSkill } from "./a2a.types";
 
 const IDENTITY_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -45,7 +45,7 @@ export class A2aAgentCardService {
     }
 
     const baseUrl =
-      this.configService.get<string>("MOLTHUB_BASE_URL") ||
+      this.configService.get<string>("CLAWSTER_BASE_URL") ||
       "http://localhost:4000";
 
     // Connect to gateway (best effort)
@@ -78,7 +78,7 @@ export class A2aAgentCardService {
       defaultInputModes: ["text"],
       defaultOutputModes: ["text"],
       provider: {
-        organization: "Molthub",
+        organization: "Clawster",
       },
     };
   }
@@ -103,7 +103,7 @@ export class A2aAgentCardService {
         port: gwConn.port,
         auth: {
           mode: "token",
-          token: gwConn.authToken || "molthub",
+          token: gwConn.authToken || "clawster",
         },
         timeoutMs: 5_000,
       };
@@ -193,7 +193,7 @@ export class A2aAgentCardService {
     // 6. Default
     return {
       name: bot.name,
-      description: `${bot.name} — OpenClaw agent managed by Molthub`,
+      description: `${bot.name} — OpenClaw agent managed by Clawster`,
     };
   }
 
@@ -269,7 +269,7 @@ export class A2aAgentCardService {
             return {
               name: name || "OpenClaw Agent",
               description:
-                theme || `${name || "OpenClaw Agent"} — managed by Molthub`,
+                theme || `${name || "OpenClaw Agent"} — managed by Clawster`,
             };
           }
         }
@@ -287,7 +287,7 @@ export class A2aAgentCardService {
           return {
             name: name || "OpenClaw Agent",
             description:
-              theme || `${name || "OpenClaw Agent"} — managed by Molthub`,
+              theme || `${name || "OpenClaw Agent"} — managed by Clawster`,
           };
         }
       }
@@ -348,7 +348,7 @@ export class A2aAgentCardService {
       this.extractSkillsFromConfig(liveConfig, "live", skillMap);
     }
 
-    // 2. desiredManifest skills (what Molthub deployed)
+    // 2. desiredManifest skills (what Clawster deployed)
     try {
       const manifest =
         typeof bot.desiredManifest === "string"
@@ -366,7 +366,7 @@ export class A2aAgentCardService {
       // Config parsing failed
     }
 
-    // 3. SkillPacks from DB (supplemental, Molthub-managed)
+    // 3. SkillPacks from DB (supplemental, Clawster-managed)
     for (const binding of bot.skillPacks) {
       const pack = binding.skillPack;
       if (!skillMap.has(pack.name)) {

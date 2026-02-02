@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Injectable, Logger } from "@nestjs/common";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 import * as crypto from "crypto";
 import { DelegationSkillGeneratorService } from "../bot-teams/delegation-skill-generator.service";
 
@@ -19,7 +19,7 @@ export class DelegationSkillWriterService {
    *
    * @param instanceId - The bot instance ID
    * @param configPath - The host filesystem path where config is stored (e.g., /var/openclaw/bot-name)
-   * @param apiUrl - The Molthub API URL (e.g., http://host.docker.internal:4000)
+   * @param apiUrl - The Clawster API URL (e.g., http://host.docker.internal:4000)
    */
   async writeDelegationSkills(
     instanceId: string,
@@ -34,7 +34,7 @@ export class DelegationSkillWriterService {
       },
     });
 
-    const skillDir = path.join(configPath, "skills", "molthub-delegation");
+    const skillDir = path.join(configPath, "skills", "clawster-delegation");
 
     // 2. If no team members, clean up any existing skill files
     if (teamMembers.length === 0) {
@@ -86,7 +86,7 @@ export class DelegationSkillWriterService {
    * Returns the plaintext key.
    */
   private async ensureDelegationApiKey(botInstanceId: string): Promise<string> {
-    const DELEGATION_LABEL = "molthub-delegation-auto";
+    const DELEGATION_LABEL = "clawster-delegation-auto";
 
     // Revoke any previous delegation keys
     await prisma.a2aApiKey.updateMany({

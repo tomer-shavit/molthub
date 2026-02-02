@@ -1,7 +1,7 @@
 import { NotFoundException } from "@nestjs/common";
 import { OpenClawSecurityAuditService } from "../security-audit.service";
 
-jest.mock("@molthub/database", () => ({
+jest.mock("@clawster/database", () => ({
   prisma: {
     botInstance: {
       findUnique: jest.fn(),
@@ -17,7 +17,7 @@ function createStoredInstance(openclawConfig: Record<string, unknown> = {}, over
     id: "inst-1",
     name: "test-bot",
     desiredManifest: {
-      apiVersion: "molthub/v2",
+      apiVersion: "clawster/v2",
       metadata: { name: "test-bot", environment: "dev" },
       spec: { openclawConfig: { gateway: { port: 18789, host: "127.0.0.1" }, ...openclawConfig } },
     },
@@ -27,7 +27,7 @@ function createStoredInstance(openclawConfig: Record<string, unknown> = {}, over
 
 describe("OpenClawSecurityAuditService", () => {
   let service: OpenClawSecurityAuditService;
-  const { prisma } = require("@molthub/database");
+  const { prisma } = require("@clawster/database");
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -108,7 +108,7 @@ describe("OpenClawSecurityAuditService", () => {
   describe("preProvisioningAudit", () => {
     it("returns allowed field and arrays", async () => {
       const manifest = {
-        apiVersion: "molthub/v2",
+        apiVersion: "clawster/v2",
         metadata: { name: "test", environment: "dev" },
         spec: {
           openclawConfig: {
@@ -126,7 +126,7 @@ describe("OpenClawSecurityAuditService", () => {
 
     it("maps 'local' environment to 'dev'", async () => {
       const manifest = {
-        apiVersion: "molthub/v2",
+        apiVersion: "clawster/v2",
         metadata: { name: "test", environment: "local" },
         spec: { openclawConfig: { gateway: { port: 18789, auth: { token: "t" } } } },
       } as any;

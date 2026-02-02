@@ -114,7 +114,7 @@ export const RuntimeConfigSchema = z.object({
 export type RuntimeConfig = z.infer<typeof RuntimeConfigSchema>;
 
 export const InstanceManifestSchema = z.object({
-  apiVersion: z.literal("molthub/v1"),
+  apiVersion: z.literal("clawster/v1"),
   kind: z.literal("OpenClawInstance"),
   metadata: z.object({
     name: z.string()

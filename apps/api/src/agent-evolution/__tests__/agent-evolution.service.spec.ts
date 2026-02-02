@@ -2,7 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { AgentEvolutionService } from "../agent-evolution.service";
 
 // Mock prisma
-jest.mock("@molthub/database", () => ({
+jest.mock("@clawster/database", () => ({
   prisma: {
     botInstance: {
       findUnique: jest.fn(),
@@ -29,13 +29,13 @@ jest.mock("@molthub/database", () => ({
 
 // Mock gateway-client
 const mockGetClient = jest.fn();
-jest.mock("@molthub/gateway-client", () => ({
+jest.mock("@clawster/gateway-client", () => ({
   GatewayManager: jest.fn().mockImplementation(() => ({
     getClient: mockGetClient,
   })),
 }));
 
-const { prisma } = require("@molthub/database");
+const { prisma } = require("@clawster/database");
 
 describe("AgentEvolutionService", () => {
   let service: AgentEvolutionService;

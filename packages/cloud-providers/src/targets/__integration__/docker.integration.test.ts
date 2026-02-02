@@ -34,11 +34,11 @@ const DOCKER_AVAILABLE = isDockerAvailable();
     beforeAll(() => {
       profile = generateTestProfile();
       port = generateTestPort();
-      configDir = path.join(os.tmpdir(), `molthub-docker-test-${profile}`);
+      configDir = path.join(os.tmpdir(), `clawster-docker-test-${profile}`);
       fs.mkdirSync(configDir, { recursive: true });
 
       const config: DockerTargetConfig = {
-        containerName: `molthub-test-${profile}`,
+        containerName: `clawster-test-${profile}`,
         configPath: configDir,
         gatewayPort: port,
       };

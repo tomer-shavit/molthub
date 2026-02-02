@@ -7,7 +7,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 
 const validManifest = {
-  apiVersion: 'molthub/v1',
+  apiVersion: 'clawster/v1',
   kind: 'OpenClawInstance',
   metadata: {
     name: 'test-bot',

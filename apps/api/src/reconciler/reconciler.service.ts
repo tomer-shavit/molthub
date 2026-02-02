@@ -2,11 +2,11 @@ import { Injectable, Logger } from "@nestjs/common";
 import {
   prisma,
   BotInstance,
-} from "@molthub/database";
+} from "@clawster/database";
 import {
   validateOpenClawManifest,
-} from "@molthub/core";
-import type { OpenClawManifest } from "@molthub/core";
+} from "@clawster/core";
+import type { OpenClawManifest } from "@clawster/core";
 import { ConfigGeneratorService } from "./config-generator.service";
 import { LifecycleManagerService } from "./lifecycle-manager.service";
 import { DriftDetectionService } from "./drift-detection.service";
@@ -175,7 +175,7 @@ export class ReconcilerService {
           ? JSON.parse(instance.metadata)
           : instance.metadata) as Record<string, unknown> | null;
         const configPath = (instanceMeta?.configPath as string) ?? `/var/openclaw/${instance.name}`;
-        const apiUrl = process.env.MOLTHUB_API_URL || "http://172.17.0.1:4000";
+        const apiUrl = process.env.CLAWSTER_API_URL || "http://172.17.0.1:4000";
         const skillResult = await this.delegationSkillWriter.writeDelegationSkills(
           instanceId,
           configPath,
@@ -469,14 +469,14 @@ export class ReconcilerService {
     const obj = (typeof rawStr === "string" ? JSON.parse(rawStr) : rawStr) as Record<string, unknown>;
 
     // If it's already a v2 manifest, validate directly
-    if (obj.apiVersion === "molthub/v2") {
+    if (obj.apiVersion === "clawster/v2") {
       return validateOpenClawManifest(obj);
     }
 
     // Legacy format: wrap in v2 envelope
     // Assume the raw manifest IS the openclawConfig section
     const wrapped = {
-      apiVersion: "molthub/v2" as const,
+      apiVersion: "clawster/v2" as const,
       kind: "OpenClawInstance" as const,
       metadata: {
         name: instance.name.toLowerCase().replace(/[^a-z0-9-]/g, "-"),

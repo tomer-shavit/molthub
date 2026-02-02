@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { prisma, Trace } from "@molthub/database";
+import { prisma, Trace } from "@clawster/database";
 import type { A2aTask, A2aMessage, TaskState } from "./a2a.types";
 
 @Injectable()

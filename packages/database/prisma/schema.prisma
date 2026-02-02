@@ -533,7 +533,7 @@ model SkillPack {
   // String variables shared across all bots using this pack
   envVars String @default("{}")
   
-  // Whether this is a built-in pack (provided by Molthub)
+  // Whether this is a built-in pack (provided by Clawster)
   isBuiltin Boolean @default(false)
   
   // Version for tracking changes

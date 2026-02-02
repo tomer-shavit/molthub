@@ -12,7 +12,7 @@ import {
 } from "@nestjs/common";
 import { PolicyPacksService } from "./policy-packs.service";
 import { CreatePolicyPackDto, UpdatePolicyPackDto, ListPolicyPacksQueryDto, EvaluatePolicyDto } from "./policy-packs.dto";
-import { PolicyPack } from "@molthub/database";
+import { PolicyPack } from "@clawster/database";
 
 @Controller("policy-packs")
 export class PolicyPacksController {

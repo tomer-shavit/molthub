@@ -45,7 +45,7 @@ export function buildTestConfig(
       },
       agents: {
         defaults: {
-          workspace: `/tmp/molthub-test-${profileName}`,
+          workspace: `/tmp/clawster-test-${profileName}`,
         },
       },
     },

@@ -1,5 +1,5 @@
 /**
- * Test Utilities for Molthub
+ * Test Utilities for Clawster
  * 
  * Provides helper functions for testing, including mock setups,
  * database helpers, and assertion utilities.
@@ -256,7 +256,7 @@ export function isNonNegativeNumber(value: unknown): value is number {
 export function setupTestEnv(): void {
   // Set test environment variables
   process.env.NODE_ENV = 'test';
-  process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://test:test@localhost:5433/molthub_test';
+  process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://test:test@localhost:5433/clawster_test';
 }
 
 /**

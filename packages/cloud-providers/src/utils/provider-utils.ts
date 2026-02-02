@@ -116,14 +116,14 @@ export function sleep(ms: number): Promise<void> {
 
 /**
  * Generate standardized resource names
- * Format: molthub-{workspace}-{resourceType}-{suffix}
+ * Format: clawster-{workspace}-{resourceType}-{suffix}
  */
 export function generateResourceName(
   workspace: string,
   resourceType: string,
   suffix?: string
 ): string {
-  const parts = ["molthub", workspace, resourceType];
+  const parts = ["clawster", workspace, resourceType];
   if (suffix) parts.push(suffix);
   return parts.join("-").toLowerCase().replace(/[^a-z0-9-]/g, "-");
 }
@@ -136,7 +136,7 @@ export function generateTags(
   extraTags?: Record<string, string>
 ): Record<string, string> {
   return {
-    managedBy: "molthub",
+    managedBy: "clawster",
     workspace,
     createdAt: new Date().toISOString(),
     ...extraTags,
@@ -375,7 +375,7 @@ export function parseCloudError(error: unknown, providerName: string): {
       suggestions: [
         "Use a different name for the resource",
         "Check if the resource was already created",
-        "Run 'molthub cleanup' to remove existing resources",
+        "Run 'clawster cleanup' to remove existing resources",
       ],
     };
   }

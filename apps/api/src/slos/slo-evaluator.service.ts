@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
-import { prisma, SloDefinition } from "@molthub/database";
+import { prisma, SloDefinition } from "@clawster/database";
 
 @Injectable()
 export class SloEvaluatorService {

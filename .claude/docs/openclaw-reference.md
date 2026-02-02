@@ -8,7 +8,7 @@ alwaysApply: true
 
 Source: https://docs.openclaw.ai/
 
-This document captures the key technical details from OpenClaw's official documentation that Molthub needs to integrate with.
+This document captures the key technical details from OpenClaw's official documentation that Clawster needs to integrate with.
 
 ---
 

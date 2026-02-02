@@ -1,6 +1,6 @@
-# Contributing to Molthub
+# Contributing to Clawster
 
-Thank you for your interest in contributing to Molthub! Molthub is a self-hosted control plane for OpenClaw instances, and we welcome contributions from the community.
+Thank you for your interest in contributing to Clawster! Clawster is a self-hosted control plane for OpenClaw instances, and we welcome contributions from the community.
 
 Please note that this project follows a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold it.
 
@@ -8,14 +8,14 @@ Please note that this project follows a [Code of Conduct](CODE_OF_CONDUCT.md). B
 
 ### Reporting Bugs
 
-- Use [GitHub Issues](https://github.com/tomer-shavit/molthub/issues) with the bug report template.
+- Use [GitHub Issues](https://github.com/tomer-shavit/clawster/issues) with the bug report template.
 - Include clear reproduction steps.
 - Describe expected vs. actual behavior.
 - Include environment info (OS, Node.js version, pnpm version, browser if applicable).
 
 ### Suggesting Features
 
-- Use [GitHub Issues](https://github.com/tomer-shavit/molthub/issues) with the feature request template.
+- Use [GitHub Issues](https://github.com/tomer-shavit/clawster/issues) with the feature request template.
 - Describe the use case, not just the solution. Explain the problem you are trying to solve.
 
 ### Pull Requests
@@ -35,8 +35,8 @@ Please note that this project follows a [Code of Conduct](CODE_OF_CONDUCT.md). B
 ### Getting Started
 
 ```bash
-git clone https://github.com/tomer-shavit/molthub.git
-cd molthub
+git clone https://github.com/tomer-shavit/clawster.git
+cd clawster
 pnpm install
 cp .env.example .env
 pnpm dev:setup    # Starts PostgreSQL + Redis, runs migrations
@@ -46,7 +46,7 @@ pnpm dev          # Starts API (port 4000) and Web UI (port 3000)
 ### Project Structure
 
 ```
-molthub/
+clawster/
 ├── apps/
 │   ├── api/              # NestJS backend (port 4000)
 │   └── web/              # Next.js frontend (port 3000)
@@ -63,9 +63,9 @@ molthub/
 
 ```bash
 pnpm test                           # All tests
-pnpm --filter @molthub/core test    # Core package (Vitest)
-pnpm --filter @molthub/api test     # API tests (Jest)
-pnpm --filter @molthub/web test:e2e # E2E tests (Playwright)
+pnpm --filter @clawster/core test    # Core package (Vitest)
+pnpm --filter @clawster/api test     # API tests (Jest)
+pnpm --filter @clawster/web test:e2e # E2E tests (Playwright)
 pnpm build                          # Full build
 pnpm lint                           # Lint check
 ```
@@ -104,8 +104,8 @@ This project follows [Conventional Commits](https://www.conventionalcommits.org/
 
 ## Questions?
 
-Use [GitHub Discussions](https://github.com/tomer-shavit/molthub/discussions) for questions. GitHub Issues are reserved for bug reports and feature requests only.
+Use [GitHub Discussions](https://github.com/tomer-shavit/clawster/discussions) for questions. GitHub Issues are reserved for bug reports and feature requests only.
 
 ---
 
-Thank you for contributing to Molthub!
+Thank you for contributing to Clawster!

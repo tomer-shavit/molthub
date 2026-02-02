@@ -89,11 +89,11 @@ export class EcsFargateTarget implements DeploymentTarget {
     // to operate on existing resources without calling install() again)
     if (config.profileName) {
       const p = config.profileName;
-      this.stackName = `molthub-bot-${p}`;
-      this.clusterName = `molthub-${p}`;
-      this.serviceName = `molthub-${p}`;
-      this.secretName = `molthub/${p}/config`;
-      this.logGroup = `/ecs/molthub-${p}`;
+      this.stackName = `clawster-bot-${p}`;
+      this.clusterName = `clawster-${p}`;
+      this.serviceName = `clawster-${p}`;
+      this.secretName = `clawster/${p}/config`;
+      this.logGroup = `/ecs/clawster-${p}`;
     }
 
     const credentials = {
@@ -116,11 +116,11 @@ export class EcsFargateTarget implements DeploymentTarget {
   async install(options: InstallOptions): Promise<InstallResult> {
     const profileName = options.profileName;
     this.gatewayPort = options.port;
-    this.stackName = `molthub-bot-${profileName}`;
-    this.clusterName = `molthub-${profileName}`;
-    this.serviceName = `molthub-${profileName}`;
-    this.secretName = `molthub/${profileName}/config`;
-    this.logGroup = `/ecs/molthub-${profileName}`;
+    this.stackName = `clawster-bot-${profileName}`;
+    this.clusterName = `clawster-${profileName}`;
+    this.serviceName = `clawster-${profileName}`;
+    this.secretName = `clawster/${profileName}/config`;
+    this.logGroup = `/ecs/clawster-${profileName}`;
 
     try {
       // 1. Resolve image: use public node:22-slim unless a custom image is provided
@@ -173,7 +173,7 @@ export class EcsFargateTarget implements DeploymentTarget {
           TemplateBody: JSON.stringify(template),
           Parameters: cfParams.length > 0 ? cfParams : undefined,
           Capabilities: ["CAPABILITY_NAMED_IAM"],
-          Tags: [{ Key: "molthub:bot", Value: profileName }],
+          Tags: [{ Key: "clawster:bot", Value: profileName }],
         }),
       );
 
@@ -204,7 +204,7 @@ export class EcsFargateTarget implements DeploymentTarget {
     this.gatewayPort = config.gatewayPort;
 
     if (!this.secretName) {
-      this.secretName = `molthub/${profileName}/config`;
+      this.secretName = `clawster/${profileName}/config`;
     }
 
     // Apply the same config transformations as the Docker target

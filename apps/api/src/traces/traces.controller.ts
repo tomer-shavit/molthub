@@ -7,7 +7,7 @@ import {
   Param,
   Query,
 } from "@nestjs/common";
-import { Trace } from "@molthub/database";
+import { Trace } from "@clawster/database";
 import { TracesService } from "./traces.service";
 import { CreateTraceDto, ListTracesQueryDto } from "./traces.dto";
 

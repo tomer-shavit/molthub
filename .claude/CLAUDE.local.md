@@ -1,21 +1,21 @@
 ---
-description: "Project context, architecture overview, and conventions for Molthub"
+description: "Project context, architecture overview, and conventions for Clawster"
 globs: []
 alwaysApply: true
 ---
 
-# Molthub - Project Context
+# Clawster - Project Context
 
 ## Project Goal
 
-Molthub is an open-source, self-hosted control plane for running and operating a swarm of OpenClaws. It provides a single place to provision OpenClaw instances, configure them consistently, attach channels and integrations, enforce security guardrails, roll out changes safely, and get fleet-level visibility into health, logs, traces, cost, and quality. It integrates tightly with OpenClaw's real control surfaces: the Gateway WebSocket protocol, the `openclaw.json` config model, channel auth flows, health/doctor diagnostics, and systemd/launchd service management.
+Clawster is an open-source, self-hosted control plane for running and operating a swarm of OpenClaws. It provides a single place to provision OpenClaw instances, configure them consistently, attach channels and integrations, enforce security guardrails, roll out changes safely, and get fleet-level visibility into health, logs, traces, cost, and quality. It integrates tightly with OpenClaw's real control surfaces: the Gateway WebSocket protocol, the `openclaw.json` config model, channel auth flows, health/doctor diagnostics, and systemd/launchd service management.
 
 ## Architecture Overview
 
 pnpm + Turborepo monorepo with two apps and four shared packages:
 
 ```
-molthub/
+clawster/
 ├── apps/
 │   ├── api/                  # NestJS 10.3 backend (port 4000, 20+ modules, 70+ endpoints)
 │   └── web/                  # Next.js 14 frontend (port 3000, Tailwind + shadcn/ui + Recharts)
@@ -27,7 +27,7 @@ molthub/
 │   ├── cloud-providers/      # 6 providers (AWS, Azure, GCP, DO, Self-Hosted, Simulated)
 │   └── cli/                  # Bootstrap, auth, db, dev commands
 ├── scripts/                  # dev-start.sh, deploy.sh
-└── molthub/infra/terraform/  # Full AWS IaC
+└── clawster/infra/terraform/  # Full AWS IaC
 ```
 
 ### API Request Lifecycle
@@ -76,7 +76,7 @@ OpenClaw is a real, open-source project: **https://github.com/openclaw/openclaw*
 | `src/daemon/` | Daemon/service management |
 | `docker-compose.yml` | Container setup with gateway + CLI services |
 
-**IMPORTANT**: Always check the OpenClaw source before implementing Molthub features that interact with it. The source of truth is the GitHub repo, not assumptions.
+**IMPORTANT**: Always check the OpenClaw source before implementing Clawster features that interact with it. The source of truth is the GitHub repo, not assumptions.
 
 ## OpenClaw Integration Essentials
 
@@ -110,7 +110,7 @@ OpenClaw is a real, open-source project: **https://github.com/openclaw/openclaw*
 - ValidationPipe with `whitelist: true` strips unknown properties from DTOs
 - OpenClaw config changes should use `config.apply` (with baseHash for optimistic concurrency) or `config.patch`, never direct file writes
 - Port spacing of 20+ between Gateway instances is mandatory (derived ports: browser +2, canvas +4, CDP +11 through +110)
-- Old `molthub/v1` manifest schema is deprecated but must remain functional alongside new `molthub/v2`
+- Old `clawster/v1` manifest schema is deprecated but must remain functional alongside new `clawster/v2`
 
 ## Current State / Active Work
 

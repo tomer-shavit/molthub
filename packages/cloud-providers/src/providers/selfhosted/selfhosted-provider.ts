@@ -1,4 +1,4 @@
-import { InstanceManifest } from "@molthub/core";
+import { InstanceManifest } from "@clawster/core";
 import { spawn } from "child_process";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -58,8 +58,8 @@ export class SelfHostedProvider implements CloudProvider {
     this.region = config.region || "local";
     this.workspace = config.workspace;
     this.dockerHost = config.dockerHost;
-    this.composeProjectName = config.composeProjectName || `molthub-${config.workspace}`;
-    this.dataDir = config.dataDir || path.join(os.homedir(), ".molthub", config.workspace);
+    this.composeProjectName = config.composeProjectName || `clawster-${config.workspace}`;
+    this.dataDir = config.dataDir || path.join(os.homedir(), ".clawster", config.workspace);
     this.secretsDir = path.join(this.dataDir, "secrets");
 
     // Ensure directories exist
@@ -120,10 +120,10 @@ export class SelfHostedProvider implements CloudProvider {
 
     // Create .env file
     const envContent = `
-# Molthub Self-Hosted Configuration
+# Clawster Self-Hosted Configuration
 COMPOSE_PROJECT_NAME=${this.composeProjectName}
-MOLTHUB_WORKSPACE=${this.workspace}
-MOLTHUB_DATA_DIR=${this.dataDir}
+CLAWSTER_WORKSPACE=${this.workspace}
+CLAWSTER_DATA_DIR=${this.dataDir}
 `.trim();
 
     await fs.writeFile(
@@ -166,13 +166,13 @@ MOLTHUB_DATA_DIR=${this.dataDir}
     return `version: '3.8'
 
 services:
-  # Molthub API (optional - can run outside compose)
-  # molthub-api:
-  #   image: molthub/api:latest
+  # Clawster API (optional - can run outside compose)
+  # clawster-api:
+  #   image: clawster/api:latest
   #   ports:
   #     - "4000:4000"
   #   environment:
-  #     - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/molthub
+  #     - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/clawster
   #   volumes:
   #     - ./data:/data
   #   depends_on:
@@ -182,15 +182,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: molthub
-      POSTGRES_PASSWORD: molthub
-      POSTGRES_DB: molthub
+      POSTGRES_USER: clawster
+      POSTGRES_PASSWORD: clawster
+      POSTGRES_DB: clawster
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U molthub"]
+      test: ["CMD-SHELL", "pg_isready -U clawster"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -224,9 +224,9 @@ volumes:
       "run",
       "-d",
       "--name", containerName,
-      "--label", `molthub.workspace=${this.workspace}`,
-      "--label", `molthub.instance=${config.name}`,
-      "--label", `molthub.managed=true`,
+      "--label", `clawster.workspace=${this.workspace}`,
+      "--label", `clawster.instance=${config.name}`,
+      "--label", `clawster.managed=true`,
       "--env-file", path.join(containerDir, ".env"),
       "--restart", "unless-stopped",
       "--memory", `${config.memory}m`,
@@ -370,7 +370,7 @@ volumes:
 
       return {
         id: info.Id,
-        name: labels["molthub.instance"] || name,
+        name: labels["clawster.instance"] || name,
         status,
         health,
         provider: "selfhosted",
@@ -405,7 +405,7 @@ volumes:
       "ps",
       "-a",
       "--format", "{{json .}}",
-      "--filter", `label=molthub.workspace=${this.workspace}`,
+      "--filter", `label=clawster.workspace=${this.workspace}`,
     ]);
 
     const lines = result.stdout.trim().split("\n").filter(Boolean);

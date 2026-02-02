@@ -6,7 +6,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { BotInstancesService } from './bot-instances.service';
 
 // Mock the database and core modules
-jest.mock('@molthub/database', () => ({
+jest.mock('@clawster/database', () => ({
   prisma: {
     botInstance: {
       findFirst: jest.fn(),
@@ -40,20 +40,20 @@ jest.mock('@molthub/database', () => ({
   },
 }));
 
-jest.mock('@molthub/core', () => ({
+jest.mock('@clawster/core', () => ({
   PolicyEngine: jest.fn().mockImplementation(() => ({
     validate: jest.fn().mockReturnValue({ valid: true, violations: [] }),
   })),
 }));
 
-import { prisma } from '@molthub/database';
+import { prisma } from '@clawster/database';
 
 describe('BotInstancesService', () => {
   let service: BotInstancesService;
   const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 
   const validManifest = {
-    apiVersion: 'molthub/v1',
+    apiVersion: 'clawster/v1',
     kind: 'OpenClawInstance',
     metadata: {
       name: 'test-bot',
@@ -131,7 +131,7 @@ describe('BotInstancesService', () => {
     });
 
     it('should throw BadRequestException for invalid manifest', async () => {
-      const { PolicyEngine } = jest.requireMock('@molthub/core');
+      const { PolicyEngine } = jest.requireMock('@clawster/core');
       PolicyEngine.mockImplementation(() => ({
         validate: jest.fn().mockReturnValue({
           valid: false,
@@ -218,7 +218,7 @@ describe('BotInstancesService', () => {
     });
 
     it('should validate manifest on update', async () => {
-      const { PolicyEngine } = jest.requireMock('@molthub/core');
+      const { PolicyEngine } = jest.requireMock('@clawster/core');
       PolicyEngine.mockImplementation(() => ({
         validate: jest.fn().mockReturnValue({
           valid: false,

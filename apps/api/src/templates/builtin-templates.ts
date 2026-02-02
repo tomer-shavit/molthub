@@ -1,4 +1,4 @@
-import type { OpenClawFullConfig } from "@molthub/core";
+import type { OpenClawFullConfig } from "@clawster/core";
 
 // =============================================================================
 // Template Types

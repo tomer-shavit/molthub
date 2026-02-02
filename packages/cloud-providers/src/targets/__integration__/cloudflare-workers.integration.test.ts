@@ -35,7 +35,7 @@ const CAN_RUN = isWranglerAvailable() && HAS_CF_CREDS;
 
       const config: CloudflareWorkersConfig = {
         accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,
-        workerName: `molthub-test-${profile}`,
+        workerName: `clawster-test-${profile}`,
         gatewayToken: `test-token-${profile}`,
         gatewayPort: port,
       };

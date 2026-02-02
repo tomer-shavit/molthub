@@ -8,7 +8,7 @@ import {
   LocalStateSyncBackend,
   SyncScheduler,
   type ScheduledInstance,
-} from "@molthub/core";
+} from "@clawster/core";
 
 @Injectable()
 export class StateSyncService implements OnModuleInit, OnModuleDestroy {
@@ -99,7 +99,7 @@ export class StateSyncService implements OnModuleInit, OnModuleDestroy {
           type: "s3",
           bucket: this.configService.get<string>("STATE_SYNC_S3_BUCKET") ?? "",
           region: this.configService.get<string>("STATE_SYNC_S3_REGION") ?? "us-east-1",
-          prefix: this.configService.get<string>("STATE_SYNC_S3_PREFIX") ?? "molthub/state/",
+          prefix: this.configService.get<string>("STATE_SYNC_S3_PREFIX") ?? "clawster/state/",
           accessKeyId: this.configService.get<string>("STATE_SYNC_S3_ACCESS_KEY_ID"),
           secretAccessKey: this.configService.get<string>("STATE_SYNC_S3_SECRET_ACCESS_KEY"),
           endpoint: this.configService.get<string>("STATE_SYNC_S3_ENDPOINT"),
@@ -110,7 +110,7 @@ export class StateSyncService implements OnModuleInit, OnModuleDestroy {
           type: "r2",
           bucket: this.configService.get<string>("STATE_SYNC_R2_BUCKET") ?? "",
           accountId: this.configService.get<string>("STATE_SYNC_R2_ACCOUNT_ID") ?? "",
-          prefix: this.configService.get<string>("STATE_SYNC_R2_PREFIX") ?? "molthub/state/",
+          prefix: this.configService.get<string>("STATE_SYNC_R2_PREFIX") ?? "clawster/state/",
           accessKeyId: this.configService.get<string>("STATE_SYNC_R2_ACCESS_KEY_ID") ?? "",
           secretAccessKey: this.configService.get<string>("STATE_SYNC_R2_SECRET_ACCESS_KEY") ?? "",
         };
@@ -119,7 +119,7 @@ export class StateSyncService implements OnModuleInit, OnModuleDestroy {
         base.backend = {
           type: "azure-blob",
           connectionString: this.configService.get<string>("STATE_SYNC_AZURE_CONNECTION_STRING") ?? "",
-          containerName: this.configService.get<string>("STATE_SYNC_AZURE_CONTAINER") ?? "molthub-state",
+          containerName: this.configService.get<string>("STATE_SYNC_AZURE_CONTAINER") ?? "clawster-state",
           prefix: this.configService.get<string>("STATE_SYNC_AZURE_PREFIX") ?? "state/",
         };
         break;
@@ -127,7 +127,7 @@ export class StateSyncService implements OnModuleInit, OnModuleDestroy {
         base.backend = {
           type: "gcs",
           bucket: this.configService.get<string>("STATE_SYNC_GCS_BUCKET") ?? "",
-          prefix: this.configService.get<string>("STATE_SYNC_GCS_PREFIX") ?? "molthub/state/",
+          prefix: this.configService.get<string>("STATE_SYNC_GCS_PREFIX") ?? "clawster/state/",
           projectId: this.configService.get<string>("STATE_SYNC_GCS_PROJECT_ID"),
           keyFilePath: this.configService.get<string>("STATE_SYNC_GCS_KEY_FILE"),
         };
@@ -136,7 +136,7 @@ export class StateSyncService implements OnModuleInit, OnModuleDestroy {
       default:
         base.backend = {
           type: "local",
-          basePath: this.configService.get<string>("STATE_SYNC_LOCAL_PATH") ?? "/tmp/molthub-state-backups",
+          basePath: this.configService.get<string>("STATE_SYNC_LOCAL_PATH") ?? "/tmp/clawster-state-backups",
         };
         break;
     }
@@ -163,7 +163,7 @@ export class StateSyncService implements OnModuleInit, OnModuleDestroy {
         );
         return new LocalStateSyncBackend({
           type: "local",
-          basePath: "/tmp/molthub-state-backups",
+          basePath: "/tmp/clawster-state-backups",
         });
       default:
         throw new Error(`Unsupported backend type: ${(config.backend as { type: string }).type}`);

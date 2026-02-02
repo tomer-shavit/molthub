@@ -1,24 +1,24 @@
-# Molthub
+# Clawster
 
-[![CI](https://github.com/tomer-shavit/molthub/actions/workflows/ci.yml/badge.svg)](https://github.com/tomer-shavit/molthub/actions/workflows/ci.yml)
+[![CI](https://github.com/tomer-shavit/clawster/actions/workflows/ci.yml/badge.svg)](https://github.com/tomer-shavit/clawster/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 Open-source, self-hosted control plane for managing fleets of OpenClaw instances. Deploy, configure, monitor, and secure hundreds of bots from a single dashboard.
 
-## Why Molthub?
+## Why Clawster?
 
 - **Fleet-First**: Manage hundreds of OpenClaw instances as easily as one. Templates, profiles, and overlays eliminate configuration sprawl.
 - **OpenClaw-Native**: Built around OpenClaw's real control surfaces -- Gateway protocol, config model, health checks, and diagnostics. Not a generic wrapper.
 - **Secure by Default**: Policy Engine blocks unsafe configs. Secrets never stored in plaintext. Audit trail for every change. No public inbound by default.
 - **Observable**: Fleet health dashboards, per-bot operational views, end-to-end trace visualization, and cost tracking -- all built in.
 
-## When NOT to Use Molthub
+## When NOT to Use Clawster
 
 - You only need a single OpenClaw instance and don't need fleet management.
-- You want a fully managed SaaS (Molthub is self-hosted).
-- You're not using OpenClaw (Molthub is purpose-built for OpenClaw, not a generic bot manager).
+- You want a fully managed SaaS (Clawster is self-hosted).
+- You're not using OpenClaw (Clawster is purpose-built for OpenClaw, not a generic bot manager).
 
 ## Features
 
@@ -91,14 +91,14 @@ Open-source, self-hosted control plane for managing fleets of OpenClaw instances
 
 | Package | Description |
 |---------|-------------|
-| `@molthub/api` | NestJS REST API -- fleet management, reconciler, audit, traces |
-| `@molthub/web` | Next.js dashboard -- health views, config management, trace viewer |
-| `@molthub/core` | Shared Zod schemas, TypeScript types, Policy Engine |
-| `@molthub/database` | Prisma schema and PostgreSQL client |
-| `@molthub/adapters-aws` | AWS ECS, Secrets Manager, CloudWatch integrations |
-| `@molthub/cloud-providers` | Multi-cloud deployment providers |
-| `@molthub/gateway-client` | OpenClaw Gateway WebSocket client |
-| `@molthub/cli` | CLI for bootstrap, auth, and dev workflows |
+| `@clawster/api` | NestJS REST API -- fleet management, reconciler, audit, traces |
+| `@clawster/web` | Next.js dashboard -- health views, config management, trace viewer |
+| `@clawster/core` | Shared Zod schemas, TypeScript types, Policy Engine |
+| `@clawster/database` | Prisma schema and PostgreSQL client |
+| `@clawster/adapters-aws` | AWS ECS, Secrets Manager, CloudWatch integrations |
+| `@clawster/cloud-providers` | Multi-cloud deployment providers |
+| `@clawster/gateway-client` | OpenClaw Gateway WebSocket client |
+| `@clawster/cli` | CLI for bootstrap, auth, and dev workflows |
 
 ## Quick Start
 
@@ -112,8 +112,8 @@ Open-source, self-hosted control plane for managing fleets of OpenClaw instances
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/tomer-shavit/molthub.git
-cd molthub
+git clone https://github.com/tomer-shavit/clawster.git
+cd clawster
 pnpm install
 ```
 
@@ -137,13 +137,13 @@ pnpm db:push
 
 **Terminal 1 - Start API:**
 ```bash
-pnpm --filter @molthub/api dev
+pnpm --filter @clawster/api dev
 # API will be available at http://localhost:4000
 ```
 
 **Terminal 2 - Start Web UI:**
 ```bash
-pnpm --filter @molthub/web dev
+pnpm --filter @clawster/web dev
 # UI will be available at http://localhost:3000
 ```
 
@@ -265,7 +265,7 @@ Visit http://localhost:3000
 ## Project Structure
 
 ```
-molthub/
+clawster/
 ├── apps/
 │   ├── api/                 # NestJS API
 │   │   ├── src/
@@ -298,7 +298,7 @@ molthub/
 │   ├── core/                # Types, schemas, policy engine
 │   ├── database/            # Prisma schema and client
 │   ├── adapters-aws/        # AWS ECS, Secrets Manager, CloudWatch
-│   └── cli/                 # molthub CLI
+│   └── cli/                 # clawster CLI
 └── docker-compose.yml       # Local development stack
 ```
 
@@ -308,7 +308,7 @@ molthub/
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/molthub
+DATABASE_URL=postgresql://user:pass@localhost:5432/clawster
 
 # AWS
 AWS_REGION=us-east-1
@@ -317,7 +317,7 @@ AWS_SECRET_ACCESS_KEY=xxx
 AWS_ACCOUNT_ID=123456789
 
 # ECS
-ECS_CLUSTER_ARN=arn:aws:ecs:us-east-1:123456789:cluster/molthub
+ECS_CLUSTER_ARN=arn:aws:ecs:us-east-1:123456789:cluster/clawster
 ECS_EXECUTION_ROLE_ARN=arn:aws:iam::123456789:role/ecsTaskExecutionRole
 ECS_TASK_ROLE_ARN=arn:aws:iam::123456789:role/ecsTaskRole
 
@@ -371,11 +371,11 @@ pnpm test
 pnpm test:coverage
 
 # Run specific package tests
-pnpm --filter @molthub/core test
-pnpm --filter @molthub/api test
+pnpm --filter @clawster/core test
+pnpm --filter @clawster/api test
 
 # Run E2E tests
-pnpm --filter @molthub/web test:e2e
+pnpm --filter @clawster/web test:e2e
 ```
 
 ### Test Structure
@@ -405,8 +405,8 @@ apps/web/                # E2E tests with Playwright
 
 | Package | Lines | Functions | Branches |
 |---------|-------|-----------|----------|
-| @molthub/core | 85% | 88% | 78% |
-| @molthub/api | 82% | 85% | 75% |
+| @clawster/core | 85% | 88% | 78% |
+| @clawster/api | 82% | 85% | 75% |
 | **Total** | **83%** | **86%** | **76%** |
 
 ## Contributing
@@ -417,8 +417,8 @@ Please note that this project is released with a [Code of Conduct](CODE_OF_CONDU
 
 ## Community
 
-- [GitHub Issues](https://github.com/tomer-shavit/molthub/issues) -- Bug reports and feature requests
-- [GitHub Discussions](https://github.com/tomer-shavit/molthub/discussions) -- Questions, ideas, show and tell
+- [GitHub Issues](https://github.com/tomer-shavit/clawster/issues) -- Bug reports and feature requests
+- [GitHub Discussions](https://github.com/tomer-shavit/clawster/discussions) -- Questions, ideas, show and tell
 
 ## License
 

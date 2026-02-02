@@ -1,6 +1,6 @@
 import { AlertingService } from "../alerting.service";
 
-jest.mock("@molthub/database", () => ({
+jest.mock("@clawster/database", () => ({
   prisma: {
     botInstance: { findMany: jest.fn().mockResolvedValue([]) },
     budgetConfig: { findMany: jest.fn().mockResolvedValue([]) },
@@ -42,7 +42,7 @@ function createInstance(overrides: Record<string, unknown> = {}) {
 
 describe("AlertingService", () => {
   let service: AlertingService;
-  const { prisma } = require("@molthub/database");
+  const { prisma } = require("@clawster/database");
 
   beforeEach(() => {
     jest.clearAllMocks();

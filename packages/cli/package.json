@@ -1,9 +1,9 @@
 {
-  "name": "@molthub/cli",
+  "name": "@clawster/cli",
   "version": "0.1.0",
   "private": true,
   "bin": {
-    "molthub": "./dist/index.js"
+    "clawster": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -11,8 +11,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@molthub/core": "workspace:*",
-    "@molthub/cloud-providers": "workspace:*",
+    "@clawster/core": "workspace:*",
+    "@clawster/cloud-providers": "workspace:*",
     "commander": "^11.1.0",
     "inquirer": "^9.2.12",
     "chalk": "^5.3.0",

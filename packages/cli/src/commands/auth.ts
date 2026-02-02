@@ -7,8 +7,8 @@ import fs from "fs-extra";
 import path from "path";
 import os from "os";
 
-const MOLTHUB_DIR = path.join(os.homedir(), ".molthub");
-const USERS_FILE = path.join(MOLTHUB_DIR, "users.json");
+const CLAWSTER_DIR = path.join(os.homedir(), ".clawster");
+const USERS_FILE = path.join(CLAWSTER_DIR, "users.json");
 
 interface User {
   id: string;
@@ -29,7 +29,7 @@ export async function createUser(options: {
   role?: string;
   workspace?: string;
 }) {
-  console.log(chalk.blue.bold("👤 Create Molthub User\n"));
+  console.log(chalk.blue.bold("👤 Create Clawster User\n"));
 
   // Get user input
   let { username, password, role } = options;
@@ -83,7 +83,7 @@ export async function createUser(options: {
 
   try {
     // Ensure directory exists
-    await fs.ensureDir(MOLTHUB_DIR);
+    await fs.ensureDir(CLAWSTER_DIR);
 
     // Load existing users
     let db: UsersDb = { users: [] };
@@ -130,7 +130,7 @@ export async function login(options: {
   username?: string;
   password?: string;
 }) {
-  console.log(chalk.blue.bold("🔐 Molthub Login\n"));
+  console.log(chalk.blue.bold("🔐 Clawster Login\n"));
 
   let { username, password } = options;
 
@@ -158,7 +158,7 @@ export async function login(options: {
   try {
     // Load users
     if (!(await fs.pathExists(USERS_FILE))) {
-      spinner.fail("No users found. Run 'molthub auth:create-user' first.");
+      spinner.fail("No users found. Run 'clawster auth:create-user' first.");
       process.exit(1);
     }
 
@@ -206,7 +206,7 @@ export async function login(options: {
     console.log(chalk.cyan(`Authorization: Bearer ${token}`));
 
     // Save token to file for CLI use
-    const tokenFile = path.join(MOLTHUB_DIR, "token");
+    const tokenFile = path.join(CLAWSTER_DIR, "token");
     await fs.writeFile(tokenFile, token, "utf-8");
     console.log();
     console.log(chalk.gray(`Token saved to: ${tokenFile}`));
@@ -219,11 +219,11 @@ export async function login(options: {
 }
 
 export async function listUsers() {
-  console.log(chalk.blue.bold("👥 Molthub Users\n"));
+  console.log(chalk.blue.bold("👥 Clawster Users\n"));
 
   try {
     if (!(await fs.pathExists(USERS_FILE))) {
-      console.log(chalk.yellow("No users found. Run 'molthub auth:create-user' to create one."));
+      console.log(chalk.yellow("No users found. Run 'clawster auth:create-user' to create one."));
       return;
     }
 

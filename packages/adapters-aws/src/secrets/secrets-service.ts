@@ -73,13 +73,13 @@ export class SecretsManagerService {
     }
   }
 
-  // For Molthub - store secrets and return ARNs for ECS
+  // For Clawster - store secrets and return ARNs for ECS
   async ensureSecretsForInstance(
     workspace: string,
     instanceName: string,
     secrets: Record<string, string>
   ): Promise<Record<string, string>> {
-    const prefix = `/molthub/${workspace}/${instanceName}`;
+    const prefix = `/clawster/${workspace}/${instanceName}`;
     const arns: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(secrets)) {
@@ -89,7 +89,7 @@ export class SecretsManagerService {
         await this.updateSecret(secretName, value);
       } else {
         await this.createSecret(secretName, value, {
-          managedBy: "molthub",
+          managedBy: "clawster",
           workspace,
           instance: instanceName,
         });

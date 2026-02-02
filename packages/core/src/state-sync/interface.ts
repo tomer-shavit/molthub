@@ -67,7 +67,7 @@ export const S3BackendConfigSchema = z.object({
   type: z.literal("s3"),
   bucket: z.string().min(1),
   region: z.string().min(1).default("us-east-1"),
-  prefix: z.string().default("molthub/state/"),
+  prefix: z.string().default("clawster/state/"),
   accessKeyId: z.string().optional(),
   secretAccessKey: z.string().optional(),
   endpoint: z.string().url().optional(),
@@ -78,7 +78,7 @@ export const R2BackendConfigSchema = z.object({
   type: z.literal("r2"),
   bucket: z.string().min(1),
   accountId: z.string().min(1),
-  prefix: z.string().default("molthub/state/"),
+  prefix: z.string().default("clawster/state/"),
   accessKeyId: z.string().min(1),
   secretAccessKey: z.string().min(1),
 });
@@ -87,7 +87,7 @@ export type R2BackendConfig = z.infer<typeof R2BackendConfigSchema>;
 export const AzureBlobBackendConfigSchema = z.object({
   type: z.literal("azure-blob"),
   connectionString: z.string().min(1),
-  containerName: z.string().min(1).default("molthub-state"),
+  containerName: z.string().min(1).default("clawster-state"),
   prefix: z.string().default("state/"),
 });
 export type AzureBlobBackendConfig = z.infer<typeof AzureBlobBackendConfigSchema>;
@@ -95,7 +95,7 @@ export type AzureBlobBackendConfig = z.infer<typeof AzureBlobBackendConfigSchema
 export const GCSBackendConfigSchema = z.object({
   type: z.literal("gcs"),
   bucket: z.string().min(1),
-  prefix: z.string().default("molthub/state/"),
+  prefix: z.string().default("clawster/state/"),
   projectId: z.string().optional(),
   keyFilePath: z.string().optional(),
 });

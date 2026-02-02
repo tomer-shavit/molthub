@@ -1,7 +1,7 @@
 /**
  * Environment variable mapper for Cloudflare Workers deployment.
  *
- * Maps Molthub configuration into Worker secrets and container environment
+ * Maps Clawster configuration into Worker secrets and container environment
  * variables for the OpenClaw gateway running inside a Cloudflare Sandbox.
  */
 
@@ -35,7 +35,7 @@ export interface WorkerSecrets {
   R2_SECRET_ACCESS_KEY?: string;
   /** AI Gateway API key (if AI Gateway is configured) */
   AI_GATEWAY_API_KEY?: string;
-  /** Any additional secrets from the Molthub config */
+  /** Any additional secrets from the Clawster config */
   [key: string]: string | undefined;
 }
 
@@ -52,11 +52,11 @@ export interface EnvMappingResult {
 }
 
 /**
- * Maps Molthub Cloudflare Workers config and optional additional environment
+ * Maps Clawster Cloudflare Workers config and optional additional environment
  * into container env, worker secrets, and worker vars.
  *
  * @param config - Cloudflare Workers deployment config
- * @param additionalEnv - Extra environment variables from the Molthub config payload
+ * @param additionalEnv - Extra environment variables from the Clawster config payload
  * @returns Separated env mapping result
  */
 export function mapEnvironment(

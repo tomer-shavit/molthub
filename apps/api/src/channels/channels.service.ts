@@ -3,7 +3,7 @@ import {
   prisma,
   CommunicationChannel,
   BotChannelBinding,
-} from "@molthub/database";
+} from "@clawster/database";
 import {
   CreateChannelDto,
   UpdateChannelDto,

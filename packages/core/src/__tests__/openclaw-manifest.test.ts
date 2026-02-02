@@ -4,13 +4,13 @@ import {
   OpenClawEnvironmentSchema,
   DeploymentTargetSchema,
   SecurityOverridesSchema,
-  MolthubSettingsSchema,
+  ClawsterSettingsSchema,
   validateOpenClawManifest,
 } from "../openclaw-manifest";
 
 function createValidManifest(overrides: Record<string, unknown> = {}) {
   return {
-    apiVersion: "molthub/v2",
+    apiVersion: "clawster/v2",
     kind: "OpenClawInstance",
     metadata: {
       name: "test-bot",
@@ -39,10 +39,10 @@ describe("OpenClawManifestSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("requires apiVersion molthub/v2", () => {
+  it("requires apiVersion clawster/v2", () => {
     const result = OpenClawManifestSchema.safeParse({
       ...createValidManifest(),
-      apiVersion: "molthub/v1",
+      apiVersion: "clawster/v1",
     });
     expect(result.success).toBe(false);
   });
@@ -164,15 +164,15 @@ describe("SecurityOverridesSchema", () => {
   });
 });
 
-describe("MolthubSettingsSchema", () => {
+describe("ClawsterSettingsSchema", () => {
   it("applies defaults", () => {
-    const parsed = MolthubSettingsSchema.parse({});
+    const parsed = ClawsterSettingsSchema.parse({});
     expect(parsed.autoRestart).toBe(true);
     expect(parsed.healthCheckIntervalSec).toBe(30);
   });
 
   it("accepts all optional fields", () => {
-    const result = MolthubSettingsSchema.safeParse({
+    const result = ClawsterSettingsSchema.safeParse({
       fleetId: "fleet-1",
       templateId: "tmpl-1",
       enforcedPolicyPackIds: ["pack-1"],
@@ -185,10 +185,10 @@ describe("MolthubSettingsSchema", () => {
 
   it("rejects non-positive healthCheckIntervalSec", () => {
     expect(
-      MolthubSettingsSchema.safeParse({ healthCheckIntervalSec: 0 }).success,
+      ClawsterSettingsSchema.safeParse({ healthCheckIntervalSec: 0 }).success,
     ).toBe(false);
     expect(
-      MolthubSettingsSchema.safeParse({ healthCheckIntervalSec: -1 }).success,
+      ClawsterSettingsSchema.safeParse({ healthCheckIntervalSec: -1 }).success,
     ).toBe(false);
   });
 });
@@ -196,7 +196,7 @@ describe("MolthubSettingsSchema", () => {
 describe("validateOpenClawManifest", () => {
   it("returns parsed manifest for valid input", () => {
     const manifest = validateOpenClawManifest(createValidManifest());
-    expect(manifest.apiVersion).toBe("molthub/v2");
+    expect(manifest.apiVersion).toBe("clawster/v2");
     expect(manifest.metadata.name).toBe("test-bot");
   });
 

@@ -273,7 +273,7 @@ describe('Fleet API (e2e)', () => {
           fleetId: createResponse.body.id,
           name: 'test-instance',
           desiredManifest: {
-            apiVersion: 'molthub/v1',
+            apiVersion: 'clawster/v1',
             kind: 'OpenClawInstance',
             metadata: {
               name: 'test-instance',

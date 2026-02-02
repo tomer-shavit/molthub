@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 import { ReconcilerService } from "../reconciler/reconciler.service";
 import { OpenClawHealthService } from "../health/openclaw-health.service";
 

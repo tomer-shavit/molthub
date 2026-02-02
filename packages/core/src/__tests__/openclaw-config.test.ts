@@ -346,7 +346,7 @@ describe("Channel schemas", () => {
 
 describe("OpenClawManifestSchema (v2)", () => {
   const validManifest = {
-    apiVersion: "molthub/v2",
+    apiVersion: "clawster/v2",
     kind: "OpenClawInstance",
     metadata: {
       name: "my-bot",
@@ -358,7 +358,7 @@ describe("OpenClawManifestSchema (v2)", () => {
     },
     spec: {
       openclawConfig: realisticConfig,
-      molthubSettings: {
+      clawsterSettings: {
         fleetId: "fleet-123",
         autoRestart: true,
         healthCheckIntervalSec: 60,
@@ -375,7 +375,7 @@ describe("OpenClawManifestSchema (v2)", () => {
   it("rejects v1 apiVersion in v2 schema", () => {
     const result = OpenClawManifestSchema.safeParse({
       ...validManifest,
-      apiVersion: "molthub/v1",
+      apiVersion: "clawster/v1",
     });
     expect(result.success).toBe(false);
   });

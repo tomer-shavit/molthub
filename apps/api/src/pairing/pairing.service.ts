@@ -6,12 +6,12 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
-import { prisma } from "@molthub/database";
+import { prisma } from "@clawster/database";
 // PairingState and OpenClawChannelType were enums, now plain strings after SQLite migration
 type PairingState = string;
 type OpenClawChannelType = string;
-import { GatewayManager } from "@molthub/gateway-client";
-import type { GatewayConnectionOptions } from "@molthub/gateway-client";
+import { GatewayManager } from "@clawster/gateway-client";
+import type { GatewayConnectionOptions } from "@clawster/gateway-client";
 
 /** Characters used for pairing codes — excludes ambiguous 0/O/1/I. */
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -75,7 +75,7 @@ export class PairingService {
     const options: GatewayConnectionOptions = {
       host,
       port,
-      auth: token ? { mode: "token", token } : { mode: "token", token: "molthub" },
+      auth: token ? { mode: "token", token } : { mode: "token", token: "clawster" },
       timeoutMs: 10_000,
     };
 

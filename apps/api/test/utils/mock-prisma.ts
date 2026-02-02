@@ -62,7 +62,7 @@ export function createMockBotInstance(overrides: Record<string, unknown> = {}) {
     errorCount: 0,
     lastHealthCheckAt: new Date(),
     desiredManifest: {
-      apiVersion: "molthub/v2",
+      apiVersion: "clawster/v2",
       metadata: { name: "test-bot", environment: "dev" },
       spec: { openclawConfig: { gateway: { port: 18789, host: "127.0.0.1" } } },
     },

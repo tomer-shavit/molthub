@@ -6,7 +6,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { FleetService } from '../src/fleets/fleets.service';
 
 // Mock the database module
-jest.mock('@molthub/database', () => ({
+jest.mock('@clawster/database', () => ({
   prisma: {
     fleet: {
       findFirst: jest.fn(),
@@ -35,7 +35,7 @@ jest.mock('@molthub/database', () => ({
   },
 }));
 
-import { prisma } from '@molthub/database';
+import { prisma } from '@clawster/database';
 
 describe('FleetService', () => {
   let service: FleetService;

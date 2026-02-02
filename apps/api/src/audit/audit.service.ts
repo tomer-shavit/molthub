@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { prisma, AuditEvent } from "@molthub/database";
+import { prisma, AuditEvent } from "@clawster/database";
 import { ListAuditEventsQueryDto } from "./audit.dto";
 
 @Injectable()

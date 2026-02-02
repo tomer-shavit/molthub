@@ -1,10 +1,10 @@
 ---
-description: "UX dream and core design principles for Molthub — the experience we're building toward"
+description: "UX dream and core design principles for Clawster — the experience we're building toward"
 globs: ["apps/web/src/**/*.tsx", "apps/web/src/**/*.ts"]
 alwaysApply: true
 ---
 
-# Molthub UX Dream
+# Clawster UX Dream
 
 ## What OpenClaw Is — And Why It Shapes Everything
 
@@ -27,16 +27,16 @@ This is the most important thing to understand about OpenClaw: **agents are not 
 - **Change its own identity** — an agent can update its name, personality, emoji, system prompt, or goals as it evolves.
 - **Modify its config** — through `config.apply` and `config.patch`, an agent can change its own configuration: session settings, message behavior, channel config, tool restrictions.
 
-This means the relationship between Molthub and each OpenClaw agent is **bidirectional**:
+This means the relationship between Clawster and each OpenClaw agent is **bidirectional**:
 
-- **Molthub → OpenClaw**: Molthub deploys agents, pushes config, sets up channels, configures security. This is the "control" direction.
-- **OpenClaw → Molthub**: Agents evolve autonomously — they add skills, change tools, modify config, connect to MCP servers. Molthub must **observe and reflect** these changes back to the user. This is the "observe" direction.
+- **Clawster → OpenClaw**: Clawster deploys agents, pushes config, sets up channels, configures security. This is the "control" direction.
+- **OpenClaw → Clawster**: Agents evolve autonomously — they add skills, change tools, modify config, connect to MCP servers. Clawster must **observe and reflect** these changes back to the user. This is the "observe" direction.
 
-Molthub is not just a deployment tool that fires and forgets. It's a **living dashboard** for autonomous entities. When Sarah opens Molthub and looks at her support bot, she should see what that agent has become — not just what she originally deployed. The skills it's learned, the tools it's using, the MCP servers it's connected to, the config it's modified — all of this should be visible and understandable.
+Clawster is not just a deployment tool that fires and forgets. It's a **living dashboard** for autonomous entities. When Sarah opens Clawster and looks at her support bot, she should see what that agent has become — not just what she originally deployed. The skills it's learned, the tools it's using, the MCP servers it's connected to, the config it's modified — all of this should be visible and understandable.
 
 ### What This Means for the UX
 
-Molthub is the **control plane** for all of this. It takes what `openclaw onboard --install-daemon` does on a single machine and makes it visual, repeatable, multi-instance, and observable across any infrastructure.
+Clawster is the **control plane** for all of this. It takes what `openclaw onboard --install-daemon` does on a single machine and makes it visual, repeatable, multi-instance, and observable across any infrastructure.
 
 Understanding OpenClaw's nature is essential to the UX. We're not building a generic "deploy a container" UI — we're building the cockpit for autonomous agents that have personality, purpose, channels, skills, health, and security. These are living, running entities that evolve on their own. The UI must reflect both what you told them to be and what they've become.
 
@@ -44,13 +44,13 @@ Understanding OpenClaw's nature is essential to the UX. We're not building a gen
 
 ## The Promise
 
-Someone opens Molthub for the first time. Within 5 minutes they have an OpenClaw agent running — a Gateway spun up, an agent configured with a personality and purpose, channels ready to connect. They pick a template (support bot, DevOps bot, personal assistant), give it a name, and hit Deploy. The Gateway starts, auth tokens are generated, profile isolation is handled, and the agent is live.
+Someone opens Clawster for the first time. Within 5 minutes they have an OpenClaw agent running — a Gateway spun up, an agent configured with a personality and purpose, channels ready to connect. They pick a template (support bot, DevOps bot, personal assistant), give it a name, and hit Deploy. The Gateway starts, auth tokens are generated, profile isolation is handled, and the agent is live.
 
 Then they deploy another. A personal WhatsApp assistant. Then a code review bot on Slack. Each one takes 2 minutes because the flow is the same. They can see all their agents at a glance — which Gateways are healthy, which channels are connected, which agents need attention. Every bot is secure by default, properly isolated, and fully observable.
 
-A week later, they open Molthub again. Their support bot has learned new skills — it added a Jira integration and connected to an MCP server on its own. Their DevOps bot changed its tool profile. Molthub shows all of this. Not as errors or drift — as the natural evolution of autonomous agents. Sarah can see what each agent has become, understand its current capabilities, and still push config changes when she wants to. The control flows both ways.
+A week later, they open Clawster again. Their support bot has learned new skills — it added a Jira integration and connected to an MCP server on its own. Their DevOps bot changed its tool profile. Clawster shows all of this. Not as errors or drift — as the natural evolution of autonomous agents. Sarah can see what each agent has become, understand its current capabilities, and still push config changes when she wants to. The control flows both ways.
 
-That's the bar. Molthub makes deploying, understanding, and managing autonomous OpenClaw agents feel seamless — whether you're running 1 or 20. The first agent is the hook. Seeing what your agents become keeps you coming back. The confidence to keep deploying more is the product.
+That's the bar. Clawster makes deploying, understanding, and managing autonomous OpenClaw agents feel seamless — whether you're running 1 or 20. The first agent is the hook. Seeing what your agents become keeps you coming back. The confidence to keep deploying more is the product.
 
 ---
 
@@ -60,13 +60,13 @@ That's the bar. Molthub makes deploying, understanding, and managing autonomous 
 
 Sarah is a developer — maybe solo, maybe on a small team. She wants autonomous agents handling different parts of her life and work: a support agent for her SaaS on Telegram with DM pairing for security, a personal WhatsApp assistant that handles her schedule, a code review agent on Discord watching her repos, a DevOps agent monitoring her infra via webhooks and cron jobs.
 
-She's technical enough to understand what a Gateway is, but she doesn't want to manually configure `openclaw.json`, manage port spacing, generate auth tokens, or set up systemd services for each instance. She wants Molthub to handle the operational complexity while she focuses on what each agent should do.
+She's technical enough to understand what a Gateway is, but she doesn't want to manually configure `openclaw.json`, manage port spacing, generate auth tokens, or set up systemd services for each instance. She wants Clawster to handle the operational complexity while she focuses on what each agent should do.
 
 **What Sarah needs:**
 - Deploy her first OpenClaw agent fast — template, name, deploy. Gateway comes up, auth is configured, agent is ready.
 - Deploy her second, third, fifth agent just as easily. Each gets its own isolated profile, ports, and config automatically.
 - See all her agents at a glance — Gateway health, channel status, which agents are running, degraded, or need attention.
-- **Understand what her agents are and what they have.** Her support bot might have started from a template, but over time it added skills, connected MCP servers, changed its tool profile. When Sarah opens Molthub, she should see the current reality of each agent — not a stale snapshot of what she originally deployed.
+- **Understand what her agents are and what they have.** Her support bot might have started from a template, but over time it added skills, connected MCP servers, changed its tool profile. When Sarah opens Clawster, she should see the current reality of each agent — not a stale snapshot of what she originally deployed.
 - Connect and manage channels (WhatsApp, Telegram, Discord, Slack) without editing JSON5 config files.
 - Feel confident that security is handled — auth tokens generated, DM policies set, sandbox isolation configured, secrets stored properly. She shouldn't have to think about it.
 - Configure agent identity, skills, and tools through the UI when she wants to — but also see when agents have configured themselves. The control is bidirectional.
@@ -108,7 +108,7 @@ The UI reveals complexity as the user's needs grow. A user with 2 agents should 
 
 ### 2. Deploying the Next Agent Should Be as Easy as the First
 
-The wizard isn't just for onboarding — it's the deployment flow. Whether it's your first OpenClaw agent or your tenth, the path is the same: select your deployment platform (Local/Docker, AWS, Azure, GCP — cloud options grayed out until ready), pick your channels, name it, deploy. The whole configuration (platform + channels) is one template. Molthub handles profile isolation, port allocation, auth token generation, and Gateway startup automatically. The product should actively encourage deploying more agents.
+The wizard isn't just for onboarding — it's the deployment flow. Whether it's your first OpenClaw agent or your tenth, the path is the same: select your deployment platform (Local/Docker, AWS, Azure, GCP — cloud options grayed out until ready), pick your channels, name it, deploy. The whole configuration (platform + channels) is one template. Clawster handles profile isolation, port allocation, auth token generation, and Gateway startup automatically. The product should actively encourage deploying more agents.
 
 **In practice:**
 - "Deploy New Bot" is always visible — in the sidebar, on the dashboard, in the header. It's never more than 1 click away.
@@ -116,7 +116,7 @@ The wizard isn't just for onboarding — it's the deployment flow. Whether it's 
 - Each new deployment automatically gets isolated config, state, workspace, and ports. The user never has to think about port spacing or profile paths.
 - Bot cards on the dashboard make it obvious that multiple agents coexist naturally — it's not a special case, it's the expected state.
 
-**The rule:** The effort to deploy agent N+1 should be the same as deploying agent 1. No additional setup, no new concepts to learn, no UI mode switches. Molthub handles the isolation complexity.
+**The rule:** The effort to deploy agent N+1 should be the same as deploying agent 1. No additional setup, no new concepts to learn, no UI mode switches. Clawster handles the isolation complexity.
 
 ### 3. Always Answer "What Should I Do Next?"
 
@@ -133,7 +133,7 @@ At every point in the user's journey, the UI should make the next step obvious. 
 
 ### 4. Time to First Value < 5 Minutes
 
-The entire onboarding flow — from opening Molthub for the first time to having a running OpenClaw agent with a live Gateway — must complete in under 5 minutes. This mirrors the CLI experience: `openclaw onboard --install-daemon` gets you running fast. Molthub should be even faster because the UI makes decisions for you.
+The entire onboarding flow — from opening Clawster for the first time to having a running OpenClaw agent with a live Gateway — must complete in under 5 minutes. This mirrors the CLI experience: `openclaw onboard --install-daemon` gets you running fast. Clawster should be even faster because the UI makes decisions for you.
 
 **In practice:**
 - The wizard has 3 decision points: Pick your deployment platform (Local/Docker is the only active option — AWS, Azure, GCP are visible but grayed out), pick your channels, name your bot and deploy. Channels are optional (can add later). The whole selection (platform + channels) becomes a reusable template.
@@ -145,7 +145,7 @@ The entire onboarding flow — from opening Molthub for the first time to having
 
 ### 5. Security Is Invisible Infrastructure, Confidence Is Visible
 
-OpenClaw's security model is comprehensive — three-layer access control, Gateway auth tokens, DM pairing codes, file permissions (600/700), sandbox isolation, tool allow/deny lists. Molthub should make all of this happen automatically. The user doesn't configure security — they see the result of it.
+OpenClaw's security model is comprehensive — three-layer access control, Gateway auth tokens, DM pairing codes, file permissions (600/700), sandbox isolation, tool allow/deny lists. Clawster should make all of this happen automatically. The user doesn't configure security — they see the result of it.
 
 **In practice:**
 - Every agent deploys with secure defaults: Gateway auth token generated and stored in secret management, profile isolation enabled, DM policy set to "pairing" (the safe default), sandbox configured per template.
@@ -154,7 +154,7 @@ OpenClaw's security model is comprehensive — three-layer access control, Gatew
 - Security configuration (policies, RBAC, audit) appears in the sidebar only when the user has enough agents or team members to need governance.
 - Error messages about security issues are actionable: "Auth token expired — click to regenerate" not "SECURITY_ERROR_401."
 
-**The rule:** Security should make the user feel confident, not anxious. Every OpenClaw agent deployed through Molthub should be as secure as the "Secure Baseline Config" from the OpenClaw docs — without the user having to write a single line of JSON5.
+**The rule:** Security should make the user feel confident, not anxious. Every OpenClaw agent deployed through Clawster should be as secure as the "Secure Baseline Config" from the OpenClaw docs — without the user having to write a single line of JSON5.
 
 ### 6. Respect the User's Context
 
@@ -198,7 +198,7 @@ Never show fake metrics, simulated charts, or placeholder data to make the UI lo
 
 The onboarding wizard isn't a side feature — it's the most important page in the entire product. It's the first thing every user sees. It determines whether they stay or leave. And it's the same flow they return to every time they deploy a new agent.
 
-The wizard is Molthub's visual equivalent of `openclaw onboard --install-daemon`. It should feel just as fast and opinionated, but with the added benefit of a visual interface that makes choices obvious.
+The wizard is Clawster's visual equivalent of `openclaw onboard --install-daemon`. It should feel just as fast and opinionated, but with the added benefit of a visual interface that makes choices obvious.
 
 **In practice:**
 - The wizard gets its own full-screen layout. No sidebar, no navigation chrome, no distractions. Just the task at hand.
@@ -211,7 +211,7 @@ The wizard is Molthub's visual equivalent of `openclaw onboard --install-daemon`
 
 ### 10. Surface OpenClaw's Nature, Not Generic Infrastructure
 
-Molthub's UI should reflect that these are OpenClaw agents — not generic containers or serverless functions. The concepts in the UI should map to OpenClaw's real surfaces.
+Clawster's UI should reflect that these are OpenClaw agents — not generic containers or serverless functions. The concepts in the UI should map to OpenClaw's real surfaces.
 
 **In practice:**
 - Show "Gateway Status" not "Container Status." The Gateway is the always-on process — its health is what matters.
@@ -226,20 +226,20 @@ Molthub's UI should reflect that these are OpenClaw agents — not generic conta
 
 ### 11. Bidirectional Awareness — Observe What Agents Become
 
-Molthub deploys agents, but agents don't stay as deployed. They're autonomous. They add skills, install tools, connect MCP servers, modify their config, and evolve their capabilities. Molthub must reflect this reality — it's not just a deployment tool, it's a living window into what each agent is right now.
+Clawster deploys agents, but agents don't stay as deployed. They're autonomous. They add skills, install tools, connect MCP servers, modify their config, and evolve their capabilities. Clawster must reflect this reality — it's not just a deployment tool, it's a living window into what each agent is right now.
 
 **In practice:**
 - The bot detail page shows the **current state** of the agent — not just the original template config. If the agent added a GitHub skill, that skill shows up. If it connected to an MCP server, that connection is visible. If it changed its tool profile from "minimal" to "coding," the UI reflects it.
-- Molthub reads agent state via the Gateway WebSocket protocol (`config.get`, `health`, `status`). This is how it stays in sync. The Gateway is the source of truth for what an agent currently is.
-- When an agent's current state differs from what Molthub originally deployed, the UI should surface this clearly — not as an error, but as information. "This agent has evolved since deployment: 3 new skills, 1 MCP server, updated tool profile." The user should be able to explore these changes.
-- Molthub can push config changes to agents (`config.apply`, `config.patch`), and agents can change their own config. The UI should make both directions visible: "You set this" vs "The agent changed this."
+- Clawster reads agent state via the Gateway WebSocket protocol (`config.get`, `health`, `status`). This is how it stays in sync. The Gateway is the source of truth for what an agent currently is.
+- When an agent's current state differs from what Clawster originally deployed, the UI should surface this clearly — not as an error, but as information. "This agent has evolved since deployment: 3 new skills, 1 MCP server, updated tool profile." The user should be able to explore these changes.
+- Clawster can push config changes to agents (`config.apply`, `config.patch`), and agents can change their own config. The UI should make both directions visible: "You set this" vs "The agent changed this."
 - Skills, tools, and MCP servers should be browsable per agent. "What can this agent do?" is a fundamental question the dashboard must answer at all times — and the answer may have changed since yesterday.
-- When Sarah hasn't checked on an agent for a week, Molthub should show her what's changed: "Your DevOps bot added 2 skills and connected to a new MCP server since your last visit." This makes the dashboard worth coming back to.
+- When Sarah hasn't checked on an agent for a week, Clawster should show her what's changed: "Your DevOps bot added 2 skills and connected to a new MCP server since your last visit." This makes the dashboard worth coming back to.
 
 - Chat panel enables direct two-way interaction with agents — not just observation, but conversation.
 - Delegation traces show how bots communicate with each other, making inter-bot collaboration visible.
 
-**The rule:** Molthub is not fire-and-forget. Every agent page should answer two questions: "What did I deploy?" and "What has this agent become?" If those diverge, the user should understand why and feel in control.
+**The rule:** Clawster is not fire-and-forget. Every agent page should answer two questions: "What did I deploy?" and "What has this agent become?" If those diverge, the user should understand why and feel in control.
 
 ### 12. Consistent Mental Model
 
@@ -267,7 +267,7 @@ Every navigation path, every page title, every breadcrumb should reinforce this 
 - Don't introduce concepts before the user needs them. "Profiles" and "Overlays" are power-user config concepts — they appear when the user has enough agents to benefit from shared config. "Bindings" (multi-agent routing) appear when a user has multiple agents per Gateway.
 - Terminology is consistent everywhere. A "bot" is always a "bot" (not "instance" in one place and "agent" in another). A "channel" is always a "channel" (not "integration" or "connector").
 
-**The rule:** A user should be able to explain Molthub to someone in one sentence: "You deploy OpenClaw agents from templates, connect them to messaging channels, and monitor everything from a dashboard."
+**The rule:** A user should be able to explain Clawster to someone in one sentence: "You deploy OpenClaw agents from templates, connect them to messaging channels, and monitor everything from a dashboard."
 
 ---
 
@@ -279,7 +279,7 @@ Every navigation path, every page title, every breadcrumb should reinforce this 
 
 **What the user sees:**
 - Full-screen welcome page. Centered layout. No sidebar.
-- Molthub logo + "Welcome to Molthub" heading.
+- Clawster logo + "Welcome to Clawster" heading.
 - Subtitle: "Deploy your first OpenClaw agent in minutes."
 - The wizard begins immediately — no landing page before the wizard.
 
@@ -304,7 +304,7 @@ Every navigation path, every page title, every breadcrumb should reinforce this 
 - Agent cards showing: name, status, Gateway health (connected/disconnected), connected channels with status, uptime, agent identity (emoji + personality snippet). Each agent is a first-class citizen on the page.
 - **Live agent state**: each card reflects what the agent currently is — including skills it's added, tools it's using, and MCP servers it's connected to since deployment. If the agent has evolved, a subtle indicator shows "2 new skills since deploy" or similar.
 - Setup checklist: what they've done, what they could do next (connect channels, verify health, configure skills, deploy another agent)
-- **Built-in chat panel**: Click any bot card to open a slide-over chat panel and talk to the bot directly inside Molthub — no need to switch to Telegram or Slack.
+- **Built-in chat panel**: Click any bot card to open a slide-over chat panel and talk to the bot directly inside Clawster — no need to switch to Telegram or Slack.
 - **Routing rules**: Configure which bots can delegate to others via simple pattern-based rules.
 - Quick actions: Add Channel, View Health, Edit Config, Deploy Another Bot
 
@@ -338,10 +338,10 @@ Don't design a dashboard and then try to figure out what data to put in it. Desi
 Don't build the UI for the 100-agent operator and then try to simplify it for everyday users. Build for the person deploying their first few agents and progressively enhance for scale.
 
 ### 3. Making the Nth Agent Harder Than the First
-If deploying agent #5 requires more steps, more context, or more navigation than agent #1, something is wrong. Molthub handles profile isolation, port allocation, and auth automatically. The deployment flow should be consistent regardless of how many agents you already have.
+If deploying agent #5 requires more steps, more context, or more navigation than agent #1, something is wrong. Clawster handles profile isolation, port allocation, and auth automatically. The deployment flow should be consistent regardless of how many agents you already have.
 
 ### 4. Generic Container UI
-Molthub is not Portainer or Kubernetes Dashboard. Don't show "container status" when you mean "Gateway health." Don't show "environment variables" when you mean "agent config." Speak OpenClaw's language — Gateway, channels, agents, skills, tools, DM policies, health checks.
+Clawster is not Portainer or Kubernetes Dashboard. Don't show "container status" when you mean "Gateway health." Don't show "environment variables" when you mean "agent config." Speak OpenClaw's language — Gateway, channels, agents, skills, tools, DM policies, health checks.
 
 ### 5. Feature Parity as a Goal
 Not every backend capability needs a UI surface. The API might support 20 OpenClaw config sections, but the UI should expose the ones that matter for the current user's stage and let power users use the API, CLI, or direct config editing for the rest.
@@ -362,7 +362,7 @@ Terms like "reconciler," "overlay," "manifest," "binding," or "SLO" are meaningf
 Don't make security something the user has to configure before they can deploy. OpenClaw's secure baseline (Gateway auth, DM pairing, file permissions, sandbox isolation) should just work by default. Security configuration surfaces are for users who want to customize their posture, not a gate that blocks getting started.
 
 ### 11. Treating Agents as Static Deployments
-An OpenClaw agent is not a container you deploy and forget. It's an autonomous entity that evolves — adding skills, connecting MCP servers, modifying its config, changing its tool profile. If Molthub only shows what was originally deployed and never syncs with the agent's current state, the dashboard becomes a lie. Always reflect the agent's live state via Gateway communication, not a stale deployment snapshot.
+An OpenClaw agent is not a container you deploy and forget. It's an autonomous entity that evolves — adding skills, connecting MCP servers, modifying its config, changing its tool profile. If Clawster only shows what was originally deployed and never syncs with the agent's current state, the dashboard becomes a lie. Always reflect the agent's live state via Gateway communication, not a stale deployment snapshot.
 
 ---
 
@@ -375,10 +375,10 @@ The UX dream is achieved when:
 3. **Zero Dead Ends**: No page in the app leaves the user without a clear next action.
 4. **Stage Appropriateness**: The UI matches the user's current scale — never too much, never too little.
 5. **OpenClaw-Native**: The UI speaks OpenClaw's language. Gateway health, not container status. Channels, not integrations. Agent identity, not instance metadata.
-6. **Live State Awareness**: Every agent's page reflects its current reality — skills, tools, MCP servers, config — not a stale deployment snapshot. When an agent evolves, Molthub shows it.
+6. **Live State Awareness**: Every agent's page reflects its current reality — skills, tools, MCP servers, config — not a stale deployment snapshot. When an agent evolves, Clawster shows it.
 7. **Action Density**: Every visible metric or status indicator is within 1 click of a relevant action.
 8. **No Fake Data**: Every number, chart, and percentage is computed from real Gateway health checks and real telemetry.
-9. **Secure by Default**: Every agent deployed through Molthub matches OpenClaw's secure baseline config without the user touching security settings.
+9. **Secure by Default**: Every agent deployed through Clawster matches OpenClaw's secure baseline config without the user touching security settings.
 10. **Bidirectional Control**: Users can push config to agents and see what agents have done on their own. Both directions are visible, understandable, and actionable.
 11. **Confidence**: Users feel their agents are autonomous, secure, and properly isolated. They understand what each agent is and what it can do. They trust the system enough to deploy more.
 12. **Return Rate**: Users come back to see what their agents have been doing, check on changes, deploy new ones, and connect new channels. The dashboard is a living window, not a static report.
