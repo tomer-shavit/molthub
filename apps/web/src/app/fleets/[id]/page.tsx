@@ -2,21 +2,12 @@ export const dynamic = 'force-dynamic';
 
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge, HealthIndicator } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
+import { FleetDetailTabs } from "./fleet-detail-tabs";
+import { PromoteFleetDialog } from "./promote-fleet-dialog";
 import { Progress } from "@/components/ui/progress";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ClientAreaChart } from "@/components/ui/client-chart";
-import { TimeDisplay } from "@/components/ui/time-display";
 import { api, type Fleet, type FleetHealth, type BotInstance } from "@/lib/api";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -28,10 +19,7 @@ import {
   Settings,
   Play,
   Pause,
-  RotateCcw,
-  AlertTriangle,
   CheckCircle,
-  Clock,
   Layers,
   Wifi,
   Server
@@ -86,6 +74,7 @@ export default async function FleetDetailPage({ params }: { params: { id: string
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <PromoteFleetDialog fleet={fleet} />
             <Button variant="outline" size="sm">
               <Settings className="w-4 h-4 mr-2" />
               Settings
@@ -243,97 +232,8 @@ export default async function FleetDetailPage({ params }: { params: { id: string
         </Card>
       </div>
 
-      {/* Instances Table */}
-      <Tabs defaultValue="instances" className="w-full">
-        <TabsList>
-          <TabsTrigger active>Instances</TabsTrigger>
-          <TabsTrigger>Profiles</TabsTrigger>
-          <TabsTrigger>Events</TabsTrigger>
-        </TabsList>
-
-        <TabsContent active className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Bot Instances</CardTitle>
-              <CardDescription>All instances in this fleet</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Health</TableHead>
-                    <TableHead>Target</TableHead>
-                    <TableHead>Gateway</TableHead>
-                    <TableHead>Uptime</TableHead>
-                    <TableHead>Last Health Check</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {!fleet.instances || fleet.instances.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                        No instances in this fleet.
-                        <Link href={`/bots/new?fleetId=${fleet.id}`}>
-                          <Button variant="link" className="ml-2">Create instance</Button>
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    fleet.instances.map((instance: BotInstance) => (
-                      <TableRow key={instance.id}>
-                        <TableCell className="font-medium">
-                          <Link href={`/bots/${instance.id}`} className="hover:underline">
-                            {instance.name}
-                          </Link>
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={instance.status} />
-                        </TableCell>
-                        <TableCell>
-                          <HealthIndicator health={instance.health} />
-                        </TableCell>
-                        <TableCell>
-                          {instance.deploymentType ? (
-                            <Badge variant="outline" className="text-xs">
-                              {instance.deploymentType}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">local</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            <span className={`w-2 h-2 rounded-full ${instance.status === "RUNNING" ? "bg-green-500" : "bg-gray-400"}`} />
-                            <span className="text-xs font-mono">{instance.gatewayPort || 18789}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {(() => { const s = instance.runningSince ? Math.max(0, Math.floor((Date.now() - new Date(instance.runningSince).getTime()) / 1000)) : 0; return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; })()}
-                        </TableCell>
-                        <TableCell>
-                          {instance.lastHealthCheckAt ? (
-                            <TimeDisplay date={instance.lastHealthCheckAt} />
-                          ) : (
-                            <span className="text-muted-foreground">Never</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Link href={`/bots/${instance.id}`}>
-                            <Button variant="ghost" size="sm">View</Button>
-                          </Link>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Instances & Profiles Tabs */}
+      <FleetDetailTabs fleet={fleet} />
     </DashboardLayout>
   );
 }

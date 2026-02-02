@@ -74,12 +74,6 @@ model Fleet {
   status      String @default("ACTIVE")
   tags        String        @default("{}")
 
-  // Infrastructure references
-  ecsClusterArn    String?
-  vpcId            String?
-  privateSubnetIds String    @default("[]")
-  securityGroupId  String?
-
   // Configuration
   defaultProfileId      String?
   enforcedPolicyPackIds String    @default("[]")

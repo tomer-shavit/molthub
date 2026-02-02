@@ -7,6 +7,4 @@ export interface AWSConfig {
   accountId?: string;
   ecsExecutionRoleArn?: string;
   ecsTaskRoleArn?: string;
-  privateSubnetIds?: string[];
-  securityGroupId?: string;
 }

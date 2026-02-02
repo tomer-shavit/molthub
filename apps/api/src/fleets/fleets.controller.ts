@@ -11,11 +11,12 @@ import {
   HttpStatus,
 } from "@nestjs/common";
 import { FleetService } from "./fleets.service";
-import { 
-  CreateFleetDto, 
-  UpdateFleetDto, 
-  UpdateFleetStatusDto, 
-  ListFleetsQueryDto 
+import {
+  CreateFleetDto,
+  UpdateFleetDto,
+  UpdateFleetStatusDto,
+  ListFleetsQueryDto,
+  PromoteFleetDto,
 } from "./fleets.dto";
 import { Fleet } from "@clawster/database";
 
@@ -51,6 +52,16 @@ export class FleetController {
   @Patch(":id/status")
   updateStatus(@Param("id") id: string, @Body() dto: UpdateFleetStatusDto): Promise<Fleet> {
     return this.fleetService.updateStatus(id, dto.status);
+  }
+
+  @Post(":id/promote")
+  promote(@Param("id") id: string, @Body() dto: PromoteFleetDto): Promise<Record<string, unknown>> {
+    return this.fleetService.promote(id, dto.targetEnvironment);
+  }
+
+  @Post(":id/reconcile-all")
+  reconcileAll(@Param("id") id: string): Promise<{ queued: number; skipped: number }> {
+    return this.fleetService.reconcileAll(id);
   }
 
   @Delete(":id")

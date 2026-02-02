@@ -232,3 +232,47 @@ When gateway communication fails:
 2. **Container naming**: OpenClaw containers are named `openclaw-<bot-name>` (e.g., `openclaw-test-l-1`)
 3. **Gateway error format**: `⇄ res ✗ <method> errorCode=<CODE> errorMessage=<msg>` — this shows the exact rejection reason
 4. **Don't assume protocol shapes** — even if the TypeScript types compile, the gateway validates at runtime with strict schemas. A build passing does NOT mean the wire protocol is correct.
+
+---
+
+## Reconciler & Instance Lifecycle — Hard-Won Lessons
+
+### Bot Status Semantics — Do NOT Overload
+
+Bot instance statuses have **specific meanings** in the reconciler. Misusing them causes cascading failures:
+
+- **CREATING**: Brand new instance, never provisioned. Reconciler does **full provision** (install infra + configure + start + connect gateway).
+- **PENDING**: Needs reconciliation. Could be new OR existing. The reconciler checks `lastReconcileAt`/`configHash` to decide provision vs update.
+- **RUNNING / DEGRADED**: Normal operational states. Drift detection runs on these.
+- **RECONCILING**: Actively being reconciled. Stuck detector catches these after 10 minutes.
+- **ERROR**: Failed. User can retry via "Reconcile" button.
+- **STOPPED**: Intentionally stopped. Resume sets to PENDING.
+
+**Critical rule**: When changing a bot's status to trigger re-reconciliation (e.g., fleet promotion, config change), set it to **PENDING**, NOT CREATING. The reconciler uses `isNewInstance()` to decide between full provisioning and config update. Full provisioning on an existing ECS instance tries to create infrastructure that already exists, causing hangs or failures.
+
+### Deployment Target Differences Matter
+
+Not all deployment targets behave the same during reconciliation:
+
+| Operation | Docker | ECS Fargate |
+|-----------|--------|-------------|
+| **Provision (new)** | Creates container (fast, idempotent) | Creates CloudFormation stack (slow, 5-10 min) |
+| **Config update** | Gateway WS `config.apply` + write to disk | Gateway WS `config.apply` + update Secrets Manager |
+| **Re-provision (existing)** | Replaces container (works) | Must update stack, not create (create fails with AlreadyExistsException) |
+| **Credentials** | None needed | AWS creds required; empty creds cause SDK to probe IMDS (hangs on non-AWS machines) |
+
+**Always test reconciliation changes against ALL deployment types**, not just Docker. ECS has timeouts (CloudFormation: 10min, endpoint resolution: 5min) that can exceed the stuck detector threshold.
+
+### Config Persistence Across Restarts
+
+When pushing config via Gateway WS (`config.apply`), the config is only in the gateway's memory and local disk. For deployment targets with external config stores (ECS uses Secrets Manager), you MUST also persist the config to the backing store. Otherwise, when the container/task restarts, it reverts to the old config.
+
+### The Reconciler Must Be Self-Healing
+
+Every error path in the reconciler must:
+1. **Record the error** in `lastError` on the BotInstance — silent failures are unacceptable
+2. **Set status to ERROR** so the user can see and retry from the dashboard
+3. **Not hang indefinitely** — use timeouts, and ensure the stuck detector can catch anything that slips through
+4. **Be retryable** — clicking "Reconcile" from the dashboard must work without needing CLI access
+
+The user should NEVER need to open a terminal to fix a bot. Everything must be fixable from the web dashboard.

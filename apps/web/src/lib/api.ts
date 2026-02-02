@@ -103,16 +103,17 @@ export interface Fleet {
   description?: string;
   status: 'ACTIVE' | 'PAUSED' | 'DRAINING' | 'ERROR';
   tags: Record<string, string>;
-  ecsClusterArn?: string;
-  vpcId?: string;
-  privateSubnetIds: string[];
-  securityGroupId?: string;
   defaultProfileId?: string;
   enforcedPolicyPackIds: string[];
   createdAt: string;
   updatedAt: string;
   _count?: { instances: number };
   instances?: BotInstance[];
+}
+
+export interface PromoteFleetResult {
+  fleet: Fleet;
+  botsReconciling: number;
 }
 
 export interface FleetHealth {
@@ -644,6 +645,17 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  async promoteFleet(id: string, targetEnvironment: string): Promise<PromoteFleetResult> {
+    return this.fetch(`/fleets/${id}/promote`, {
+      method: 'POST',
+      body: JSON.stringify({ targetEnvironment }),
+    });
+  }
+
+  async reconcileAllFleet(id: string): Promise<{ queued: number; skipped: number }> {
+    return this.fetch(`/fleets/${id}/reconcile-all`, { method: 'POST' });
   }
 
   // Templates

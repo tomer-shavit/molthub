@@ -27,18 +27,6 @@ export const FleetSchema = z.object({
       { message: "Too many tags (max 50)" }
     ),
   
-  // Infrastructure references
-  ecsClusterArn: z.string()
-    .regex(/^arn:aws:ecs:[a-z0-9-]+:\d+:cluster\/.+$/, "Invalid ECS cluster ARN format")
-    .optional(),
-  vpcId: z.string()
-    .regex(/^vpc-[a-f0-9]+$/, "Invalid VPC ID format")
-    .optional(),
-  privateSubnetIds: z.array(z.string().regex(/^subnet-[a-f0-9]+$/, "Invalid subnet ID format")).default([]),
-  securityGroupId: z.string()
-    .regex(/^sg-[a-f0-9]+$/, "Invalid security group ID format")
-    .optional(),
-  
   // Default configurations applied to all instances in fleet
   defaultProfileId: z.string().optional(),
   enforcedPolicyPackIds: z.array(z.string())

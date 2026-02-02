@@ -1,6 +1,7 @@
 import {
   CloudFormationClient,
   CreateStackCommand,
+  UpdateStackCommand,
   DeleteStackCommand,
   DescribeStacksCommand,
 } from "@aws-sdk/client-cloudformation";
@@ -166,19 +167,43 @@ export class EcsFargateTarget implements DeploymentTarget {
         );
       }
 
-      // 5. Deploy CloudFormation stack
-      await this.cfnClient.send(
-        new CreateStackCommand({
-          StackName: this.stackName,
-          TemplateBody: JSON.stringify(template),
-          Parameters: cfParams.length > 0 ? cfParams : undefined,
-          Capabilities: ["CAPABILITY_NAMED_IAM"],
-          Tags: [{ Key: "clawster:bot", Value: profileName }],
-        }),
-      );
+      // 5. Deploy CloudFormation stack (create or update if it already exists)
+      const stackExists = await this.stackExists();
 
-      // 6. Wait for stack creation
-      await this.waitForStack("CREATE_COMPLETE");
+      if (stackExists) {
+        try {
+          await this.cfnClient.send(
+            new UpdateStackCommand({
+              StackName: this.stackName,
+              TemplateBody: JSON.stringify(template),
+              Parameters: cfParams.length > 0 ? cfParams : undefined,
+              Capabilities: ["CAPABILITY_NAMED_IAM"],
+            }),
+          );
+          await this.waitForStack("UPDATE_COMPLETE");
+        } catch (error: unknown) {
+          // "No updates are to be performed" is not an error
+          if (
+            error instanceof Error &&
+            error.message.includes("No updates are to be performed")
+          ) {
+            // Stack is already up-to-date, nothing to do
+          } else {
+            throw error;
+          }
+        }
+      } else {
+        await this.cfnClient.send(
+          new CreateStackCommand({
+            StackName: this.stackName,
+            TemplateBody: JSON.stringify(template),
+            Parameters: cfParams.length > 0 ? cfParams : undefined,
+            Capabilities: ["CAPABILITY_NAMED_IAM"],
+            Tags: [{ Key: "clawster:bot", Value: profileName }],
+          }),
+        );
+        await this.waitForStack("CREATE_COMPLETE");
+      }
 
       return {
         success: true,
@@ -593,8 +618,23 @@ export class EcsFargateTarget implements DeploymentTarget {
     return { vpcId: vpc.VpcId, subnetIds };
   }
 
+  private async stackExists(): Promise<boolean> {
+    try {
+      const result = await this.cfnClient.send(
+        new DescribeStacksCommand({ StackName: this.stackName }),
+      );
+      const stack = result.Stacks?.[0];
+      // A stack in DELETE_COMPLETE or ROLLBACK_COMPLETE is effectively gone
+      if (!stack) return false;
+      const status = stack.StackStatus;
+      return status !== "DELETE_COMPLETE" && status !== "ROLLBACK_COMPLETE";
+    } catch {
+      return false;
+    }
+  }
+
   private async waitForStack(
-    targetStatus: "CREATE_COMPLETE" | "DELETE_COMPLETE",
+    targetStatus: "CREATE_COMPLETE" | "UPDATE_COMPLETE" | "DELETE_COMPLETE",
   ): Promise<void> {
     const start = Date.now();
 

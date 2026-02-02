@@ -232,7 +232,7 @@ export const OPENCLAW_PRODUCTION_HARDENING: PolicyPack = {
       config: {
         type: "require_sandbox",
         enabled: true,
-        allowedModes: ["docker", "container"],
+        allowedModes: ["non-main", "all"],
       },
     },
     {
@@ -568,7 +568,7 @@ export function evaluateRequireSandbox(
   }
 
   const sandboxMode = config.agents?.defaults?.sandbox?.mode;
-  const allowedModes = ruleConfig.allowedModes || ["docker", "container"];
+  const allowedModes = ruleConfig.allowedModes || ["non-main", "all"];
 
   if (!sandboxMode || sandboxMode === "off") {
     return {

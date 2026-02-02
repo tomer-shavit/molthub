@@ -111,8 +111,33 @@ export class ReconcilerService {
       const manifest = this.parseManifest(instance);
       changes.push("Manifest validated");
 
-      // 2b. Pre-provisioning security audit
-      const auditResult = await this.securityAudit.preProvisioningAudit(manifest);
+      // 2b. Check for team members and inject delegation config into manifest
+      const teamMembers = await prisma.botTeamMember.findMany({
+        where: { ownerBotId: instanceId, enabled: true },
+      });
+
+      if (teamMembers.length > 0) {
+        this.injectDelegationConfig(manifest);
+        changes.push(`Delegation config injected (${teamMembers.length} team members)`);
+      }
+
+      // 3. Generate config + hash (BEFORE security audit so enforceSecureDefaults
+      //    applies environment-aware fixes like sandbox enforcement for prod/staging)
+      const config = this.configGenerator.generateOpenClawConfig(manifest);
+      const desiredHash = this.configGenerator.generateConfigHash(config);
+      changes.push(`Desired config hash: ${desiredHash.slice(0, 12)}...`);
+
+      // 4. Pre-provisioning security audit on the FINAL config (not the raw manifest).
+      //    This ensures the audit sees what will actually be deployed, including
+      //    enforced defaults (sandbox mode, auth tokens, etc.).
+      const auditManifest = {
+        ...manifest,
+        spec: {
+          ...manifest.spec,
+          openclawConfig: config as unknown as typeof manifest.spec.openclawConfig,
+        },
+      };
+      const auditResult = await this.securityAudit.preProvisioningAudit(auditManifest);
       if (!auditResult.allowed) {
         const blockerMessages = auditResult.blockers.map(b => b.message).join("; ");
         throw new Error(`Security audit blocked provisioning: ${blockerMessages}`);
@@ -124,22 +149,7 @@ export class ReconcilerService {
       }
       changes.push(`Security audit: ${auditResult.blockers.length} blockers, ${auditResult.warnings.length} warnings`);
 
-      // 2c. Check for team members and inject delegation config into manifest
-      const teamMembers = await prisma.botTeamMember.findMany({
-        where: { ownerBotId: instanceId, enabled: true },
-      });
-
-      if (teamMembers.length > 0) {
-        this.injectDelegationConfig(manifest);
-        changes.push(`Delegation config injected (${teamMembers.length} team members)`);
-      }
-
-      // 3. Generate config + hash
-      const config = this.configGenerator.generateOpenClawConfig(manifest);
-      const desiredHash = this.configGenerator.generateConfigHash(config);
-      changes.push(`Desired config hash: ${desiredHash.slice(0, 12)}...`);
-
-      // 4. Determine if this is a new or existing instance
+      // 5. Determine if this is a new or existing instance
       const isNew = this.isNewInstance(instance);
 
       if (isNew) {
@@ -159,10 +169,19 @@ export class ReconcilerService {
         const updateResult = await this.lifecycleManager.update(instance, manifest);
 
         if (!updateResult.success) {
-          throw new Error(`Config update failed: ${updateResult.message}`);
-        }
+          // Gateway unreachable or config.apply failed — fall back to full provision.
+          // This handles: resume from stopped, crashed containers, ECS tasks recycled.
+          this.logger.warn(
+            `Config update failed for ${instanceId}, falling back to provision: ${updateResult.message}`,
+          );
 
-        if (updateResult.method === "none") {
+          const provisionResult = await this.lifecycleManager.provision(instance, manifest);
+          if (!provisionResult.success) {
+            throw new Error(`Re-provision failed (update also failed: ${updateResult.message}): ${provisionResult.message}`);
+          }
+
+          changes.push(`Re-provisioned (gateway unreachable for config update: ${updateResult.message})`);
+        } else if (updateResult.method === "none") {
           changes.push("Config already up-to-date");
         } else {
           changes.push(`Config updated via ${updateResult.method} (hash=${updateResult.configHash?.slice(0, 12)}...)`);
@@ -496,15 +515,14 @@ export class ReconcilerService {
 
   /**
    * Determine if an instance needs full provisioning vs config-only update.
-   * An instance is "new" if it has never been successfully reconciled or
-   * has no gateway connection.
+   * An instance is "new" only if it has NEVER been successfully reconciled.
+   * PENDING instances that were previously reconciled (e.g., after fleet
+   * promotion or resume) use the update path, not full reprovisioning.
    */
   private isNewInstance(instance: BotInstance): boolean {
-    return (
-      instance.status === "CREATING" ||
-      instance.status === "PENDING" ||
-      (!instance.lastReconcileAt && !instance.configHash)
-    );
+    if (instance.status === "CREATING") return true;
+    if (instance.lastReconcileAt || instance.configHash) return false;
+    return true;
   }
 
   /**

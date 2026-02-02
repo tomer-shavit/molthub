@@ -55,18 +55,6 @@ class DeploymentTargetDto {
   certificateArn?: string;
 
   @IsOptional()
-  @IsArray()
-  subnetIds?: string[];
-
-  @IsOptional()
-  @IsString()
-  securityGroupId?: string;
-
-  @IsOptional()
-  @IsString()
-  executionRoleArn?: string;
-
-  @IsOptional()
   @IsString()
   containerName?: string;
 

@@ -20,11 +20,6 @@ export class CreateFleetDto {
   @IsOptional()
   tags?: Record<string, string>;
 
-  @IsArray()
-  @IsString({ each: true })
-  @IsOptional()
-  privateSubnetIds?: string[];
-
   @IsString()
   @IsOptional()
   defaultProfileId?: string;
@@ -75,4 +70,9 @@ export class ListFleetsQueryDto {
   @IsString()
   @IsOptional()
   status?: string;
+}
+
+export class PromoteFleetDto {
+  @IsString()
+  targetEnvironment: string;
 }

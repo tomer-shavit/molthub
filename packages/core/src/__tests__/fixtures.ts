@@ -36,10 +36,6 @@ export interface FleetOptions {
   status?: 'ACTIVE' | 'PAUSED' | 'DRAINING' | 'ERROR';
   description?: string;
   tags?: Record<string, string>;
-  ecsClusterArn?: string;
-  vpcId?: string;
-  privateSubnetIds?: string[];
-  securityGroupId?: string;
   defaultProfileId?: string;
   enforcedPolicyPackIds?: string[];
 }
@@ -53,10 +49,6 @@ export function createFleet(options: FleetOptions = {}) {
     status: options.status ?? 'ACTIVE',
     description: options.description ?? 'Test fleet',
     tags: options.tags ?? { team: 'test', environment: 'dev' },
-    ecsClusterArn: options.ecsClusterArn,
-    vpcId: options.vpcId,
-    privateSubnetIds: options.privateSubnetIds ?? [],
-    securityGroupId: options.securityGroupId,
     defaultProfileId: options.defaultProfileId,
     enforcedPolicyPackIds: options.enforcedPolicyPackIds ?? [],
     createdAt: new Date(),

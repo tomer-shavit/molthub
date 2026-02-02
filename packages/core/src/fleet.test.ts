@@ -19,10 +19,6 @@ describe('Fleet', () => {
     description: 'Production fleet for customer-facing bots',
     status: 'ACTIVE',
     tags: { team: 'platform', cost_center: 'engineering' },
-    ecsClusterArn: 'arn:aws:ecs:us-east-1:123456789:cluster/prod',
-    vpcId: 'vpc-123456',
-    privateSubnetIds: ['subnet-1', 'subnet-2'],
-    securityGroupId: 'sg-123456',
     defaultProfileId: 'profile-123',
     enforcedPolicyPackIds: ['pack-1', 'pack-2'],
     createdAt: new Date(),
@@ -79,20 +75,6 @@ describe('Fleet', () => {
   it('rejects invalid environment', () => {
     const invalid = { ...validFleet, environment: 'production' };
     expect(() => validateFleet(invalid)).toThrow();
-  });
-
-  it('validates optional AWS resources', () => {
-    const minimal = {
-      id: 'fleet-456',
-      name: 'dev-fleet',
-      workspaceId: 'workspace-123',
-      environment: 'dev',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    const result = validateFleet(minimal);
-    expect(result.ecsClusterArn).toBeUndefined();
-    expect(result.privateSubnetIds).toEqual([]);
   });
 
   it('validates enforced policy pack IDs', () => {

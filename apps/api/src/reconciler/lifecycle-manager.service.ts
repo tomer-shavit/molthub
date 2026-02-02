@@ -277,6 +277,23 @@ export class LifecycleManagerService {
         throw new Error(`config.apply rejected: ${errors}`);
       }
 
+      // Persist config to the deployment target's backing store (e.g., Secrets
+      // Manager for ECS, disk for Docker) so config survives restarts.
+      try {
+        const target = await this.resolveTarget(instance);
+        const profileName = instance.profileName ?? manifest.metadata.name;
+        const gatewayPort = instance.gatewayPort ?? (config as Record<string, unknown> & { gateway?: { port?: number } }).gateway?.port ?? 18789;
+        await target.configure({
+          profileName,
+          gatewayPort,
+          config: config as unknown as Record<string, unknown>,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Failed to persist config to deployment target for ${instance.id}: ${msg}`);
+        // Non-fatal: the gateway already has the new config in memory
+      }
+
       // Persist new hash
       await prisma.botInstance.update({
         where: { id: instance.id },

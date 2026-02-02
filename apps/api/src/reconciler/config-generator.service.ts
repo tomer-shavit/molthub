@@ -160,12 +160,14 @@ export class ConfigGeneratorService {
       }
     }
 
-    // Force sandbox mode to "all" in prod/staging if currently "off"
-    // Sandbox lives under agents.defaults.sandbox (not top-level)
+    // Force sandbox mode to "all" in prod/staging if currently "off" or missing.
+    // Valid OpenClaw sandbox modes: "off", "non-main", "all".
+    // Sandbox lives under agents.defaults.sandbox (not top-level).
     const agentSandbox = secured.agents?.defaults?.sandbox;
+    const currentMode = agentSandbox?.mode;
     if (
       (environment === "prod" || environment === "staging") &&
-      agentSandbox?.mode === "off" &&
+      (!currentMode || currentMode === "off") &&
       !securityOverrides?.allowSandboxOff
     ) {
       secured.agents = {
@@ -179,7 +181,7 @@ export class ConfigGeneratorService {
         },
       };
       this.logger.warn(
-        `Sandbox mode was "off" in ${environment} — forced to "all"`,
+        `Sandbox mode was "${currentMode ?? "unset"}" in ${environment} — forced to "all"`,
       );
     }
 
