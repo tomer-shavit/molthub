@@ -50,7 +50,7 @@ Configuration layering: Template → Profile → Overlay → manifest (deepMerge
 - **Connector**: Reusable integration credential (Slack token, Telegram bot token, model provider API key) — bots attach to connectors, rotate once
 - **Policy Pack**: Security guardrail rules evaluated against instance configs (e.g., forbid open dmPolicy in prod, require gateway auth)
 - **ChangeSet**: Rollout strategy (ALL/PERCENTAGE/CANARY) for applying changes across a fleet
-- **Deployment Target**: Where an OpenClaw runs — local (systemd/launchd), remote VM (SSH), Docker, ECS Fargate, Cloud Run, ACI, Kubernetes
+- **Deployment Target**: Where an OpenClaw runs — local (systemd/launchd), remote VM (SSH), Docker, ECS EC2, Cloud Run, ACI, Kubernetes
 - **Gateway Connection**: WebSocket link to a running OpenClaw instance (port 18789) for config apply, health, status, and logs
 
 ## OpenClaw Source Reference

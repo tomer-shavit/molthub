@@ -132,7 +132,7 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
       const result = await api.deployOnboarding({
         botName: botName.trim(),
         deploymentTarget: selectedPlatform === "aws"
-          ? { type: "ecs-fargate", ...awsConfig }
+          ? { type: "ecs-ec2", ...awsConfig }
           : { type: selectedPlatform },
         ...(awsConfig.savedCredentialId ? { awsCredentialId: awsConfig.savedCredentialId } : {}),
         ...(modelConfig?.savedCredentialId ? { modelCredentialId: modelConfig.savedCredentialId } : {}),

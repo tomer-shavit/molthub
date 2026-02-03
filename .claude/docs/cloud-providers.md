@@ -14,7 +14,7 @@ Each ECS-deployed bot creates the following AWS resources:
 |---|---|---|
 | ECS Cluster | `<bot-name>` | One cluster per bot |
 | ECS Task Definition | `<bot-name>:<revision>` | Versioned; old revisions linger |
-| EC2 Instance | Tagged `Name: <bot-name>` | Only for EC2-backed ECS (not Fargate) |
+| EC2 Instance | Tagged `Name: <bot-name>` | EC2-backed ECS deployment |
 | CloudFormation Stack | `molthub-bot-<bot-name>` or `clawster-bot-<bot-name>` | Manages infra (SGs, IAM roles, etc.) |
 | Secrets Manager | `<prefix>/<bot-name>/config` | OpenClaw config JSON |
 | Secrets Manager | `<prefix>/<bot-name>/gateway-token` | Gateway auth token |

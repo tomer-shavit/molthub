@@ -289,7 +289,7 @@ Bot instance statuses have **specific meanings** in the reconciler. Misusing the
 
 Not all deployment targets behave the same during reconciliation:
 
-| Operation | Docker | ECS Fargate |
+| Operation | Docker | ECS EC2 |
 |-----------|--------|-------------|
 | **Provision (new)** | Creates container (fast, idempotent) | Creates CloudFormation stack (slow, 5-10 min) |
 | **Config update** | Gateway WS `config.apply` + write to disk | Gateway WS `config.apply` + update Secrets Manager |

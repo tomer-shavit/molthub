@@ -83,7 +83,7 @@ Open-source, self-hosted control plane for managing fleets of OpenClaw instances
                            ▼
                     ┌─────────────┐
                     │   AWS ECS   │
-                    │   Fargate   │
+                    │     EC2     │
                     └─────────────┘
 ```
 
@@ -339,7 +339,7 @@ NEXT_PUBLIC_API_URL=http://localhost:4000
 - **Date Handling**: date-fns
 
 ### Infrastructure
-- **Container Orchestration**: AWS ECS Fargate
+- **Container Orchestration**: AWS ECS EC2
 - **Secrets**: AWS Secrets Manager
 - **Logs**: AWS CloudWatch
 - **Networking**: VPC with private subnets

@@ -45,7 +45,7 @@ export class ECSService {
     const result = await this.client.send(new RegisterTaskDefinitionCommand({
       family,
       networkMode: "awsvpc",
-      requiresCompatibilities: ["FARGATE"],
+      requiresCompatibilities: ["EC2"],
       cpu,
       memory,
       executionRoleArn: process.env.ECS_EXECUTION_ROLE_ARN,
@@ -108,7 +108,7 @@ export class ECSService {
       serviceName,
       taskDefinition: taskDefinitionArn,
       desiredCount: manifest.spec.runtime.replicas,
-      launchType: "FARGATE",
+      launchType: "EC2",
       networkConfiguration: {
         awsvpcConfiguration: {
           subnets: subnetIds,

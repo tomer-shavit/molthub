@@ -51,7 +51,7 @@ export interface TierSpec {
 }
 
 /**
- * ECS Fargate tier specifications.
+ * ECS EC2 tier specifications.
  */
 export const ECS_TIER_SPECS: Record<Exclude<ResourceTier, "custom">, TierSpec> = {
   light: {

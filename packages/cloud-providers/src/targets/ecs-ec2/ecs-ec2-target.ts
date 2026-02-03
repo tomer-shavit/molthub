@@ -218,7 +218,7 @@ export class EcsEc2Target implements DeploymentTarget {
       return {
         success: false,
         instanceId: this.serviceName,
-        message: `ECS Fargate install failed: ${errorMsg}`,
+        message: `ECS EC2 install failed: ${errorMsg}`,
       };
     }
   }
@@ -770,7 +770,7 @@ export class EcsEc2Target implements DeploymentTarget {
     try {
       this.log(`Starting resource update: CPU=${spec.cpu}, Memory=${spec.memory} MiB`);
 
-      // ECS Fargate resource updates work by updating the CloudFormation stack
+      // ECS EC2 resource updates work by updating the CloudFormation stack
       // with new CPU/memory values. This triggers a rolling deployment.
       this.log("Generating updated CloudFormation template...");
       const template = generateProductionTemplate({

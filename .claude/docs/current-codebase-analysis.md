@@ -230,7 +230,7 @@ Workspace → User, AuthUser, Fleet → BotInstance (status machine: CREATING �
 
 | Provider | Status |
 |----------|--------|
-| AWS (ECS Fargate + Secrets Manager + CloudWatch) | Full |
+| AWS (ECS EC2 + Secrets Manager + CloudWatch) | Full |
 | Azure (Container Instances + Key Vault + Log Analytics) | Implemented |
 | GCP (Cloud Run + Secret Manager + Cloud Logging) | Implemented |
 | DigitalOcean (App Platform) | Implemented (limited) |
@@ -244,13 +244,13 @@ Workspace → User, AuthUser, Fleet → BotInstance (status machine: CREATING �
 | Local | Local development |
 | Remote VM | SSH-based deployment |
 | Docker | Docker container |
-| ECS Fargate | AWS Fargate |
+| ECS EC2 | AWS ECS with EC2 launch type |
 | Kubernetes | K8s deployments |
 | Cloudflare Workers | Edge deployment (Wrangler, R2 state sync) |
 
 ## AWS Adapters
 
-- `EcsService`: createTaskDefinition (Fargate), createService (private subnets), updateService, deleteService, getServiceStatus
+- `EcsService`: createTaskDefinition (EC2), createService (private subnets), updateService, deleteService, getServiceStatus
 - `SecretsManagerService`: ensureSecretsForInstance at `/clawster/{workspace}/{instance}/{key}`
 - `CloudWatchLogsService`: createLogGroup, getLogs, getConsoleLink
 - `TokenRotationService`: Automated credential rotation with rollback

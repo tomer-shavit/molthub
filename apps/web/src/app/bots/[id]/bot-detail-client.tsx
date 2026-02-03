@@ -695,7 +695,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
           <div>
             <p className="font-medium text-blue-800">Provisioning infrastructure...</p>
             <p className="text-sm text-blue-700">
-              {bot.deploymentType === "ECS_FARGATE"
+              {bot.deploymentType === "ECS_EC2"
                 ? "Creating AWS resources (ECS task, networking, secrets). This typically takes 2-5 minutes."
                 : "Building and starting the Docker container. This should complete within a minute."}
             </p>
@@ -722,7 +722,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
               {bot.lastError === "Container no longer running" || bot.lastError?.startsWith("Container is ")
                 ? <>The Docker container was detected as no longer running. Click <strong>Start</strong> to re-provision it.</>
                 : <>This instance has been manually stopped. Click <strong>Start</strong> to bring it back online.</>}
-              {bot.deploymentType === "ECS_FARGATE" && " The ECS task has been scaled down to zero."}
+              {bot.deploymentType === "ECS_EC2" && " The ECS task has been scaled down to zero."}
             </p>
           </div>
         </div>

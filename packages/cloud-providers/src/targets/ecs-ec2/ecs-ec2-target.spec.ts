@@ -211,7 +211,7 @@ describe("EcsEc2Target", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.message).toContain("ECS Fargate install failed");
+      expect(result.message).toContain("ECS EC2 install failed");
     });
   });
 
@@ -504,7 +504,7 @@ describe("EcsEc2Target", () => {
       mockAwsCalls([JSON.stringify({ taskArns: [] })]);
 
       await expect(target.getEndpoint()).rejects.toThrow(
-        "Failed to resolve ECS Fargate endpoint",
+        "Failed to resolve ECS EC2 endpoint",
       );
     });
 
@@ -525,7 +525,7 @@ describe("EcsEc2Target", () => {
       ]);
 
       await expect(target.getEndpoint()).rejects.toThrow(
-        "Failed to resolve ECS Fargate endpoint",
+        "Failed to resolve ECS EC2 endpoint",
       );
     });
 

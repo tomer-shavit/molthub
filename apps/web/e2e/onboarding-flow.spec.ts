@@ -83,7 +83,7 @@ test.describe("Onboarding Wizard", () => {
       ).toBeVisible({ timeout: 5000 });
     });
 
-    test("should show Docker and ECS Fargate options on deployment step", async ({
+    test("should show Docker and ECS EC2 options on deployment step", async ({
       page,
     }) => {
       await page.goto("/setup");
@@ -100,10 +100,10 @@ test.describe("Onboarding Wizard", () => {
       await expect(page.getByText(/docker/i).first()).toBeVisible({
         timeout: 5000,
       });
-      await expect(page.getByText(/ecs fargate/i).first()).toBeVisible();
+      await expect(page.getByText(/ecs ec2/i).first()).toBeVisible();
     });
 
-    test("should show ECS credential fields when ECS Fargate is selected", async ({
+    test("should show ECS credential fields when ECS EC2 is selected", async ({
       page,
     }) => {
       await page.goto("/setup");
@@ -116,8 +116,8 @@ test.describe("Onboarding Wizard", () => {
       }
       await page.getByRole("button", { name: /next/i }).click();
 
-      // Select ECS Fargate
-      await page.getByText(/ecs fargate/i).first().click();
+      // Select ECS EC2
+      await page.getByText(/ecs ec2/i).first().click();
 
       // Should show AWS credential inputs
       await expect(

@@ -198,7 +198,7 @@ For deploying OpenClaw gateways to remote infrastructure. Clawster still runs lo
 | **Local** | systemd/launchctl on the same machine. | Ready |
 | **Remote VM** | SSH to remote host, run Docker/systemd there. | Beta |
 | **Kubernetes** | StatefulSet + ConfigMap + Service. kubectl applies manifests. | Beta |
-| **ECS Fargate** | AWS task definition + service. Config in Secrets Manager. | Ready |
+| **ECS EC2** | AWS task definition + service. Config in Secrets Manager. | Ready |
 | **Cloudflare Workers** | Wrangler deploy. State in R2. | Beta |
 
 **No Kubernetes required.** K8s is one option among many. The default (Docker or Local) is simpler and sufficient for most users.
