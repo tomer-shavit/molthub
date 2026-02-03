@@ -289,8 +289,10 @@ export interface CloudflareWorkersConfig {
 
 import type { EcsEc2Config } from "../targets/ecs-ec2/ecs-ec2-config";
 import type { AciConfig } from "../targets/aci/aci-config";
+import type { CloudRunConfig } from "../targets/cloud-run/cloud-run-config";
 export type { EcsEc2Config } from "../targets/ecs-ec2/ecs-ec2-config";
 export type { AciConfig } from "../targets/aci/aci-config";
+export type { CloudRunConfig } from "../targets/cloud-run/cloud-run-config";
 
 export type DeploymentTargetConfig =
   | { type: "local" }
@@ -298,6 +300,7 @@ export type DeploymentTargetConfig =
   | { type: "docker"; docker: DockerTargetConfig }
   | { type: "kubernetes"; k8s: KubernetesTargetConfig }
   | { type: "ecs-ec2"; ecs: EcsEc2Config }
+  | { type: "cloud-run"; cloudRun: CloudRunConfig }
   | { type: "aci"; aci: AciConfig }
   | { type: "cloudflare-workers"; cloudflare: CloudflareWorkersConfig };
 

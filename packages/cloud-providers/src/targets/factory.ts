@@ -8,6 +8,7 @@ import { RemoteVMTarget } from "./remote-vm/remote-vm-target";
 import { DockerContainerTarget } from "./docker/docker-target";
 import { KubernetesTarget } from "./kubernetes/kubernetes-target";
 import { EcsEc2Target } from "./ecs-ec2/ecs-ec2-target";
+import { CloudRunTarget } from "./cloud-run/cloud-run-target";
 import { AciTarget } from "./aci/aci-target";
 import { CloudflareWorkersTarget } from "./cloudflare-workers/cloudflare-workers-target";
 
@@ -53,6 +54,12 @@ export class DeploymentTargetFactory {
           throw new Error("ECS EC2 target requires 'ecs' configuration");
         }
         return new EcsEc2Target(config.ecs);
+
+      case "cloud-run":
+        if (!config.cloudRun) {
+          throw new Error("Cloud Run target requires 'cloudRun' configuration");
+        }
+        return new CloudRunTarget(config.cloudRun);
 
       case "aci":
         if (!config.aci) {
@@ -130,8 +137,8 @@ export class DeploymentTargetFactory {
       {
         type: DeploymentTargetType.CLOUD_RUN,
         name: "Google Cloud Run",
-        description: "Deploy on Google Cloud Run",
-        status: "coming_soon",
+        description: "Deploy on Google Cloud Run with VPC + External Load Balancer (secure)",
+        status: "ready",
       },
       {
         type: DeploymentTargetType.ACI,
@@ -158,6 +165,7 @@ export class DeploymentTargetFactory {
       DeploymentTargetType.DOCKER,
       DeploymentTargetType.KUBERNETES,
       DeploymentTargetType.ECS_EC2,
+      DeploymentTargetType.CLOUD_RUN,
       DeploymentTargetType.ACI,
       DeploymentTargetType.CLOUDFLARE_WORKERS,
     ].includes(type);

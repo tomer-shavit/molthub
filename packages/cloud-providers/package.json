@@ -28,6 +28,7 @@
     "@azure/identity": "^4.0.0",
     "@azure/keyvault-secrets": "^4.7.0",
     "@azure/monitor-query": "^1.1.0",
+    "@google-cloud/compute": "^4.0.0",
     "@google-cloud/logging": "^11.0.0",
     "@google-cloud/run": "^1.2.0",
     "@google-cloud/secret-manager": "^5.0.0",

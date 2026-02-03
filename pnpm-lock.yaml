@@ -367,6 +367,9 @@ importers:
       '@clawster/core':
         specifier: workspace:*
         version: link:../core
+      '@google-cloud/compute':
+        specifier: ^4.0.0
+        version: 4.12.0
       '@google-cloud/logging':
         specifier: ^11.0.0
         version: 11.2.1
@@ -2864,6 +2867,16 @@ packages:
       html-entities: 2.6.0
       retry-request: 7.0.2
       teeny-request: 9.0.0
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+    dev: false
+
+  /@google-cloud/compute@4.12.0:
+    resolution: {integrity: sha512-N3isWbxIMd02qzdlFFxHxEM+2B/vNgn9N7WMpteY2sfwN1yT9PJHcilKDLyw+uIwuQAoErNxBM+JOLq3r/Tv+Q==}
+    engines: {node: '>=14.0.0'}
+    dependencies:
+      google-gax: 4.6.1
     transitivePeerDependencies:
       - encoding
       - supports-color
