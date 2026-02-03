@@ -462,17 +462,17 @@ export class LifecycleManagerService {
    */
   private resolveDeploymentType(instance: BotInstance): string {
     const typeStr = instance.deploymentType ?? "LOCAL";
-    const typeMap: Record<string, string> = { LOCAL: "local", DOCKER: "docker", KUBERNETES: "kubernetes", ECS_EC2: "ecs-ec2", ACI: "aci", CLOUDFLARE_WORKERS: "cloudflare-workers" };
+    const typeMap: Record<string, string> = { LOCAL: "local", DOCKER: "docker", KUBERNETES: "kubernetes", ECS_EC2: "ecs-ec2", GCE: "gce", AZURE_VM: "azure-vm", CLOUDFLARE_WORKERS: "cloudflare-workers" };
     return typeMap[typeStr] ?? "docker";
   }
 
   private getInstallStepId(deploymentType: string): string {
-    const stepMap: Record<string, string> = { docker: "build_image", local: "install_openclaw", kubernetes: "generate_manifests", "ecs-ec2": "create_task_definition", aci: "create_container_group", "cloudflare-workers": "generate_wrangler_config" };
+    const stepMap: Record<string, string> = { docker: "build_image", local: "install_openclaw", kubernetes: "generate_manifests", "ecs-ec2": "create_task_definition", gce: "create_vm", "azure-vm": "create_vm", "cloudflare-workers": "generate_wrangler_config" };
     return stepMap[deploymentType] ?? "build_image";
   }
 
   private getStartStepId(deploymentType: string): string {
-    const stepMap: Record<string, string> = { docker: "start_container", local: "start_service", kubernetes: "apply_deployment", "ecs-ec2": "create_service", aci: "start_container_group", "cloudflare-workers": "deploy_worker" };
+    const stepMap: Record<string, string> = { docker: "start_container", local: "start_service", kubernetes: "apply_deployment", "ecs-ec2": "create_service", gce: "start_vm", "azure-vm": "start_vm", "cloudflare-workers": "deploy_worker" };
     return stepMap[deploymentType] ?? "start_container";
   }
 
@@ -524,9 +524,20 @@ export class LifecycleManagerService {
           profileName: instance.profileName ?? instance.name,
         },
       },
-      ACI: {
-        type: "aci",
-        aci: {
+      GCE: {
+        type: "gce",
+        gce: {
+          projectId: (instanceMeta?.projectId as string) ?? (instanceMeta?.gcpProjectId as string) ?? "",
+          zone: (instanceMeta?.zone as string) ?? (instanceMeta?.gcpZone as string) ?? "us-central1-a",
+          keyFilePath: instanceMeta?.keyFilePath as string | undefined,
+          machineType: instanceMeta?.machineType as string | undefined,
+          image: instanceMeta?.image as string | undefined,
+          profileName: instance.profileName ?? instance.name,
+        },
+      },
+      AZURE_VM: {
+        type: "azure-vm",
+        azureVm: {
           subscriptionId: (instanceMeta?.subscriptionId as string) ?? (instanceMeta?.azureSubscriptionId as string) ?? "",
           resourceGroup: (instanceMeta?.resourceGroup as string) ?? (instanceMeta?.azureResourceGroup as string) ?? "",
           region: (instanceMeta?.region as string) ?? (instanceMeta?.azureRegion as string) ?? "eastus",
@@ -536,8 +547,7 @@ export class LifecycleManagerService {
           keyVaultName: instanceMeta?.keyVaultName as string | undefined,
           logAnalyticsWorkspaceId: instanceMeta?.logAnalyticsWorkspaceId as string | undefined,
           logAnalyticsWorkspaceKey: instanceMeta?.logAnalyticsWorkspaceKey as string | undefined,
-          cpu: instanceMeta?.cpu as number | undefined,
-          memory: instanceMeta?.memory as number | undefined,
+          vmSize: instanceMeta?.vmSize as string | undefined,
           image: instanceMeta?.image as string | undefined,
           profileName: instance.profileName ?? instance.name,
         },
@@ -607,10 +617,22 @@ export class LifecycleManagerService {
             profileName: instance?.profileName ?? instance?.name,
           },
         };
-      case "ACI":
+      case "GCE":
         return {
-          type: "aci",
-          aci: {
+          type: "gce",
+          gce: {
+            projectId: (cfg.projectId as string) ?? "",
+            zone: (cfg.zone as string) ?? "us-central1-a",
+            keyFilePath: cfg.keyFilePath as string | undefined,
+            machineType: cfg.machineType as string | undefined,
+            image: cfg.image as string | undefined,
+            profileName: instance?.profileName ?? instance?.name,
+          },
+        };
+      case "AZURE_VM":
+        return {
+          type: "azure-vm",
+          azureVm: {
             subscriptionId: (cfg.subscriptionId as string) ?? "",
             resourceGroup: (cfg.resourceGroup as string) ?? "",
             region: (cfg.region as string) ?? "eastus",
@@ -620,8 +642,7 @@ export class LifecycleManagerService {
             keyVaultName: cfg.keyVaultName as string | undefined,
             logAnalyticsWorkspaceId: cfg.logAnalyticsWorkspaceId as string | undefined,
             logAnalyticsWorkspaceKey: cfg.logAnalyticsWorkspaceKey as string | undefined,
-            cpu: cfg.cpu as number | undefined,
-            memory: cfg.memory as number | undefined,
+            vmSize: cfg.vmSize as string | undefined,
             image: cfg.image as string | undefined,
             profileName: instance?.profileName ?? instance?.name,
           },

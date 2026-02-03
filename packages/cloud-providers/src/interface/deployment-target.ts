@@ -15,7 +15,7 @@ export enum DeploymentTargetType {
   DOCKER = "docker",
   ECS_EC2 = "ecs-ec2",
   GCE = "gce",
-  ACI = "aci",
+  AZURE_VM = "azure-vm",
   KUBERNETES = "kubernetes",
   CLOUDFLARE_WORKERS = "cloudflare-workers",
 }
@@ -288,10 +288,10 @@ export interface CloudflareWorkersConfig {
 }
 
 import type { EcsEc2Config } from "../targets/ecs-ec2/ecs-ec2-config";
-import type { AciConfig } from "../targets/aci/aci-config";
+import type { AzureVmConfig } from "../targets/azure-vm/azure-vm-config";
 import type { GceConfig } from "../targets/gce/gce-config";
 export type { EcsEc2Config } from "../targets/ecs-ec2/ecs-ec2-config";
-export type { AciConfig } from "../targets/aci/aci-config";
+export type { AzureVmConfig } from "../targets/azure-vm/azure-vm-config";
 export type { GceConfig } from "../targets/gce/gce-config";
 
 export type DeploymentTargetConfig =
@@ -301,7 +301,7 @@ export type DeploymentTargetConfig =
   | { type: "kubernetes"; k8s: KubernetesTargetConfig }
   | { type: "ecs-ec2"; ecs: EcsEc2Config }
   | { type: "gce"; gce: GceConfig }
-  | { type: "aci"; aci: AciConfig }
+  | { type: "azure-vm"; azureVm: AzureVmConfig }
   | { type: "cloudflare-workers"; cloudflare: CloudflareWorkersConfig };
 
 // ── Utility types ──

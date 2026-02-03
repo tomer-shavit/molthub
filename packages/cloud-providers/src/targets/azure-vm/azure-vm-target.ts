@@ -1,4 +1,4 @@
-import { ContainerInstanceManagementClient } from "@azure/arm-containerinstance";
+import { ComputeManagementClient } from "@azure/arm-compute";
 import { NetworkManagementClient } from "@azure/arm-network";
 import { DefaultAzureCredential, ClientSecretCredential, TokenCredential } from "@azure/identity";
 import { SecretClient } from "@azure/keyvault-secrets";
@@ -14,77 +14,67 @@ import {
   DeploymentLogOptions,
   GatewayEndpoint,
 } from "../../interface/deployment-target";
-import type { AciConfig } from "./aci-config";
+import type { AzureVmConfig } from "./azure-vm-config";
 
-const DEFAULT_CPU = 1;
-const DEFAULT_MEMORY = 2048;
+const DEFAULT_VM_SIZE = "Standard_B2s";
+const DEFAULT_OS_DISK_SIZE_GB = 30;
+const DEFAULT_DATA_DISK_SIZE_GB = 10;
 const DEFAULT_VNET_PREFIX = "10.0.0.0/16";
-const DEFAULT_ACI_SUBNET_PREFIX = "10.0.1.0/24";
+const DEFAULT_VM_SUBNET_PREFIX = "10.0.1.0/24";
 const DEFAULT_APPGW_SUBNET_PREFIX = "10.0.2.0/24";
 
 /**
- * AciTarget manages an OpenClaw gateway instance running on
- * Azure Container Instances (ACI).
+ * AzureVmTarget manages an OpenClaw gateway instance running on
+ * Azure Virtual Machine.
  *
- * SECURITY: All deployments use VNet + Application Gateway architecture.
- * Containers are NEVER exposed directly to the internet.
- * External access (for webhooks from Telegram, WhatsApp, etc.) goes through Application Gateway.
+ * ARCHITECTURE: VM-based deployment with full Docker support.
+ * Unlike ACI, Azure VM provides:
+ * - Full Docker daemon access for sandbox mode (Docker-in-Docker)
+ * - Managed Disk for WhatsApp sessions (survives restarts)
+ * - No cold starts - VM is always running
+ * - State survives VM restarts
  *
- * All deployments include:
- * - VNet with private subnet for containers
- * - Network Security Group with restrictive inbound rules
- * - Application Gateway for secure external access
- * - Optional Key Vault integration for secrets
+ * Security:
+ *   Internet -> Application Gateway -> Azure VM (VNet-isolated)
+ *                                          |
+ *                                    Managed Disk (persistent storage)
  */
-export class AciTarget implements DeploymentTarget {
-  readonly type = DeploymentTargetType.ACI;
+export class AzureVmTarget implements DeploymentTarget {
+  readonly type = DeploymentTargetType.AZURE_VM;
 
-  private readonly config: AciConfig;
-  private readonly cpu: number;
-  private readonly memory: number;
+  private readonly config: AzureVmConfig;
+  private readonly vmSize: string;
+  private readonly osDiskSizeGb: number;
+  private readonly dataDiskSizeGb: number;
   private readonly credential: TokenCredential;
 
-  private readonly aciClient: ContainerInstanceManagementClient;
+  private readonly computeClient: ComputeManagementClient;
   private readonly networkClient: NetworkManagementClient;
   private readonly keyVaultClient?: SecretClient;
   private readonly logsClient?: LogsQueryClient;
 
   /** Derived resource names - set during install */
-  private containerGroupName = "";
+  private vmName = "";
+  private dataDiskName = "";
+  private nicName = "";
   private vnetName = "";
   private subnetName = "";
-  private subnetId = "";
   private nsgName = "";
   private secretName = "";
   private gatewayPort = 18789;
 
-  /** Application Gateway resources (for with-gateway tier) */
+  /** Application Gateway resources */
   private appGatewayName = "";
   private appGatewaySubnetName = "";
-  private appGatewaySubnetId = "";
   private appGatewayPublicIpName = "";
   private appGatewayPublicIp = "";
   private appGatewayFqdn = "";
 
-  constructor(config: AciConfig) {
+  constructor(config: AzureVmConfig) {
     this.config = config;
-    this.cpu = config.cpu ?? DEFAULT_CPU;
-    this.memory = (config.memory ?? DEFAULT_MEMORY) / 1024; // Convert MB to GB
-
-    // Derive resource names from profileName if available
-    if (config.profileName) {
-      const p = this.sanitizeName(config.profileName);
-      this.containerGroupName = `clawster-${p}`;
-      this.vnetName = config.vnetName ?? `clawster-vnet-${p}`;
-      this.subnetName = config.subnetName ?? `clawster-aci-subnet-${p}`;
-      this.nsgName = config.nsgName ?? `clawster-nsg-${p}`;
-      this.secretName = `clawster-${p}-config`;
-    }
-
-    // Use existing subnet ID if provided
-    if (config.subnetId) {
-      this.subnetId = config.subnetId;
-    }
+    this.vmSize = config.vmSize ?? DEFAULT_VM_SIZE;
+    this.osDiskSizeGb = config.osDiskSizeGb ?? DEFAULT_OS_DISK_SIZE_GB;
+    this.dataDiskSizeGb = config.dataDiskSizeGb ?? DEFAULT_DATA_DISK_SIZE_GB;
 
     // Create credential
     if (config.clientId && config.clientSecret && config.tenantId) {
@@ -97,7 +87,7 @@ export class AciTarget implements DeploymentTarget {
       this.credential = new DefaultAzureCredential();
     }
 
-    this.aciClient = new ContainerInstanceManagementClient(
+    this.computeClient = new ComputeManagementClient(
       this.credential,
       config.subscriptionId
     );
@@ -117,6 +107,44 @@ export class AciTarget implements DeploymentTarget {
     if (config.logAnalyticsWorkspaceId) {
       this.logsClient = new LogsQueryClient(this.credential);
     }
+
+    // Derive resource names from profileName if available
+    if (config.profileName) {
+      this.deriveResourceNames(config.profileName);
+    }
+  }
+
+  private deriveResourceNames(profileName: string): void {
+    const sanitized = this.sanitizeName(profileName);
+    this.vmName = `clawster-${sanitized}`;
+    this.dataDiskName = `clawster-data-${sanitized}`;
+    this.nicName = `clawster-nic-${sanitized}`;
+    this.vnetName = this.config.vnetName ?? `clawster-vnet-${sanitized}`;
+    this.subnetName = this.config.subnetName ?? `clawster-subnet-${sanitized}`;
+    this.nsgName = this.config.nsgName ?? `clawster-nsg-${sanitized}`;
+    this.secretName = `clawster-${sanitized}-config`;
+
+    // Application Gateway names
+    this.appGatewayName = this.config.appGatewayName ?? `clawster-appgw-${sanitized}`;
+    this.appGatewaySubnetName = this.config.appGatewaySubnetName ?? `clawster-appgw-subnet-${sanitized}`;
+    this.appGatewayPublicIpName = `clawster-appgw-pip-${sanitized}`;
+  }
+
+  /**
+   * Sanitize name for Azure resources.
+   * Must be lowercase, alphanumeric and hyphens, max 63 characters.
+   */
+  private sanitizeName(name: string): string {
+    const sanitized = name
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .substring(0, 63);
+
+    if (!sanitized) {
+      throw new Error(`Invalid name: "${name}" produces empty sanitized value`);
+    }
+    return sanitized;
   }
 
   // ------------------------------------------------------------------
@@ -126,89 +154,53 @@ export class AciTarget implements DeploymentTarget {
   async install(options: InstallOptions): Promise<InstallResult> {
     const profileName = this.sanitizeName(options.profileName);
     this.gatewayPort = options.port;
-    this.containerGroupName = `clawster-${profileName}`;
-    this.vnetName = this.config.vnetName ?? `clawster-vnet-${profileName}`;
-    this.subnetName = this.config.subnetName ?? `clawster-aci-subnet-${profileName}`;
-    this.nsgName = this.config.nsgName ?? `clawster-nsg-${profileName}`;
-    this.secretName = `clawster-${profileName}-config`;
-
-    // Application Gateway names (for with-gateway tier)
-    this.appGatewayName = this.config.appGatewayName ?? `clawster-appgw-${profileName}`;
-    this.appGatewaySubnetName = this.config.appGatewaySubnetName ?? `clawster-appgw-subnet-${profileName}`;
-    this.appGatewayPublicIpName = `clawster-appgw-pip-${profileName}`;
+    this.deriveResourceNames(profileName);
 
     try {
-      // 1. Set up VNet infrastructure (MANDATORY for all deployments)
+      // 1. Set up VNet infrastructure
       await this.ensureNetworkInfrastructure();
 
-      // 2. Set up Application Gateway for secure external access (webhooks, etc.)
+      // 2. Set up Application Gateway for secure external access
       await this.ensureApplicationGateway();
 
-      // 3. Resolve image
-      const imageUri = this.config.image ?? "node:22-slim";
+      // 3. Create data disk for persistent storage
+      await this.ensureDataDisk();
 
       // 4. Store initial empty config in Key Vault if available
       if (this.keyVaultClient) {
         await this.ensureSecret(this.secretName, "{}");
       }
 
-      // 5. Build environment variables
-      const environmentVariables: Array<{ name: string; value?: string; secureValue?: string }> = [
-        { name: "OPENCLAW_GATEWAY_PORT", value: String(this.gatewayPort) },
-      ];
+      // 5. Create VM with Docker and startup script
+      await this.createVm(options);
 
-      // Add gateway auth token if provided
-      if (options.gatewayAuthToken) {
-        environmentVariables.push({
-          name: "OPENCLAW_GATEWAY_TOKEN",
-          secureValue: options.gatewayAuthToken,
-        });
-      }
-
-      // Add container env vars
-      for (const [key, value] of Object.entries(options.containerEnv ?? {})) {
-        environmentVariables.push({ name: key, value });
-      }
-
-      // 6. Build container group configuration
-      const containerGroupConfig = this.buildContainerGroupConfig(
-        imageUri,
-        environmentVariables,
-        profileName
-      );
-
-      // 7. Create container group
-      const result = await this.aciClient.containerGroups.beginCreateOrUpdateAndWait(
-        this.config.resourceGroup,
-        this.containerGroupName,
-        containerGroupConfig
-      );
-
-      // 8. Update Application Gateway backend with ACI's private IP
-      if (result.ipAddress?.ip) {
-        await this.updateAppGatewayBackend(result.ipAddress.ip);
+      // 6. Update Application Gateway backend with VM's private IP
+      const vmPrivateIp = await this.getVmPrivateIp();
+      if (vmPrivateIp) {
+        await this.updateAppGatewayBackend(vmPrivateIp);
       }
 
       const externalAccess = this.appGatewayFqdn
         ? ` External access via: http://${this.appGatewayFqdn}`
         : "";
+
       return {
         success: true,
-        instanceId: this.containerGroupName,
-        message: `ACI container group "${this.containerGroupName}" created (VNet + App Gateway, secure) in ${this.config.region}.${externalAccess}`,
-        serviceName: result.name,
+        instanceId: this.vmName,
+        message: `Azure VM "${this.vmName}" created (VNet + App Gateway, managed disk) in ${this.config.region}.${externalAccess}`,
+        serviceName: this.vmName,
       };
     } catch (error) {
       return {
         success: false,
-        instanceId: this.containerGroupName,
-        message: `ACI install failed: ${error instanceof Error ? error.message : String(error)}`,
+        instanceId: this.vmName,
+        message: `Azure VM install failed: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
   }
 
   // ------------------------------------------------------------------
-  // Network Infrastructure (Production Tier)
+  // Network Infrastructure
   // ------------------------------------------------------------------
 
   private async ensureNetworkInfrastructure(): Promise<void> {
@@ -218,22 +210,20 @@ export class AciTarget implements DeploymentTarget {
     // 2. Create or get NSG with secure rules
     await this.ensureNSG();
 
-    // 3. Create or get subnet for ACI with delegation
-    await this.ensureAciSubnet();
+    // 3. Create or get subnet for VM
+    await this.ensureVmSubnet();
   }
 
   private async ensureVNet(): Promise<void> {
     const vnetAddressPrefix = this.config.vnetAddressPrefix ?? DEFAULT_VNET_PREFIX;
 
     try {
-      // Check if VNet exists
       await this.networkClient.virtualNetworks.get(
         this.config.resourceGroup,
         this.vnetName
       );
     } catch (error: unknown) {
       if ((error as { statusCode?: number }).statusCode === 404) {
-        // Create VNet
         await this.networkClient.virtualNetworks.beginCreateOrUpdateAndWait(
           this.config.resourceGroup,
           this.vnetName,
@@ -254,8 +244,6 @@ export class AciTarget implements DeploymentTarget {
   }
 
   private async ensureNSG(): Promise<void> {
-    const allowedCidr = this.config.allowedCidr ?? [];
-
     try {
       await this.networkClient.networkSecurityGroups.get(
         this.config.resourceGroup,
@@ -263,7 +251,6 @@ export class AciTarget implements DeploymentTarget {
       );
     } catch (error: unknown) {
       if ((error as { statusCode?: number }).statusCode === 404) {
-        // Build security rules
         type SecurityRule = {
           name: string;
           priority: number;
@@ -275,8 +262,9 @@ export class AciTarget implements DeploymentTarget {
           destinationAddressPrefix: string;
           destinationPortRange: string;
         };
+
         const securityRules: SecurityRule[] = [
-          // Deny all inbound by default (implicit, but explicit for clarity)
+          // Deny all direct inbound by default (traffic must go through App Gateway)
           {
             name: "DenyAllInbound",
             priority: 4096,
@@ -288,7 +276,7 @@ export class AciTarget implements DeploymentTarget {
             destinationAddressPrefix: "*",
             destinationPortRange: "*",
           },
-          // Allow outbound to internet (for npm install, API calls)
+          // Allow outbound to internet (for apt, npm, API calls)
           {
             name: "AllowInternetOutbound",
             priority: 100,
@@ -312,7 +300,7 @@ export class AciTarget implements DeploymentTarget {
             destinationAddressPrefix: "*",
             destinationPortRange: "*",
           },
-          // Allow VNet internal traffic
+          // Allow VNet internal traffic (for App Gateway -> VM)
           {
             name: "AllowVNetInbound",
             priority: 200,
@@ -324,26 +312,39 @@ export class AciTarget implements DeploymentTarget {
             destinationAddressPrefix: "VirtualNetwork",
             destinationPortRange: "*",
           },
-        ];
-
-        // Add rules for allowed CIDRs to access gateway port
-        let priority = 300;
-        for (const cidr of allowedCidr) {
-          securityRules.push({
-            name: `AllowGateway-${priority}`,
-            priority,
+          // Allow Application Gateway health probes (65503-65534 range)
+          {
+            name: "AllowAppGatewayHealthProbes",
+            priority: 300,
             direction: "Inbound" as const,
             access: "Allow" as const,
-            protocol: "Tcp" as const,
-            sourceAddressPrefix: cidr,
+            protocol: "*" as const,
+            sourceAddressPrefix: "GatewayManager",
             sourcePortRange: "*",
             destinationAddressPrefix: "*",
-            destinationPortRange: String(this.gatewayPort),
-          });
-          priority += 10;
+            destinationPortRange: "65200-65535",
+          },
+        ];
+
+        // Add additional NSG rules if configured
+        if (this.config.additionalNsgRules) {
+          let priority = 400;
+          for (const rule of this.config.additionalNsgRules) {
+            securityRules.push({
+              name: rule.name,
+              priority: rule.priority || priority,
+              direction: rule.direction,
+              access: rule.access,
+              protocol: rule.protocol,
+              sourceAddressPrefix: rule.sourceAddressPrefix,
+              sourcePortRange: "*",
+              destinationAddressPrefix: "*",
+              destinationPortRange: rule.destinationPortRange,
+            });
+            priority += 10;
+          }
         }
 
-        // Create NSG
         await this.networkClient.networkSecurityGroups.beginCreateOrUpdateAndWait(
           this.config.resourceGroup,
           this.nsgName,
@@ -361,26 +362,23 @@ export class AciTarget implements DeploymentTarget {
     }
   }
 
-  private async ensureAciSubnet(): Promise<void> {
-    const subnetAddressPrefix = this.config.subnetAddressPrefix ?? DEFAULT_ACI_SUBNET_PREFIX;
+  private async ensureVmSubnet(): Promise<void> {
+    const subnetAddressPrefix = this.config.subnetAddressPrefix ?? DEFAULT_VM_SUBNET_PREFIX;
 
-    // Get NSG ID
     const nsg = await this.networkClient.networkSecurityGroups.get(
       this.config.resourceGroup,
       this.nsgName
     );
 
     try {
-      const subnet = await this.networkClient.subnets.get(
+      await this.networkClient.subnets.get(
         this.config.resourceGroup,
         this.vnetName,
         this.subnetName
       );
-      this.subnetId = subnet.id!;
     } catch (error: unknown) {
       if ((error as { statusCode?: number }).statusCode === 404) {
-        // Create subnet with ACI delegation
-        const subnet = await this.networkClient.subnets.beginCreateOrUpdateAndWait(
+        await this.networkClient.subnets.beginCreateOrUpdateAndWait(
           this.config.resourceGroup,
           this.vnetName,
           this.subnetName,
@@ -389,15 +387,8 @@ export class AciTarget implements DeploymentTarget {
             networkSecurityGroup: {
               id: nsg.id,
             },
-            delegations: [
-              {
-                name: "aciDelegation",
-                serviceName: "Microsoft.ContainerInstance/containerGroups",
-              },
-            ],
           }
         );
-        this.subnetId = subnet.id!;
       } else {
         throw error;
       }
@@ -405,21 +396,12 @@ export class AciTarget implements DeploymentTarget {
   }
 
   // ------------------------------------------------------------------
-  // Application Gateway (for with-gateway tier)
+  // Application Gateway
   // ------------------------------------------------------------------
 
   private async ensureApplicationGateway(): Promise<void> {
-    // 1. Create Application Gateway subnet (separate from ACI subnet, no delegations)
     await this.ensureAppGatewaySubnet();
-
-    // 2. Create public IP for Application Gateway
     await this.ensureAppGatewayPublicIp();
-
-    // 3. Wait for ACI container to be ready (need its private IP for backend)
-    // Note: Container group is created after this, so we'll use a placeholder
-    // and update the backend pool after container creation
-
-    // 4. Create Application Gateway
     await this.createApplicationGateway();
   }
 
@@ -427,25 +409,22 @@ export class AciTarget implements DeploymentTarget {
     const subnetAddressPrefix = this.config.appGatewaySubnetAddressPrefix ?? DEFAULT_APPGW_SUBNET_PREFIX;
 
     try {
-      const subnet = await this.networkClient.subnets.get(
+      await this.networkClient.subnets.get(
         this.config.resourceGroup,
         this.vnetName,
         this.appGatewaySubnetName
       );
-      this.appGatewaySubnetId = subnet.id!;
     } catch (error: unknown) {
       if ((error as { statusCode?: number }).statusCode === 404) {
-        // Create subnet for Application Gateway (NO delegations - App Gateway doesn't support them)
-        const subnet = await this.networkClient.subnets.beginCreateOrUpdateAndWait(
+        // Application Gateway subnet must NOT have NSG attached directly
+        await this.networkClient.subnets.beginCreateOrUpdateAndWait(
           this.config.resourceGroup,
           this.vnetName,
           this.appGatewaySubnetName,
           {
             addressPrefix: subnetAddressPrefix,
-            // Application Gateway subnet must NOT have delegations or NSG attached directly
           }
         );
-        this.appGatewaySubnetId = subnet.id!;
       } else {
         throw error;
       }
@@ -462,7 +441,6 @@ export class AciTarget implements DeploymentTarget {
       this.appGatewayFqdn = pip.dnsSettings?.fqdn || "";
     } catch (error: unknown) {
       if ((error as { statusCode?: number }).statusCode === 404) {
-        // Create public IP for Application Gateway (must be Standard SKU for v2)
         const pip = await this.networkClient.publicIPAddresses.beginCreateOrUpdateAndWait(
           this.config.resourceGroup,
           this.appGatewayPublicIpName,
@@ -488,12 +466,10 @@ export class AciTarget implements DeploymentTarget {
 
   private async createApplicationGateway(): Promise<void> {
     try {
-      // Check if Application Gateway already exists
       const existingGw = await this.networkClient.applicationGateways.get(
         this.config.resourceGroup,
         this.appGatewayName
       );
-      // Already exists, store the frontend IP info
       if (existingGw.frontendIPConfigurations?.[0]?.publicIPAddress?.id) {
         const pip = await this.networkClient.publicIPAddresses.get(
           this.config.resourceGroup,
@@ -509,18 +485,23 @@ export class AciTarget implements DeploymentTarget {
       }
     }
 
-    // Create Application Gateway v2 (Standard_v2 SKU)
-    // Initially create with a placeholder backend - will be updated after ACI is created
+    // Get subnet ID for Application Gateway
+    const appGwSubnet = await this.networkClient.subnets.get(
+      this.config.resourceGroup,
+      this.vnetName,
+      this.appGatewaySubnetName
+    );
+
     const subscriptionId = this.config.subscriptionId;
     const resourceGroup = this.config.resourceGroup;
     const gatewayIpConfigName = "appGatewayIpConfig";
     const frontendIpConfigName = "appGatewayFrontendIp";
     const frontendPortName = "appGatewayFrontendPort";
-    const backendPoolName = "aciBackendPool";
-    const backendHttpSettingsName = "aciBackendHttpSettings";
-    const httpListenerName = "aciHttpListener";
-    const requestRoutingRuleName = "aciRoutingRule";
-    const probeName = "aciHealthProbe";
+    const backendPoolName = "vmBackendPool";
+    const backendHttpSettingsName = "vmBackendHttpSettings";
+    const httpListenerName = "vmHttpListener";
+    const requestRoutingRuleName = "vmRoutingRule";
+    const probeName = "vmHealthProbe";
 
     await this.networkClient.applicationGateways.beginCreateOrUpdateAndWait(
       resourceGroup,
@@ -530,12 +511,12 @@ export class AciTarget implements DeploymentTarget {
         sku: {
           name: "Standard_v2",
           tier: "Standard_v2",
-          capacity: 1, // Minimum capacity for cost savings
+          capacity: 1,
         },
         gatewayIPConfigurations: [
           {
             name: gatewayIpConfigName,
-            subnet: { id: this.appGatewaySubnetId },
+            subnet: { id: appGwSubnet.id },
           },
         ],
         frontendIPConfigurations: [
@@ -549,13 +530,12 @@ export class AciTarget implements DeploymentTarget {
         frontendPorts: [
           {
             name: frontendPortName,
-            port: 80, // HTTP for now, can add HTTPS with SSL cert
+            port: 80,
           },
         ],
         backendAddressPools: [
           {
             name: backendPoolName,
-            // Backend addresses will be updated after ACI is created
             backendAddresses: [],
           },
         ],
@@ -563,7 +543,7 @@ export class AciTarget implements DeploymentTarget {
           {
             name: probeName,
             protocol: "Http",
-            path: "/health", // OpenClaw gateway health endpoint
+            path: "/health",
             interval: 30,
             timeout: 30,
             unhealthyThreshold: 3,
@@ -617,21 +597,16 @@ export class AciTarget implements DeploymentTarget {
     );
   }
 
-  /**
-   * Update Application Gateway backend pool with ACI private IP.
-   * Called after container group is created and has a private IP.
-   */
-  private async updateAppGatewayBackend(aciPrivateIp: string): Promise<void> {
+  private async updateAppGatewayBackend(vmPrivateIp: string): Promise<void> {
     try {
       const appGw = await this.networkClient.applicationGateways.get(
         this.config.resourceGroup,
         this.appGatewayName
       );
 
-      // Update backend pool with ACI's private IP
       if (appGw.backendAddressPools?.[0]) {
         appGw.backendAddressPools[0].backendAddresses = [
-          { ipAddress: aciPrivateIp },
+          { ipAddress: vmPrivateIp },
         ];
       }
 
@@ -642,70 +617,235 @@ export class AciTarget implements DeploymentTarget {
       );
     } catch (error) {
       console.warn(`Failed to update Application Gateway backend: ${error}`);
-      // Non-fatal - gateway still works, just may have stale backend
     }
   }
 
   // ------------------------------------------------------------------
-  // Container Group Configuration
+  // Data Disk
   // ------------------------------------------------------------------
 
-  private buildContainerGroupConfig(
-    imageUri: string,
-    environmentVariables: Array<{ name: string; value?: string; secureValue?: string }>,
-    profileName: string
-  ) {
-    const baseConfig = {
-      location: this.config.region,
-      containers: [
-        {
-          name: "openclaw",
-          image: imageUri,
-          resources: {
-            requests: {
-              cpu: this.cpu,
-              memoryInGB: this.memory,
+  private async ensureDataDisk(): Promise<void> {
+    try {
+      await this.computeClient.disks.get(
+        this.config.resourceGroup,
+        this.dataDiskName
+      );
+    } catch (error: unknown) {
+      if ((error as { statusCode?: number }).statusCode === 404) {
+        await this.computeClient.disks.beginCreateOrUpdateAndWait(
+          this.config.resourceGroup,
+          this.dataDiskName,
+          {
+            location: this.config.region,
+            sku: { name: "Standard_LRS" },
+            diskSizeGB: this.dataDiskSizeGb,
+            creationData: {
+              createOption: "Empty",
             },
-          },
-          environmentVariables,
-          ports: [{ port: this.gatewayPort, protocol: "TCP" as const }],
-          command: [
-            "/bin/sh",
-            "-c",
-            `mkdir -p ~/.openclaw && echo "$OPENCLAW_CONFIG" > ~/.openclaw/openclaw.json && npx -y openclaw@latest gateway --port ${this.gatewayPort} --verbose`,
-          ],
-        },
-      ],
-      osType: "Linux" as const,
-      restartPolicy: "Always" as const,
-      tags: {
-        managedBy: "clawster",
-        profile: profileName,
-        architecture: "vnet-appgateway",
-      },
-      ...(this.config.logAnalyticsWorkspaceId && this.config.logAnalyticsWorkspaceKey
-        ? {
-            diagnostics: {
-              logAnalytics: {
-                workspaceId: this.config.logAnalyticsWorkspaceId,
-                workspaceKey: this.config.logAnalyticsWorkspaceKey,
-              },
+            tags: {
+              managedBy: "clawster",
             },
           }
-        : {}),
-    };
+        );
+      } else {
+        throw error;
+      }
+    }
+  }
 
-    // SECURITY: ALL deployments use VNet with private IP - no public IP option
-    if (!this.subnetId) {
-      throw new Error("VNet subnet is required for ACI deployment (security requirement)");
+  // ------------------------------------------------------------------
+  // VM Creation
+  // ------------------------------------------------------------------
+
+  private async createVm(options: InstallOptions): Promise<void> {
+    const imageUri = this.config.image ?? "node:22-slim";
+
+    // Get subnet for NIC
+    const subnet = await this.networkClient.subnets.get(
+      this.config.resourceGroup,
+      this.vnetName,
+      this.subnetName
+    );
+
+    // Create NIC (no public IP - traffic goes through App Gateway)
+    try {
+      await this.networkClient.networkInterfaces.get(
+        this.config.resourceGroup,
+        this.nicName
+      );
+    } catch (error: unknown) {
+      if ((error as { statusCode?: number }).statusCode === 404) {
+        await this.networkClient.networkInterfaces.beginCreateOrUpdateAndWait(
+          this.config.resourceGroup,
+          this.nicName,
+          {
+            location: this.config.region,
+            ipConfigurations: [
+              {
+                name: "ipconfig1",
+                subnet: { id: subnet.id },
+                privateIPAllocationMethod: "Dynamic",
+                // No public IP - VM is only accessible via Application Gateway
+              },
+            ],
+            tags: {
+              managedBy: "clawster",
+            },
+          }
+        );
+      } else {
+        throw error;
+      }
     }
 
-    return {
-      ...baseConfig,
-      subnetIds: [{ id: this.subnetId }],
-      // No public IP - containers must be accessed via VPN/ExpressRoute/bastion
-      // or through Application Gateway (with-gateway tier)
-    };
+    // Get NIC ID
+    const nic = await this.networkClient.networkInterfaces.get(
+      this.config.resourceGroup,
+      this.nicName
+    );
+
+    // Get data disk ID
+    const dataDisk = await this.computeClient.disks.get(
+      this.config.resourceGroup,
+      this.dataDiskName
+    );
+
+    // Build cloud-init script for Docker setup and OpenClaw startup
+    const cloudInit = this.buildCloudInit(imageUri, options);
+
+    // Create VM
+    await this.computeClient.virtualMachines.beginCreateOrUpdateAndWait(
+      this.config.resourceGroup,
+      this.vmName,
+      {
+        location: this.config.region,
+        hardwareProfile: {
+          vmSize: this.vmSize,
+        },
+        storageProfile: {
+          imageReference: {
+            // Ubuntu 24.04 LTS
+            publisher: "Canonical",
+            offer: "ubuntu-24_04-lts",
+            sku: "server",
+            version: "latest",
+          },
+          osDisk: {
+            createOption: "FromImage",
+            diskSizeGB: this.osDiskSizeGb,
+            managedDisk: {
+              storageAccountType: "Standard_LRS",
+            },
+            name: `${this.vmName}-osdisk`,
+          },
+          dataDisks: [
+            {
+              lun: 0,
+              createOption: "Attach",
+              managedDisk: {
+                id: dataDisk.id,
+              },
+            },
+          ],
+        },
+        osProfile: {
+          computerName: this.vmName,
+          adminUsername: "clawster",
+          customData: Buffer.from(cloudInit).toString("base64"),
+          linuxConfiguration: {
+            disablePasswordAuthentication: true,
+            ssh: this.config.sshPublicKey
+              ? {
+                  publicKeys: [
+                    {
+                      path: "/home/clawster/.ssh/authorized_keys",
+                      keyData: this.config.sshPublicKey,
+                    },
+                  ],
+                }
+              : undefined,
+          },
+        },
+        networkProfile: {
+          networkInterfaces: [
+            {
+              id: nic.id,
+              primary: true,
+            },
+          ],
+        },
+        tags: {
+          managedBy: "clawster",
+          profile: this.sanitizeName(options.profileName),
+        },
+      }
+    );
+  }
+
+  private buildCloudInit(imageUri: string, options: InstallOptions): string {
+    const gatewayToken = options.gatewayAuthToken ?? "";
+
+    return `#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - docker.io
+  - jq
+
+runcmd:
+  # Enable and start Docker
+  - systemctl enable docker
+  - systemctl start docker
+  - usermod -aG docker clawster
+
+  # Format and mount data disk
+  - mkdir -p /mnt/openclaw
+  - |
+    DATA_DISK="/dev/disk/azure/scsi1/lun0"
+    if [ -e "$DATA_DISK" ]; then
+      if ! blkid "$DATA_DISK"; then
+        mkfs.ext4 -F "$DATA_DISK"
+      fi
+      mount "$DATA_DISK" /mnt/openclaw
+      echo "$DATA_DISK /mnt/openclaw ext4 defaults,nofail 0 2" >> /etc/fstab
+    fi
+  - chmod 777 /mnt/openclaw
+  - mkdir -p /mnt/openclaw/.openclaw
+
+  # Write initial config
+  - echo '{}' > /mnt/openclaw/.openclaw/openclaw.json
+
+  # Stop any existing container
+  - docker rm -f openclaw-gateway 2>/dev/null || true
+
+  # Run OpenClaw in Docker with full Docker access (for sandbox)
+  - |
+    docker run -d \\
+      --name openclaw-gateway \\
+      --restart=always \\
+      -p ${this.gatewayPort}:${this.gatewayPort} \\
+      -v /mnt/openclaw/.openclaw:/home/node/.openclaw \\
+      -v /var/run/docker.sock:/var/run/docker.sock \\
+      -e OPENCLAW_GATEWAY_PORT=${this.gatewayPort} \\
+      -e OPENCLAW_GATEWAY_TOKEN="${gatewayToken}" \\
+      ${imageUri} \\
+      sh -c "npx -y openclaw@latest gateway --port ${this.gatewayPort} --verbose"
+
+final_message: "OpenClaw gateway started on port ${this.gatewayPort}"
+`;
+  }
+
+  private async getVmPrivateIp(): Promise<string | undefined> {
+    try {
+      const nic = await this.networkClient.networkInterfaces.get(
+        this.config.resourceGroup,
+        this.nicName
+      );
+      return nic.ipConfigurations?.[0]?.privateIPAddress ?? undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   // ------------------------------------------------------------------
@@ -713,18 +853,17 @@ export class AciTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async configure(config: OpenClawConfigPayload): Promise<ConfigureResult> {
-    const profileName = this.sanitizeName(config.profileName);
+    const profileName = config.profileName;
     this.gatewayPort = config.gatewayPort;
 
-    if (!this.containerGroupName) {
-      this.containerGroupName = `clawster-${profileName}`;
-      this.secretName = `clawster-${profileName}-config`;
+    if (!this.vmName) {
+      this.deriveResourceNames(profileName);
     }
 
-    // Apply config transformations (same as ECS/Docker targets)
+    // Apply config transformations (same as other deployment targets)
     const raw = { ...config.config } as Record<string, unknown>;
 
-    // gateway.bind = "lan" - containers MUST bind to 0.0.0.0
+    // gateway.bind = "lan" - container MUST bind to 0.0.0.0
     if (raw.gateway && typeof raw.gateway === "object") {
       const gw = { ...(raw.gateway as Record<string, unknown>) };
       gw.bind = "lan";
@@ -768,38 +907,26 @@ export class AciTarget implements DeploymentTarget {
         await this.ensureSecret(this.secretName, configData);
       }
 
-      // Update container group with new OPENCLAW_CONFIG env var
-      const existing = await this.aciClient.containerGroups.get(
+      // For Azure VM, we need to use Run Command to update the config
+      // This runs a script on the VM to write the config and restart the container
+      // Use base64 encoding to safely pass JSON through shell without injection risk
+      const base64Config = Buffer.from(configData).toString("base64");
+      await this.computeClient.virtualMachines.beginRunCommandAndWait(
         this.config.resourceGroup,
-        this.containerGroupName
-      );
-
-      if (!existing.containers?.[0]) {
-        throw new Error("Container group has no containers");
-      }
-
-      // Update the OPENCLAW_CONFIG environment variable
-      const envVars = existing.containers[0].environmentVariables || [];
-      const configEnvIndex = envVars.findIndex((e) => e.name === "OPENCLAW_CONFIG");
-
-      if (configEnvIndex >= 0) {
-        envVars[configEnvIndex] = { name: "OPENCLAW_CONFIG", secureValue: configData };
-      } else {
-        envVars.push({ name: "OPENCLAW_CONFIG", secureValue: configData });
-      }
-
-      existing.containers[0].environmentVariables = envVars;
-
-      await this.aciClient.containerGroups.beginCreateOrUpdateAndWait(
-        this.config.resourceGroup,
-        this.containerGroupName,
-        existing
+        this.vmName,
+        {
+          commandId: "RunShellScript",
+          script: [
+            `echo '${base64Config}' | base64 -d > /mnt/openclaw/.openclaw/openclaw.json`,
+            "docker restart openclaw-gateway 2>/dev/null || true",
+          ],
+        }
       );
 
       return {
         success: true,
-        message: `Configuration applied to container group "${this.containerGroupName}"`,
-        requiresRestart: true,
+        message: `Configuration applied to VM "${this.vmName}" and container restarted`,
+        requiresRestart: false, // Already restarted via Run Command
       };
     } catch (error) {
       return {
@@ -815,9 +942,9 @@ export class AciTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async start(): Promise<void> {
-    await this.aciClient.containerGroups.beginStartAndWait(
+    await this.computeClient.virtualMachines.beginStartAndWait(
       this.config.resourceGroup,
-      this.containerGroupName
+      this.vmName
     );
   }
 
@@ -826,9 +953,9 @@ export class AciTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async stop(): Promise<void> {
-    await this.aciClient.containerGroups.stop(
+    await this.computeClient.virtualMachines.beginDeallocateAndWait(
       this.config.resourceGroup,
-      this.containerGroupName
+      this.vmName
     );
   }
 
@@ -837,9 +964,9 @@ export class AciTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async restart(): Promise<void> {
-    await this.aciClient.containerGroups.beginRestartAndWait(
+    await this.computeClient.virtualMachines.beginRestartAndWait(
       this.config.resourceGroup,
-      this.containerGroupName
+      this.vmName
     );
   }
 
@@ -849,33 +976,35 @@ export class AciTarget implements DeploymentTarget {
 
   async getStatus(): Promise<TargetStatus> {
     try {
-      const group = await this.aciClient.containerGroups.get(
+      const instanceView = await this.computeClient.virtualMachines.instanceView(
         this.config.resourceGroup,
-        this.containerGroupName
+        this.vmName
       );
 
-      const container = group.containers?.[0];
-      const instanceView = container?.instanceView;
-      const provisioningState = group.provisioningState || "Unknown";
-      const containerState = instanceView?.currentState?.state || "Unknown";
+      const powerState = instanceView.statuses?.find(
+        (s: { code?: string }) => s.code?.startsWith("PowerState/")
+      );
 
       let state: TargetStatus["state"];
-      if (containerState === "Running" && provisioningState === "Succeeded") {
+      let error: string | undefined;
+
+      const code = powerState?.code ?? "";
+
+      if (code === "PowerState/running") {
         state = "running";
-      } else if (containerState === "Terminated" || provisioningState === "Stopped") {
+      } else if (code === "PowerState/stopped" || code === "PowerState/deallocated") {
         state = "stopped";
-      } else if (provisioningState === "Failed") {
-        state = "error";
+      } else if (code === "PowerState/starting" || code === "PowerState/stopping") {
+        state = "running"; // Transitional
       } else {
-        state = "stopped";
+        state = "error";
+        error = `Unknown VM power state: ${code}`;
       }
 
       return {
         state,
         gatewayPort: this.gatewayPort,
-        error: state === "error"
-          ? `Provisioning: ${provisioningState}, Container: ${containerState}`
-          : undefined,
+        error,
       };
     } catch (error: unknown) {
       if ((error as { statusCode?: number }).statusCode === 404) {
@@ -893,33 +1022,38 @@ export class AciTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async getLogs(options?: DeploymentLogOptions): Promise<string[]> {
+    // Try Log Analytics first if configured
+    if (this.logsClient && this.config.logAnalyticsWorkspaceId) {
+      return this.getLogsFromAnalytics(options);
+    }
+
+    // Fallback: use Run Command to get container logs
     try {
-      // Try ACI container logs first
-      const logs = await this.aciClient.containers.listLogs(
+      const tailLines = options?.lines ?? 100;
+      const result = await this.computeClient.virtualMachines.beginRunCommandAndWait(
         this.config.resourceGroup,
-        this.containerGroupName,
-        "openclaw",
-        { tail: options?.lines }
+        this.vmName,
+        {
+          commandId: "RunShellScript",
+          script: [`docker logs openclaw-gateway --tail ${tailLines} 2>&1`],
+        }
       );
 
-      let lines = (logs.content || "").split("\n");
+      const output = result.value?.[0]?.message ?? "";
+      let lines = output.split("\n");
 
       if (options?.filter) {
         try {
           const pattern = new RegExp(options.filter, "i");
-          lines = lines.filter((line) => pattern.test(line));
+          lines = lines.filter((line: string) => pattern.test(line));
         } catch {
           const literal = options.filter.toLowerCase();
-          lines = lines.filter((line) => line.toLowerCase().includes(literal));
+          lines = lines.filter((line: string) => line.toLowerCase().includes(literal));
         }
       }
 
       return lines;
     } catch {
-      // Fallback to Log Analytics if configured
-      if (this.logsClient && this.config.logAnalyticsWorkspaceId) {
-        return this.getLogsFromAnalytics(options);
-      }
       return [];
     }
   }
@@ -930,7 +1064,7 @@ export class AciTarget implements DeploymentTarget {
     }
 
     const limit = options?.lines || 100;
-    const query = `ContainerInstanceLog_CL | where ContainerGroup_s == "${this.containerGroupName}" | take ${limit} | project TimeGenerated, Message`;
+    const query = `Syslog | where Computer == "${this.vmName}" | take ${limit} | project TimeGenerated, SyslogMessage`;
 
     try {
       const result = await this.logsClient.queryWorkspace(
@@ -957,8 +1091,7 @@ export class AciTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async getEndpoint(): Promise<GatewayEndpoint> {
-    // Always return the Application Gateway's public endpoint (secure architecture)
-    // Try to get Application Gateway info if not already cached
+    // CRITICAL: Return the Application Gateway's public endpoint, NEVER the VM's IP
     if (!this.appGatewayFqdn && !this.appGatewayPublicIp) {
       try {
         const pip = await this.networkClient.publicIPAddresses.get(
@@ -978,7 +1111,7 @@ export class AciTarget implements DeploymentTarget {
     }
 
     return {
-      host,
+      host: this.config.customDomain ?? host,
       port: 80, // Application Gateway frontend port
       protocol: "ws",
     };
@@ -989,17 +1122,47 @@ export class AciTarget implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async destroy(): Promise<void> {
-    // 1. Delete container group
+    // 1. Delete VM
     try {
-      await this.aciClient.containerGroups.beginDeleteAndWait(
+      await this.computeClient.virtualMachines.beginDeleteAndWait(
         this.config.resourceGroup,
-        this.containerGroupName
+        this.vmName
       );
     } catch {
-      // Container group may not exist
+      // VM may not exist
     }
 
-    // 2. Delete Key Vault secrets if configured
+    // 2. Delete NIC
+    try {
+      await this.networkClient.networkInterfaces.beginDeleteAndWait(
+        this.config.resourceGroup,
+        this.nicName
+      );
+    } catch {
+      // NIC may not exist
+    }
+
+    // 3. Delete data disk
+    try {
+      await this.computeClient.disks.beginDeleteAndWait(
+        this.config.resourceGroup,
+        this.dataDiskName
+      );
+    } catch {
+      // Disk may not exist
+    }
+
+    // 4. Delete OS disk
+    try {
+      await this.computeClient.disks.beginDeleteAndWait(
+        this.config.resourceGroup,
+        `${this.vmName}-osdisk`
+      );
+    } catch {
+      // OS disk may not exist
+    }
+
+    // 5. Delete Key Vault secrets if configured
     if (this.keyVaultClient) {
       try {
         await this.keyVaultClient.beginDeleteSecret(this.secretName);
@@ -1008,18 +1171,17 @@ export class AciTarget implements DeploymentTarget {
       }
     }
 
-    // 3. Delete Application Gateway resources
-    // Delete Application Gateway first (depends on public IP and subnet)
+    // 6. Delete Application Gateway
     try {
       await this.networkClient.applicationGateways.beginDeleteAndWait(
         this.config.resourceGroup,
         this.appGatewayName
       );
     } catch {
-      // Application Gateway may not exist
+      // App Gateway may not exist
     }
 
-    // Delete public IP
+    // 7. Delete public IP
     try {
       await this.networkClient.publicIPAddresses.beginDeleteAndWait(
         this.config.resourceGroup,
@@ -1029,7 +1191,7 @@ export class AciTarget implements DeploymentTarget {
       // Public IP may not exist
     }
 
-    // Delete Application Gateway subnet
+    // 8. Delete App Gateway subnet
     try {
       await this.networkClient.subnets.beginDeleteAndWait(
         this.config.resourceGroup,
@@ -1040,8 +1202,7 @@ export class AciTarget implements DeploymentTarget {
       // Subnet may not exist
     }
 
-    // 4. VNet, ACI subnet, and NSG are NOT deleted by default to allow reuse
-    // They can be manually cleaned up or a separate cleanup method can be added
+    // Note: VNet, VM subnet, and NSG are NOT deleted to allow reuse
   }
 
   // ------------------------------------------------------------------
@@ -1054,22 +1215,7 @@ export class AciTarget implements DeploymentTarget {
     try {
       await this.keyVaultClient.setSecret(name, value);
     } catch (error) {
-      // Ignore errors - Key Vault may not be configured
       console.warn(`Failed to store secret in Key Vault: ${error}`);
     }
-  }
-
-  private sanitizeName(name: string): string {
-    // Azure container group names: lowercase, alphanumeric and hyphens, max 63 chars
-    const sanitized = name
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .substring(0, 63);
-
-    if (!sanitized) {
-      throw new Error(`Invalid name: "${name}" produces empty sanitized value`);
-    }
-    return sanitized;
   }
 }

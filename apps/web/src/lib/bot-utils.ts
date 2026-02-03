@@ -35,7 +35,7 @@ export function formatDeploymentType(
     REMOTE_VM: 'VM',
     ECS_EC2: 'ECS',
     GCE: 'GCE',
-    ACI: 'ACI',
+    AZURE_VM: 'Azure VM',
     KUBERNETES: 'K8s',
   };
   return labels[type.toUpperCase()] || type;

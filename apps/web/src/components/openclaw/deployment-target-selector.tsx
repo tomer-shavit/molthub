@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,7 @@ export type DeploymentTargetType =
   | "kubernetes"
   | "ecs"
   | "gce"
-  | "aci";
+  | "azure-vm";
 
 export interface DeploymentTargetConfig {
   type: DeploymentTargetType;
@@ -34,6 +34,7 @@ export interface DeploymentTargetConfig {
   projectId?: string;
   serviceName?: string;
   resourceGroup?: string;
+  subscriptionId?: string;
 }
 
 interface DeploymentTargetSelectorProps {
@@ -85,9 +86,9 @@ const targetOptions: {
     icon: <Globe className="w-5 h-5" />,
   },
   {
-    type: "aci",
-    label: "Azure ACI",
-    description: "Azure Container Instances",
+    type: "azure-vm",
+    label: "Azure VM",
+    description: "Azure Virtual Machine",
     icon: <Cloud className="w-5 h-5" />,
   },
 ];
@@ -270,8 +271,17 @@ export function DeploymentTargetSelector({
             </>
           )}
 
-          {value.type === "aci" && (
+          {value.type === "azure-vm" && (
             <>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Subscription ID</label>
+                <Input
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  value={value.subscriptionId || ""}
+                  onChange={(e) => handleFieldChange("subscriptionId", e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Resource Group</label>
                 <Input
@@ -282,20 +292,29 @@ export function DeploymentTargetSelector({
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Image</label>
-                <Input
-                  placeholder="myregistry.azurecr.io/openclaw:latest"
-                  value={value.image || ""}
-                  onChange={(e) => handleFieldChange("image", e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Region</label>
                 <Input
                   placeholder="eastus"
                   value={value.region || ""}
                   onChange={(e) => handleFieldChange("region", e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">VM Name</label>
+                <Input
+                  placeholder="my-bot-vm"
+                  value={value.serviceName || ""}
+                  onChange={(e) => handleFieldChange("serviceName", e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Image</label>
+                <Input
+                  placeholder="node:22-slim"
+                  value={value.image || ""}
+                  onChange={(e) => handleFieldChange("image", e.target.value)}
                   className="h-8 text-sm"
                 />
               </div>

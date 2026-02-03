@@ -9,7 +9,7 @@ import { DockerContainerTarget } from "./docker/docker-target";
 import { KubernetesTarget } from "./kubernetes/kubernetes-target";
 import { EcsEc2Target } from "./ecs-ec2/ecs-ec2-target";
 import { GceTarget } from "./gce/gce-target";
-import { AciTarget } from "./aci/aci-target";
+import { AzureVmTarget } from "./azure-vm/azure-vm-target";
 import { CloudflareWorkersTarget } from "./cloudflare-workers/cloudflare-workers-target";
 
 /**
@@ -61,11 +61,11 @@ export class DeploymentTargetFactory {
         }
         return new GceTarget(config.gce);
 
-      case "aci":
-        if (!config.aci) {
-          throw new Error("ACI target requires 'aci' configuration");
+      case "azure-vm":
+        if (!config.azureVm) {
+          throw new Error("Azure VM target requires 'azureVm' configuration");
         }
-        return new AciTarget(config.aci);
+        return new AzureVmTarget(config.azureVm);
 
       case "cloudflare-workers":
         if (!config.cloudflare) {
@@ -141,9 +141,9 @@ export class DeploymentTargetFactory {
         status: "ready",
       },
       {
-        type: DeploymentTargetType.ACI,
-        name: "Azure Container Instances",
-        description: "Deploy on Azure Container Instances (serverless containers)",
+        type: DeploymentTargetType.AZURE_VM,
+        name: "Azure Virtual Machine",
+        description: "Deploy on Azure VM with managed disk for WhatsApp sessions and sandbox support",
         status: "ready",
       },
       {
@@ -166,7 +166,7 @@ export class DeploymentTargetFactory {
       DeploymentTargetType.KUBERNETES,
       DeploymentTargetType.ECS_EC2,
       DeploymentTargetType.GCE,
-      DeploymentTargetType.ACI,
+      DeploymentTargetType.AZURE_VM,
       DeploymentTargetType.CLOUDFLARE_WORKERS,
     ].includes(type);
   }
