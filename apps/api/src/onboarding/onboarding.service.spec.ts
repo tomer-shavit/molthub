@@ -319,11 +319,11 @@ describe('OnboardingService', () => {
       );
     });
 
-    it('should create an ECS_FARGATE deployment target when type is ecs-fargate', async () => {
+    it('should create an ECS_EC2 deployment target when type is ecs-ec2', async () => {
       const ecsDto = {
         ...baseDeployDto,
         deploymentTarget: {
-          type: 'ecs-fargate' as const,
+          type: 'ecs-ec2' as const,
           region: 'us-east-1',
           accessKeyId: 'AKIA...',
           secretAccessKey: 'secret',
@@ -338,7 +338,7 @@ describe('OnboardingService', () => {
       expect(mockPrisma.deploymentTarget.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            type: 'ECS_FARGATE',
+            type: 'ECS_EC2',
           }),
         }),
       );

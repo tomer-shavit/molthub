@@ -1,10 +1,11 @@
 /**
- * Configuration for AWS ECS Fargate deployment targets.
+ * Configuration for AWS ECS EC2 deployment targets.
  *
  * Provides all settings needed to deploy an OpenClaw gateway instance
- * on AWS ECS Fargate via CloudFormation.
+ * on AWS ECS with EC2 launch type via CloudFormation.
+ * EC2 launch type enables Docker socket mounting for sandbox isolation.
  */
-export interface EcsFargateConfig {
+export interface EcsEc2Config {
   /** AWS region (e.g. "us-east-1") */
   region: string;
   /** AWS access key ID for SDK authentication */
@@ -15,9 +16,9 @@ export interface EcsFargateConfig {
   tier: "simple" | "production";
   /** ACM certificate ARN for HTTPS (production tier only) */
   certificateArn?: string;
-  /** CPU units for the Fargate task (default: 512) */
+  /** CPU units for the ECS task (default: 1024) */
   cpu?: number;
-  /** Memory in MiB for the Fargate task (default: 1024) */
+  /** Memory in MiB for the ECS task (default: 2048) */
   memory?: number;
   /** Container image (default: auto-pushed to ECR) */
   image?: string;

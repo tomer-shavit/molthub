@@ -65,7 +65,7 @@ export interface UpdateOpenClawResult {
  *  8. Update DB status (BotInstance, GatewayConnection)
  *
  * The legacy ECS reconcile path is preserved as a fallback for instances
- * with `deploymentType === "ECS_FARGATE"`.
+ * with `deploymentType === "ECS_EC2"`.
  */
 @Injectable()
 export class ReconcilerService {
@@ -447,7 +447,7 @@ export class ReconcilerService {
     });
 
     // Stop via lifecycle manager if it's an openclaw-native instance
-    if (instance.deploymentType && instance.deploymentType !== "ECS_FARGATE") {
+    if (instance.deploymentType && instance.deploymentType !== "ECS_EC2") {
       await this.lifecycleManager.destroy(instance);
     }
 

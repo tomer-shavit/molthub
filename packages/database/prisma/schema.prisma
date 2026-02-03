@@ -30,6 +30,7 @@ model Workspace {
   notificationChannels  NotificationChannel[]
   botRoutingRules       BotRoutingRule[]
   botTeamMembers        BotTeamMember[]
+  alertRuleConfigs      AlertRuleConfig[]
 
   @@index([slug])
 }
@@ -1087,6 +1088,25 @@ model AlertNotificationRule {
 
   @@index([channelId])
   @@index([enabled])
+}
+
+// AlertRuleConfig: Per-workspace alert rule configuration
+model AlertRuleConfig {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  rule       String  // e.g. "token_spike", "budget_critical"
+  enabled    Boolean @default(true)
+  severity   String  // e.g. "CRITICAL", "ERROR", "WARNING", "INFO"
+  thresholds String? // JSON string with threshold values
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, rule], name: "workspaceId_rule")
+  @@index([workspaceId])
+  @@index([rule])
 }
 
 // ============================================

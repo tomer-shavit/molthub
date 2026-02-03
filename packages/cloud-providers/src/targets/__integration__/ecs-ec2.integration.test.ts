@@ -1,4 +1,4 @@
-import { EcsFargateTarget } from "../ecs-fargate/ecs-fargate-target";
+import { EcsEc2Target } from "../ecs-ec2/ecs-ec2-target";
 import type { DeploymentTarget } from "../../interface/deployment-target";
 import {
   generateTestProfile,
@@ -16,7 +16,7 @@ const HAS_AWS_CREDS = !!(
 );
 
 (HAS_AWS_CREDS ? describe : describe.skip)(
-  "ECS Fargate Target Integration",
+  "ECS EC2 Target Integration",
   () => {
     let target: DeploymentTarget;
     let profile: string;
@@ -26,7 +26,7 @@ const HAS_AWS_CREDS = !!(
       profile = generateTestProfile();
       port = generateTestPort();
 
-      target = new EcsFargateTarget({
+      target = new EcsEc2Target({
         region: process.env.AWS_REGION || "us-east-1",
         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,

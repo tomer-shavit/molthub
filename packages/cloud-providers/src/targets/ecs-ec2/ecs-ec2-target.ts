@@ -30,6 +30,7 @@ import {
   CloudWatchLogsClient,
   DescribeLogStreamsCommand,
   GetLogEventsCommand,
+  DeleteLogGroupCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
 import {
   DeploymentTarget,
@@ -42,7 +43,7 @@ import {
   DeploymentLogOptions,
   GatewayEndpoint,
 } from "../../interface/deployment-target";
-import type { EcsFargateConfig } from "./ecs-fargate-config";
+import type { EcsEc2Config } from "./ecs-ec2-config";
 import { generateSimpleTemplate } from "./templates/simple";
 import { generateProductionTemplate } from "./templates/production";
 
@@ -55,17 +56,18 @@ const ENDPOINT_POLL_INTERVAL_MS = 10_000;
 const ENDPOINT_TIMEOUT_MS = 300_000; // 5 minutes
 
 /**
- * EcsFargateTarget manages an OpenClaw gateway instance running
- * on AWS ECS Fargate via CloudFormation.
+ * EcsEc2Target manages an OpenClaw gateway instance running
+ * on AWS ECS with EC2 launch type via CloudFormation.
  *
- * Uses AWS SDK v3 for all cloud operations. Simple tier deploys
+ * Uses AWS SDK v3 for all cloud operations. EC2 launch type enables
+ * Docker socket mounting for sandbox isolation. Simple tier deploys
  * directly into the default VPC; Production tier creates a full
  * VPC with ALB via CloudFormation.
  */
-export class EcsFargateTarget implements DeploymentTarget {
-  readonly type = DeploymentTargetType.ECS_FARGATE;
+export class EcsEc2Target implements DeploymentTarget {
+  readonly type = DeploymentTargetType.ECS_EC2;
 
-  private readonly config: EcsFargateConfig;
+  private readonly config: EcsEc2Config;
   private readonly cpu: number;
   private readonly memory: number;
 
@@ -83,7 +85,7 @@ export class EcsFargateTarget implements DeploymentTarget {
   private logGroup = "";
   private gatewayPort = 18789;
 
-  constructor(config: EcsFargateConfig) {
+  constructor(config: EcsEc2Config) {
     this.config = config;
     this.cpu = config.cpu ?? DEFAULT_CPU;
     this.memory = config.memory ?? DEFAULT_MEMORY;
@@ -584,6 +586,15 @@ export class EcsFargateTarget implements DeploymentTarget {
       );
     } catch {
       // Secret may not exist
+    }
+
+    // 3. Delete the CloudWatch log group
+    try {
+      await this.cwlClient.send(
+        new DeleteLogGroupCommand({ logGroupName: this.logGroup }),
+      );
+    } catch {
+      // Log group may not exist
     }
   }
 

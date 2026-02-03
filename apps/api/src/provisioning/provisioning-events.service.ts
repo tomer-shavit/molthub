@@ -96,7 +96,7 @@ export const PROVISIONING_STEPS: Record<string, string[]> = {
     "wait_for_gateway",
     "health_check",
   ],
-  "ecs-fargate": [
+  "ecs-ec2": [
     "validate_config",
     "security_audit",
     "create_task_definition",

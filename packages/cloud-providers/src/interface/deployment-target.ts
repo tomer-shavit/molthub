@@ -13,7 +13,7 @@ export enum DeploymentTargetType {
   LOCAL = "local",
   REMOTE_VM = "remote-vm",
   DOCKER = "docker",
-  ECS_FARGATE = "ecs-fargate",
+  ECS_EC2 = "ecs-ec2",
   CLOUD_RUN = "cloud-run",
   ACI = "aci",
   KUBERNETES = "kubernetes",
@@ -287,15 +287,15 @@ export interface CloudflareWorkersConfig {
   customDomain?: string;
 }
 
-import type { EcsFargateConfig } from "../targets/ecs-fargate/ecs-fargate-config";
-export type { EcsFargateConfig } from "../targets/ecs-fargate/ecs-fargate-config";
+import type { EcsEc2Config } from "../targets/ecs-ec2/ecs-ec2-config";
+export type { EcsEc2Config } from "../targets/ecs-ec2/ecs-ec2-config";
 
 export type DeploymentTargetConfig =
   | { type: "local" }
   | { type: "remote-vm"; ssh: RemoteVMConfig }
   | { type: "docker"; docker: DockerTargetConfig }
   | { type: "kubernetes"; k8s: KubernetesTargetConfig }
-  | { type: "ecs-fargate"; ecs: EcsFargateConfig }
+  | { type: "ecs-ec2"; ecs: EcsEc2Config }
   | { type: "cloudflare-workers"; cloudflare: CloudflareWorkersConfig };
 
 // ── Utility types ──

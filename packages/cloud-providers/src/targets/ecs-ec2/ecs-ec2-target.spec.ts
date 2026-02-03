@@ -1,12 +1,12 @@
 /**
- * Unit Tests — EcsFargateTarget
+ * Unit Tests — EcsEc2Target
  *
  * Mocks child_process.execFile to intercept all AWS CLI calls
  * made by runAwsCommand() and returns canned JSON responses.
  */
 import { execFile } from "child_process";
-import { EcsFargateTarget } from "./ecs-fargate-target";
-import type { EcsFargateConfig } from "./ecs-fargate-config";
+import { EcsEc2Target } from "./ecs-ec2-target";
+import type { EcsEc2Config } from "./ecs-ec2-config";
 import { DeploymentTargetType } from "../../interface/deployment-target";
 
 jest.mock("child_process");
@@ -18,7 +18,7 @@ const mockedExecFile = execFile as unknown as jest.Mock;
 // ---------------------------------------------------------------------------
 
 /** Minimal valid config used across all tests */
-function makeConfig(overrides?: Partial<EcsFargateConfig>): EcsFargateConfig {
+function makeConfig(overrides?: Partial<EcsEc2Config>): EcsEc2Config {
   return {
     region: "us-east-1",
     accessKeyId: "AKIAIOSFODNN7EXAMPLE",
@@ -85,7 +85,7 @@ function mockAwsCallsWithFailure(
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("EcsFargateTarget", () => {
+describe("EcsEc2Target", () => {
   beforeEach(() => {
     jest.resetAllMocks();
   });
@@ -97,9 +97,9 @@ describe("EcsFargateTarget", () => {
   describe("constructor", () => {
     it("initialises with the provided config and defaults", () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
 
-      expect(target.type).toBe(DeploymentTargetType.ECS_FARGATE);
+      expect(target.type).toBe(DeploymentTargetType.ECS_EC2);
     });
 
     it("applies custom optional values from config", () => {
@@ -112,8 +112,8 @@ describe("EcsFargateTarget", () => {
       });
 
       // Construction should not throw
-      const target = new EcsFargateTarget(cfg);
-      expect(target.type).toBe(DeploymentTargetType.ECS_FARGATE);
+      const target = new EcsEc2Target(cfg);
+      expect(target.type).toBe(DeploymentTargetType.ECS_EC2);
     });
   });
 
@@ -124,7 +124,7 @@ describe("EcsFargateTarget", () => {
   describe("install()", () => {
     it("creates cluster, log group, task definition, and service, then returns success", async () => {
       const cfg = makeConfig({ executionRoleArn: "arn:aws:iam::123:role/exec", taskRoleArn: "arn:aws:iam::123:role/task" });
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
 
       // Four AWS calls: create-cluster, create-log-group,
       // register-task-definition, create-service
@@ -168,7 +168,7 @@ describe("EcsFargateTarget", () => {
 
     it("resolves a specific openclawVersion in the image tag", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
 
       await target.install({
@@ -185,7 +185,7 @@ describe("EcsFargateTarget", () => {
 
     it("ignores log group creation failure and continues", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
 
       // Fail the 2nd call (create-log-group, index 1), rest succeed
       mockAwsCallsWithFailure(["", "", ""], 1, "ResourceAlreadyExistsException");
@@ -200,7 +200,7 @@ describe("EcsFargateTarget", () => {
 
     it("returns failure when create-cluster fails", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
 
       // Fail the first call (create-cluster)
       mockAwsCallsWithFailure([], 0, "ClusterCreationFailed");
@@ -222,7 +222,7 @@ describe("EcsFargateTarget", () => {
   describe("configure()", () => {
     it("stores config in Secrets Manager (create path) and returns success", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls([""]);
 
       const result = await target.configure({
@@ -244,7 +244,7 @@ describe("EcsFargateTarget", () => {
 
     it("falls back to update-secret when create-secret fails", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
 
       // First call (create-secret) fails, second (update-secret) succeeds
       mockAwsCallsWithFailure([""], 0, "ResourceExistsException");
@@ -263,7 +263,7 @@ describe("EcsFargateTarget", () => {
 
     it("returns failure when both create and update fail", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
 
       // Both calls fail
       let callIndex = 0;
@@ -297,7 +297,7 @@ describe("EcsFargateTarget", () => {
   describe("start()", () => {
     it("calls update-service with desired-count 1", async () => {
       const cfg = makeConfig({ clusterName: "my-cluster" });
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       // Install first to set serviceName
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "s", port: 18789 });
@@ -322,7 +322,7 @@ describe("EcsFargateTarget", () => {
   describe("stop()", () => {
     it("calls update-service with desired-count 0", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "s", port: 18789 });
 
@@ -345,7 +345,7 @@ describe("EcsFargateTarget", () => {
   describe("restart()", () => {
     it("calls update-service with --force-new-deployment", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "r", port: 18789 });
 
@@ -367,7 +367,7 @@ describe("EcsFargateTarget", () => {
   describe("getStatus()", () => {
     it('returns "running" when runningCount > 0', async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "st", port: 18789 });
 
@@ -385,7 +385,7 @@ describe("EcsFargateTarget", () => {
 
     it('returns "stopped" when desiredCount is 0', async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "st", port: 18789 });
 
@@ -402,7 +402,7 @@ describe("EcsFargateTarget", () => {
 
     it('returns "error" when desired > 0 but running is 0', async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "st", port: 18789 });
 
@@ -421,7 +421,7 @@ describe("EcsFargateTarget", () => {
 
     it('returns "not-installed" when no services are found', async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "st", port: 18789 });
 
@@ -434,7 +434,7 @@ describe("EcsFargateTarget", () => {
 
     it('returns "not-installed" when the AWS call fails', async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "st", port: 18789 });
 
@@ -453,7 +453,7 @@ describe("EcsFargateTarget", () => {
   describe("getEndpoint()", () => {
     it("returns public IP and port from ENI lookup", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "ep", port: 18789 });
 
@@ -496,7 +496,7 @@ describe("EcsFargateTarget", () => {
 
     it("throws when no running tasks are found", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "ep", port: 18789 });
 
@@ -510,7 +510,7 @@ describe("EcsFargateTarget", () => {
 
     it("throws when no ENI is found on the task", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "ep", port: 18789 });
 
@@ -531,7 +531,7 @@ describe("EcsFargateTarget", () => {
 
     it("throws when no public IP is assigned", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "ep", port: 18789 });
 
@@ -572,7 +572,7 @@ describe("EcsFargateTarget", () => {
   describe("destroy()", () => {
     it("cleans up service, task definitions, secret, and log group", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "cleanup", port: 18789 });
 
@@ -639,7 +639,7 @@ describe("EcsFargateTarget", () => {
 
     it("continues cleanup even when individual steps fail", async () => {
       const cfg = makeConfig();
-      const target = new EcsFargateTarget(cfg);
+      const target = new EcsEc2Target(cfg);
       mockAwsCalls(["", "", "", ""]);
       await target.install({ profileName: "partial", port: 18789 });
 

@@ -123,7 +123,7 @@ export class OnboardingService {
     if (dto.awsCredentialId) {
       const awsCreds = await this.credentialVault.resolve(dto.awsCredentialId, userId, workspace.id);
       if (!dto.deploymentTarget) {
-        dto.deploymentTarget = { type: "ecs-fargate" } as any;
+        dto.deploymentTarget = { type: "ecs-ec2" } as any;
       }
       dto.deploymentTarget.accessKeyId = awsCreds.accessKeyId as string;
       dto.deploymentTarget.secretAccessKey = awsCreds.secretAccessKey as string;
@@ -273,7 +273,7 @@ export class OnboardingService {
     const defaultTarget = process.env.DEFAULT_DEPLOYMENT_TARGET || "docker";
     const targetType = dto.deploymentTarget?.type || defaultTarget;
     const deploymentTypeMap: Record<string, string> = {
-      "ecs-fargate": "ECS_FARGATE",
+      "ecs-ec2": "ECS_EC2",
       docker: "DOCKER",
       local: "LOCAL",
       kubernetes: "KUBERNETES",
@@ -283,10 +283,10 @@ export class OnboardingService {
     // Auto-assign gateway port (spaced 20 apart for OpenClaw derived ports)
     const assignedPort = await this.allocateGatewayPort();
     // For AWS deployments, always use the default OpenClaw port (single container per task)
-    const effectivePort = targetType === "ecs-fargate" ? 18789 : assignedPort;
+    const effectivePort = targetType === "ecs-ec2" ? 18789 : assignedPort;
 
     const targetConfig =
-      targetType === "ecs-fargate"
+      targetType === "ecs-ec2"
         ? {
             region: dto.deploymentTarget?.region,
             accessKeyId: dto.deploymentTarget?.accessKeyId,

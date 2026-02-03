@@ -33,7 +33,7 @@ export function formatDeploymentType(
     LOCAL: 'Local',
     DOCKER: 'Docker',
     REMOTE_VM: 'VM',
-    ECS_FARGATE: 'ECS',
+    ECS_EC2: 'ECS',
     CLOUD_RUN: 'Cloud Run',
     ACI: 'ACI',
     KUBERNETES: 'K8s',

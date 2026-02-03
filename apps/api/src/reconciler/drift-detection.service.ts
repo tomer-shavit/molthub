@@ -44,7 +44,7 @@ export interface DriftCheckResult {
  *  - Status mismatch (gateway `status.state` != expected)
  *
  * The legacy ECS-based drift path is retained as a fallback for instances
- * with `deploymentType === "ECS_FARGATE"`.
+ * with `deploymentType === "ECS_EC2"`.
  */
 @Injectable()
 export class DriftDetectionService {

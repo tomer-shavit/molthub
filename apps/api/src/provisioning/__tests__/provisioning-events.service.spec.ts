@@ -41,10 +41,10 @@ describe("ProvisioningEventsService", () => {
       expect(progress!.steps).toHaveLength(PROVISIONING_STEPS["local"].length);
     });
 
-    it("should create progress with correct steps for ecs-fargate deployment", () => {
-      service.startProvisioning("inst-4", "ecs-fargate");
+    it("should create progress with correct steps for ecs-ec2 deployment", () => {
+      service.startProvisioning("inst-4", "ecs-ec2");
       const progress = service.getProgress("inst-4");
-      expect(progress!.steps).toHaveLength(PROVISIONING_STEPS["ecs-fargate"].length);
+      expect(progress!.steps).toHaveLength(PROVISIONING_STEPS["ecs-ec2"].length);
     });
 
     it("should create progress with correct steps for cloudflare-workers deployment", () => {

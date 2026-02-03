@@ -7,7 +7,7 @@ import { LocalMachineTarget } from "./local/local-target";
 import { RemoteVMTarget } from "./remote-vm/remote-vm-target";
 import { DockerContainerTarget } from "./docker/docker-target";
 import { KubernetesTarget } from "./kubernetes/kubernetes-target";
-import { EcsFargateTarget } from "./ecs-fargate/ecs-fargate-target";
+import { EcsEc2Target } from "./ecs-ec2/ecs-ec2-target";
 import { CloudflareWorkersTarget } from "./cloudflare-workers/cloudflare-workers-target";
 
 /**
@@ -47,11 +47,11 @@ export class DeploymentTargetFactory {
         }
         return new KubernetesTarget(config.k8s);
 
-      case "ecs-fargate":
+      case "ecs-ec2":
         if (!config.ecs) {
-          throw new Error("ECS Fargate target requires 'ecs' configuration");
+          throw new Error("ECS EC2 target requires 'ecs' configuration");
         }
-        return new EcsFargateTarget(config.ecs);
+        return new EcsEc2Target(config.ecs);
 
       case "cloudflare-workers":
         if (!config.cloudflare) {
@@ -115,9 +115,9 @@ export class DeploymentTargetFactory {
         status: "ready",
       },
       {
-        type: DeploymentTargetType.ECS_FARGATE,
-        name: "AWS ECS Fargate",
-        description: "Deploy on AWS ECS Fargate (serverless containers)",
+        type: DeploymentTargetType.ECS_EC2,
+        name: "AWS ECS EC2",
+        description: "Deploy on AWS ECS with EC2 launch type (enables Docker sandbox isolation)",
         status: "ready",
       },
       {
@@ -150,7 +150,7 @@ export class DeploymentTargetFactory {
       DeploymentTargetType.REMOTE_VM,
       DeploymentTargetType.DOCKER,
       DeploymentTargetType.KUBERNETES,
-      DeploymentTargetType.ECS_FARGATE,
+      DeploymentTargetType.ECS_EC2,
       DeploymentTargetType.CLOUDFLARE_WORKERS,
     ].includes(type);
   }

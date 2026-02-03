@@ -462,17 +462,17 @@ export class LifecycleManagerService {
    */
   private resolveDeploymentType(instance: BotInstance): string {
     const typeStr = instance.deploymentType ?? "LOCAL";
-    const typeMap: Record<string, string> = { LOCAL: "local", DOCKER: "docker", KUBERNETES: "kubernetes", ECS_FARGATE: "ecs-fargate", CLOUDFLARE_WORKERS: "cloudflare-workers" };
+    const typeMap: Record<string, string> = { LOCAL: "local", DOCKER: "docker", KUBERNETES: "kubernetes", ECS_EC2: "ecs-ec2", CLOUDFLARE_WORKERS: "cloudflare-workers" };
     return typeMap[typeStr] ?? "docker";
   }
 
   private getInstallStepId(deploymentType: string): string {
-    const stepMap: Record<string, string> = { docker: "build_image", local: "install_openclaw", kubernetes: "generate_manifests", "ecs-fargate": "create_task_definition", "cloudflare-workers": "generate_wrangler_config" };
+    const stepMap: Record<string, string> = { docker: "build_image", local: "install_openclaw", kubernetes: "generate_manifests", "ecs-ec2": "create_task_definition", "cloudflare-workers": "generate_wrangler_config" };
     return stepMap[deploymentType] ?? "build_image";
   }
 
   private getStartStepId(deploymentType: string): string {
-    const stepMap: Record<string, string> = { docker: "start_container", local: "start_service", kubernetes: "apply_deployment", "ecs-fargate": "create_service", "cloudflare-workers": "deploy_worker" };
+    const stepMap: Record<string, string> = { docker: "start_container", local: "start_service", kubernetes: "apply_deployment", "ecs-ec2": "create_service", "cloudflare-workers": "deploy_worker" };
     return stepMap[deploymentType] ?? "start_container";
   }
 
@@ -511,8 +511,8 @@ export class LifecycleManagerService {
           gatewayPort: instance.gatewayPort ?? 18789,
         },
       },
-      ECS_FARGATE: {
-        type: "ecs-fargate",
+      ECS_EC2: {
+        type: "ecs-ec2",
         ecs: {
           region: (instanceMeta?.region as string) ?? (instanceMeta?.awsRegion as string) ?? "us-east-1",
           accessKeyId: (instanceMeta?.accessKeyId as string) ?? (instanceMeta?.awsAccessKeyId as string) ?? "",
@@ -576,9 +576,9 @@ export class LifecycleManagerService {
             kubeContext: cfg.kubeContext as string | undefined,
           },
         };
-      case "ECS_FARGATE":
+      case "ECS_EC2":
         return {
-          type: "ecs-fargate",
+          type: "ecs-ec2",
           ecs: {
             region: (cfg.region as string) ?? "us-east-1",
             accessKeyId: (cfg.accessKeyId as string) ?? "",
