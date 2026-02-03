@@ -6,6 +6,7 @@ import { bootstrap } from "./commands/bootstrap";
 import { status } from "./commands/status";
 import { doctor } from "./commands/doctor";
 import { setup } from "./commands/setup";
+import { sysboxStatus, sysboxInstall } from "./commands/sysbox";
 import { CLAWSTER_VERSION } from "@clawster/core";
 
 const program = new Command();
@@ -111,6 +112,21 @@ dev
     console.log(chalk.blue("Starting all services..."));
     console.log(chalk.cyan("Run: pnpm dev"));
   });
+
+// Sysbox commands
+const sysbox = program
+  .command("sysbox")
+  .description("Sysbox runtime management for Docker sandbox support");
+
+sysbox
+  .command("status")
+  .description("Check Sysbox installation status")
+  .action(sysboxStatus);
+
+sysbox
+  .command("install")
+  .description("Install Sysbox for the current platform")
+  .action(sysboxInstall);
 
 // Provider commands
 const provider = program

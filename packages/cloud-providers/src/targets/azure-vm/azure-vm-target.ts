@@ -848,6 +848,7 @@ package_upgrade: true
 packages:
   - docker.io
   - jq
+  - curl
 
 runcmd:
   # Enable and start Docker
@@ -869,20 +870,45 @@ runcmd:
   - chmod 777 /mnt/openclaw
   - mkdir -p /mnt/openclaw/.openclaw
 
+  # Install Sysbox runtime for secure Docker-in-Docker (sandbox mode)
+  # Using versioned release for stability and security
+  - |
+    SYSBOX_VERSION="v0.6.4"
+    if ! docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-runc'; then
+      echo "Installing Sysbox $SYSBOX_VERSION for secure sandbox mode..."
+      SYSBOX_INSTALL_SCRIPT="/tmp/sysbox-install-$$.sh"
+      curl -fsSL "https://raw.githubusercontent.com/nestybox/sysbox/$SYSBOX_VERSION/scr/install.sh" -o "$SYSBOX_INSTALL_SCRIPT"
+      chmod +x "$SYSBOX_INSTALL_SCRIPT"
+      "$SYSBOX_INSTALL_SCRIPT"
+      rm -f "$SYSBOX_INSTALL_SCRIPT"
+      systemctl restart docker
+      echo "Sysbox runtime installed successfully"
+    else
+      echo "Sysbox runtime already available"
+    fi
+
   # Write initial config
   - echo '{}' > /mnt/openclaw/.openclaw/openclaw.json
 
   # Stop any existing container
   - docker rm -f openclaw-gateway 2>/dev/null || true
 
-  # Run OpenClaw in Docker with full Docker access (for sandbox)
+  # Determine which runtime to use and run OpenClaw
   - |
+    DOCKER_RUNTIME=""
+    if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-runc'; then
+      DOCKER_RUNTIME="--runtime=sysbox-runc"
+      echo "Using Sysbox runtime for secure Docker-in-Docker"
+    else
+      echo "Warning: Sysbox not available, sandbox mode will be limited"
+    fi
+
     docker run -d \\
       --name openclaw-gateway \\
       --restart=always \\
+      $DOCKER_RUNTIME \\
       -p ${this.gatewayPort}:${this.gatewayPort} \\
       -v /mnt/openclaw/.openclaw:/home/node/.openclaw \\
-      -v /var/run/docker.sock:/var/run/docker.sock \\
       -e OPENCLAW_GATEWAY_PORT=${this.gatewayPort} \\
       -e OPENCLAW_GATEWAY_TOKEN="${gatewayToken}" \\
       ${imageUri} \\

@@ -13,6 +13,7 @@ import {
   GatewayEndpoint,
   DockerTargetConfig,
 } from "../../interface/deployment-target";
+import { isSysboxAvailable, type ContainerRuntime } from "../../sysbox";
 
 const DEFAULT_IMAGE = "openclaw:local";
 
@@ -85,17 +86,111 @@ function runCommandStreaming(
  * Configuration is mounted as a volume, the gateway port is exposed,
  * and the container is managed via Docker CLI commands.
  */
+/**
+ * Extended Docker target configuration with Sysbox support.
+ *
+ * DREAM ARCHITECTURE: Security is not optional. Sysbox is REQUIRED for
+ * Docker deployments. If Sysbox is not available, deployment will fail
+ * with instructions to install it.
+ */
+export interface DockerTargetConfigExtended extends DockerTargetConfig {
+  /**
+   * Skip Sysbox requirement check. USE WITH CAUTION.
+   * Only for development/testing. Production deployments MUST have Sysbox.
+   * @default false
+   */
+  allowInsecureWithoutSysbox?: boolean;
+}
+
 export class DockerContainerTarget implements DeploymentTarget {
   readonly type = DeploymentTargetType.DOCKER;
 
-  private config: DockerTargetConfig;
+  private config: DockerTargetConfigExtended;
   private imageName: string;
   private environmentVars: Record<string, string> = {};
   private onLog?: (line: string, stream: "stdout" | "stderr") => void;
 
-  constructor(config: DockerTargetConfig) {
+  /** Detected runtime - always sysbox-runc in dream architecture */
+  private detectedRuntime: ContainerRuntime = "sysbox-runc";
+  /** Whether Sysbox detection has been performed */
+  private runtimeDetected = false;
+  /** Whether Sysbox is available */
+  private sysboxAvailable = false;
+
+  constructor(config: DockerTargetConfigExtended) {
     this.config = config;
     this.imageName = config.imageName || DEFAULT_IMAGE;
+  }
+
+  /**
+   * Detect Sysbox availability and enforce the dream architecture requirement.
+   *
+   * DREAM ARCHITECTURE: Security is not optional. Sysbox is REQUIRED.
+   * This method will throw an error if Sysbox is not available, unless
+   * `allowInsecureWithoutSysbox` is explicitly set (for dev/testing only).
+   */
+  private async ensureSysboxAvailable(): Promise<void> {
+    if (this.runtimeDetected) {
+      return;
+    }
+
+    this.sysboxAvailable = await isSysboxAvailable();
+    this.runtimeDetected = true;
+
+    if (this.sysboxAvailable) {
+      this.detectedRuntime = "sysbox-runc";
+      this.onLog?.("Sysbox runtime detected - secure sandbox mode enabled", "stdout");
+    } else if (this.config.allowInsecureWithoutSysbox) {
+      // Development/testing escape hatch - NOT for production
+      this.detectedRuntime = "runc";
+      this.onLog?.(
+        "WARNING: Sysbox not available, running WITHOUT sandbox protection. " +
+        "This is INSECURE and should only be used for development/testing.",
+        "stderr"
+      );
+    } else {
+      // DREAM ARCHITECTURE: Security is not optional
+      throw new Error(
+        "SYSBOX REQUIRED: Secure deployment requires Sysbox runtime.\n" +
+        "Run: clawster sysbox install\n\n" +
+        "Sysbox provides secure Docker-in-Docker for OpenClaw sandbox mode,\n" +
+        "protecting against prompt injection attacks.\n\n" +
+        "For development/testing only, you can bypass this check by setting\n" +
+        "allowInsecureWithoutSysbox: true in the Docker target config."
+      );
+    }
+  }
+
+  /**
+   * Get the runtime that will be used.
+   * Call ensureSysboxAvailable() first to perform detection.
+   */
+  private getDetectedRuntime(): ContainerRuntime {
+    return this.detectedRuntime;
+  }
+
+  /**
+   * Get the current runtime being used.
+   * Note: Returns the detected runtime. Call start() first to trigger detection.
+   */
+  getRuntime(): ContainerRuntime {
+    return this.detectedRuntime;
+  }
+
+  /**
+   * Check if Sysbox runtime is being used.
+   * Note: Returns true after successful start(). Before start(), returns false.
+   */
+  isSysboxEnabled(): boolean {
+    return this.sysboxAvailable && this.detectedRuntime === "sysbox-runc";
+  }
+
+  /**
+   * Check if this target is running in insecure mode (without Sysbox).
+   * This should ONLY be true in development/testing scenarios.
+   */
+  isRunningInsecure(): boolean {
+    return this.runtimeDetected && !this.sysboxAvailable;
   }
 
   setLogCallback(cb: (line: string, stream: "stdout" | "stderr") => void): void {
@@ -236,8 +331,15 @@ export class DockerContainerTarget implements DeploymentTarget {
 
   /**
    * Start the Docker container with the configured volume mount and port mapping.
+   *
+   * DREAM ARCHITECTURE: This method enforces the Sysbox requirement.
+   * If Sysbox is not available and allowInsecureWithoutSysbox is not set,
+   * this method will throw an error with installation instructions.
    */
   async start(): Promise<void> {
+    // DREAM ARCHITECTURE: Enforce Sysbox requirement BEFORE anything else
+    await this.ensureSysboxAvailable();
+
     // Check if container already exists
     try {
       const state = await runCommand("docker", [
@@ -260,16 +362,30 @@ export class DockerContainerTarget implements DeploymentTarget {
       // Container does not exist yet — create and run it
     }
 
+    const runtime = this.getDetectedRuntime();
+
     const args: string[] = [
       "run",
       "-d",
       "--name",
       this.config.containerName,
+    ];
+
+    // Add runtime flag - always sysbox-runc in dream architecture
+    // (unless running in insecure dev mode)
+    if (runtime === "sysbox-runc") {
+      args.push("--runtime=sysbox-runc");
+      this.onLog?.("Using Sysbox runtime for secure Docker-in-Docker", "stdout");
+    } else {
+      this.onLog?.("WARNING: Running without Sysbox - INSECURE MODE", "stderr");
+    }
+
+    args.push(
       "-p",
       `${this.config.gatewayPort}:18789`,
       "-v",
       `${this.config.configPath}:/home/node/.openclaw`,
-    ];
+    );
 
     // Pass environment variables (e.g., LLM API keys)
     for (const [key, value] of Object.entries(this.environmentVars)) {
@@ -346,7 +462,9 @@ export class DockerContainerTarget implements DeploymentTarget {
         pid: pid > 0 ? pid : undefined,
         uptime,
         gatewayPort: this.config.gatewayPort,
-      };
+        runtime: this.detectedRuntime,
+        sysboxEnabled: this.detectedRuntime === "sysbox-runc",
+      } as TargetStatus & { runtime: ContainerRuntime; sysboxEnabled: boolean };
     } catch {
       return { state: "not-installed" };
     }

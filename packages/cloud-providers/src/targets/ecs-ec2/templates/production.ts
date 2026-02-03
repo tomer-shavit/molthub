@@ -71,13 +71,37 @@ export function generateProductionTemplate(
     })),
   ];
 
-  // Base64-encoded UserData script that configures the ECS agent on first boot
+  // Base64-encoded UserData script that configures ECS agent and installs Sysbox on first boot
+  // Sysbox enables secure Docker-in-Docker for OpenClaw sandbox mode without --privileged
+  // Using versioned release for stability and security
   const userData = Buffer.from(
     [
       `#!/bin/bash`,
+      `set -e`,
+      ``,
+      `# Configure ECS agent`,
       `echo "ECS_CLUSTER=clawster-${botName}" >> /etc/ecs/ecs.config`,
       `echo "ECS_ENABLE_TASK_IAM_ROLE=true" >> /etc/ecs/ecs.config`,
       `echo "ECS_ENABLE_TASK_ENI=true" >> /etc/ecs/ecs.config`,
+      ``,
+      `# Install Sysbox runtime for secure Docker-in-Docker (sandbox mode)`,
+      `SYSBOX_VERSION="v0.6.4"`,
+      `if ! docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-runc'; then`,
+      `  echo "Installing Sysbox $SYSBOX_VERSION for secure sandbox mode..."`,
+      `  SYSBOX_INSTALL_SCRIPT="/tmp/sysbox-install-$$.sh"`,
+      `  curl -fsSL "https://raw.githubusercontent.com/nestybox/sysbox/$SYSBOX_VERSION/scr/install.sh" -o "$SYSBOX_INSTALL_SCRIPT"`,
+      `  chmod +x "$SYSBOX_INSTALL_SCRIPT"`,
+      `  "$SYSBOX_INSTALL_SCRIPT"`,
+      `  rm -f "$SYSBOX_INSTALL_SCRIPT"`,
+      `  # Register sysbox-runc as available runtime for ECS`,
+      `  echo 'ECS_AVAILABLE_RUNTIMES=["sysbox-runc"]' >> /etc/ecs/ecs.config`,
+      `  # Restart Docker and ECS agent to pick up new runtime`,
+      `  systemctl restart docker`,
+      `  systemctl restart ecs`,
+      `  echo "Sysbox runtime installed successfully"`,
+      `else`,
+      `  echo "Sysbox runtime already available"`,
+      `fi`,
     ].join("\n"),
   ).toString("base64");
 

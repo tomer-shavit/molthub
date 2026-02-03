@@ -52,15 +52,36 @@ export interface KubernetesManifests {
  * the manifest generation is fully functional while the actual apply
  * commands can be stubbed until a real cluster is available.
  */
+/**
+ * Extended Kubernetes config with Sysbox support.
+ *
+ * DREAM ARCHITECTURE: Security is not optional. Sysbox RuntimeClass is
+ * REQUIRED for Kubernetes deployments. The cluster must have a Sysbox
+ * RuntimeClass configured (typically named "sysbox-runc").
+ */
+export interface KubernetesTargetConfigExtended extends KubernetesTargetConfig {
+  /**
+   * RuntimeClass name for Sysbox. Defaults to "sysbox-runc".
+   * The cluster MUST have this RuntimeClass configured.
+   */
+  sysboxRuntimeClassName?: string;
+  /**
+   * Skip Sysbox RuntimeClass requirement. USE WITH CAUTION.
+   * Only for development/testing. Production deployments MUST use Sysbox.
+   * @default false
+   */
+  allowInsecureWithoutSysbox?: boolean;
+}
+
 export class KubernetesTarget implements DeploymentTarget {
   readonly type = DeploymentTargetType.KUBERNETES;
 
-  private config: KubernetesTargetConfig;
+  private config: KubernetesTargetConfigExtended;
   private image: string;
   private profileName: string = "";
   private manifests: KubernetesManifests | null = null;
 
-  constructor(config: KubernetesTargetConfig) {
+  constructor(config: KubernetesTargetConfigExtended) {
     this.config = config;
     this.image = config.image || DEFAULT_IMAGE;
   }
@@ -107,10 +128,106 @@ export class KubernetesTarget implements DeploymentTarget {
   }
 
   /**
+   * Check if Sysbox RuntimeClass should be used.
+   * DREAM ARCHITECTURE: Always true unless explicitly disabled for dev/testing.
+   */
+  isSysboxEnabled(): boolean {
+    return this.config.allowInsecureWithoutSysbox !== true;
+  }
+
+  /**
+   * Get the RuntimeClass name for Sysbox.
+   */
+  getSysboxRuntimeClassName(): string {
+    return this.config.sysboxRuntimeClassName ?? "sysbox-runc";
+  }
+
+  /**
+   * Check if running in insecure mode (without Sysbox RuntimeClass).
+   */
+  isRunningInsecure(): boolean {
+    return this.config.allowInsecureWithoutSysbox === true;
+  }
+
+  /**
    * Generates the Deployment manifest for the OpenClaw gateway.
    */
   private generateDeployment(): Record<string, unknown> {
     const replicas = this.config.replicas ?? 1;
+
+    // Build pod spec with optional RuntimeClass for Sysbox
+    const podSpec: Record<string, unknown> = {
+      containers: [
+        {
+          name: "openclaw-gateway",
+          image: this.image,
+          ports: [
+            {
+              containerPort: this.config.gatewayPort,
+              name: "gateway",
+              protocol: "TCP",
+            },
+          ],
+          env: [
+            {
+              name: "OPENCLAW_CONFIG_PATH",
+              value: "/app/config/config.json",
+            },
+          ],
+          volumeMounts: [
+            {
+              name: "config",
+              mountPath: "/app/config",
+              readOnly: true,
+            },
+          ],
+          readinessProbe: {
+            tcpSocket: {
+              port: this.config.gatewayPort,
+            },
+            initialDelaySeconds: 5,
+            periodSeconds: 10,
+          },
+          livenessProbe: {
+            tcpSocket: {
+              port: this.config.gatewayPort,
+            },
+            initialDelaySeconds: 15,
+            periodSeconds: 20,
+          },
+          resources: {
+            requests: {
+              cpu: "100m",
+              memory: "128Mi",
+            },
+            limits: {
+              cpu: "500m",
+              memory: "512Mi",
+            },
+          },
+        },
+      ],
+      volumes: [
+        {
+          name: "config",
+          configMap: {
+            name: `${this.config.deploymentName}-config`,
+          },
+        },
+      ],
+    };
+
+    // DREAM ARCHITECTURE: Always use Sysbox RuntimeClass for secure sandbox mode
+    // Only skip if explicitly running in insecure dev/test mode
+    if (this.isSysboxEnabled()) {
+      podSpec.runtimeClassName = this.getSysboxRuntimeClassName();
+    } else {
+      // Log warning - this should only happen in dev/testing
+      console.warn(
+        "WARNING: Kubernetes deployment without Sysbox RuntimeClass. " +
+        "This is INSECURE and should only be used for development/testing."
+      );
+    }
 
     return {
       apiVersion: "apps/v1",
@@ -138,66 +255,7 @@ export class KubernetesTarget implements DeploymentTarget {
               "app.kubernetes.io/name": "openclaw-gateway",
             },
           },
-          spec: {
-            containers: [
-              {
-                name: "openclaw-gateway",
-                image: this.image,
-                ports: [
-                  {
-                    containerPort: this.config.gatewayPort,
-                    name: "gateway",
-                    protocol: "TCP",
-                  },
-                ],
-                env: [
-                  {
-                    name: "OPENCLAW_CONFIG_PATH",
-                    value: "/app/config/config.json",
-                  },
-                ],
-                volumeMounts: [
-                  {
-                    name: "config",
-                    mountPath: "/app/config",
-                    readOnly: true,
-                  },
-                ],
-                readinessProbe: {
-                  tcpSocket: {
-                    port: this.config.gatewayPort,
-                  },
-                  initialDelaySeconds: 5,
-                  periodSeconds: 10,
-                },
-                livenessProbe: {
-                  tcpSocket: {
-                    port: this.config.gatewayPort,
-                  },
-                  initialDelaySeconds: 15,
-                  periodSeconds: 20,
-                },
-                resources: {
-                  requests: {
-                    cpu: "100m",
-                    memory: "128Mi",
-                  },
-                  limits: {
-                    cpu: "500m",
-                    memory: "512Mi",
-                  },
-                },
-              },
-            ],
-            volumes: [
-              {
-                name: "config",
-                configMap: {
-                  name: `${this.config.deploymentName}-config`,
-                },
-              },
-            ],
-          },
+          spec: podSpec,
         },
       },
     };

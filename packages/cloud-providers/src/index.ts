@@ -44,3 +44,6 @@ export { DeploymentTargetFactory } from "./targets/factory";
 
 // Security Configuration
 export * from "./security";
+
+// Sysbox Capability Detection
+export * from "./sysbox";

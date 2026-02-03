@@ -947,8 +947,9 @@ export class GceTarget implements DeploymentTarget {
 
     // Startup script that:
     // 1. Formats and mounts the data disk
-    // 2. Pulls the config from metadata
-    // 3. Runs OpenClaw in Docker with Docker socket mounted (for sandbox)
+    // 2. Installs Sysbox runtime for secure Docker-in-Docker (sandbox mode)
+    // 3. Pulls the config from metadata
+    // 4. Runs OpenClaw in Docker with Sysbox runtime (for sandbox)
     const startupScript = `#!/bin/bash
 set -e
 
@@ -973,6 +974,34 @@ if ! mountpoint -q "$MOUNT_POINT"; then
   fi
 fi
 
+# Install Sysbox runtime for secure Docker-in-Docker (sandbox mode)
+# Only install if not already available
+# Using versioned release for stability and security
+SYSBOX_VERSION="v0.6.4"
+if ! docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-runc'; then
+  echo "Installing Sysbox $SYSBOX_VERSION for secure sandbox mode..."
+  # Download to temp file (safer than curl | bash)
+  SYSBOX_INSTALL_SCRIPT="/tmp/sysbox-install-$$.sh"
+  curl -fsSL "https://raw.githubusercontent.com/nestybox/sysbox/$SYSBOX_VERSION/scr/install.sh" -o "$SYSBOX_INSTALL_SCRIPT"
+  chmod +x "$SYSBOX_INSTALL_SCRIPT"
+  "$SYSBOX_INSTALL_SCRIPT"
+  rm -f "$SYSBOX_INSTALL_SCRIPT"
+  # Restart Docker to pick up new runtime
+  systemctl restart docker
+  echo "Sysbox runtime installed successfully"
+else
+  echo "Sysbox runtime already available"
+fi
+
+# Determine which runtime to use
+DOCKER_RUNTIME=""
+if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-runc'; then
+  DOCKER_RUNTIME="--runtime=sysbox-runc"
+  echo "Using Sysbox runtime for secure Docker-in-Docker"
+else
+  echo "Warning: Sysbox not available, sandbox mode will be limited"
+fi
+
 # Get config from instance metadata
 GATEWAY_PORT=$(curl -s -H "Metadata-Flavor: Google" \\
   http://metadata.google.internal/computeMetadata/v1/instance/attributes/gateway-port || echo "${this.gatewayPort}")
@@ -988,13 +1017,13 @@ echo "$OPENCLAW_CONFIG" > "$MOUNT_POINT/.openclaw/openclaw.json"
 # Stop any existing container
 docker rm -f openclaw-gateway 2>/dev/null || true
 
-# Run OpenClaw in Docker with full Docker access (for sandbox)
+# Run OpenClaw in Docker with Sysbox runtime (for secure sandbox)
 docker run -d \\
   --name openclaw-gateway \\
   --restart=always \\
+  $DOCKER_RUNTIME \\
   -p $GATEWAY_PORT:$GATEWAY_PORT \\
   -v "$MOUNT_POINT/.openclaw:/home/node/.openclaw" \\
-  -v /var/run/docker.sock:/var/run/docker.sock \\
   -e OPENCLAW_GATEWAY_PORT=$GATEWAY_PORT \\
   -e OPENCLAW_GATEWAY_TOKEN="$GATEWAY_TOKEN" \\
   ${imageUri} \\

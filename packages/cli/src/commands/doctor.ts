@@ -5,6 +5,7 @@ import path from "path";
 import os from "os";
 import { execSync } from "child_process";
 import { glob } from "glob";
+import { detectSysboxCapability } from "@clawster/cloud-providers";
 
 const CLAWSTER_DIR = path.join(os.homedir(), ".clawster");
 
@@ -92,6 +93,48 @@ export async function doctor(options: DoctorOptions = {}) {
       status: "warn",
       message: "Plugin not found",
       fix: "Update Docker to include the Compose plugin",
+    });
+  }
+
+  // Check 3.5: Sysbox Runtime (for Docker sandbox support)
+  try {
+    const sysboxCapability = await detectSysboxCapability({ skipCache: true });
+    if (sysboxCapability.available === "available") {
+      checks.push({
+        name: "Sysbox runtime",
+        status: "pass",
+        message: sysboxCapability.version
+          ? `Installed (${sysboxCapability.version})`
+          : "Installed",
+      });
+    } else if (sysboxCapability.available === "not-installed") {
+      checks.push({
+        name: "Sysbox runtime",
+        status: "warn",
+        message: "Not installed — sandbox mode unavailable for local Docker",
+        fix: sysboxCapability.installCommand
+          ? sysboxCapability.installCommand
+          : "Run: clawster sysbox install",
+      });
+    } else if (sysboxCapability.available === "unavailable") {
+      checks.push({
+        name: "Sysbox runtime",
+        status: "skip",
+        message: sysboxCapability.reason ?? "Not available on this platform",
+      });
+    } else {
+      checks.push({
+        name: "Sysbox runtime",
+        status: "skip",
+        message: "Not applicable for this deployment target",
+      });
+    }
+  } catch {
+    checks.push({
+      name: "Sysbox runtime",
+      status: "warn",
+      message: "Could not detect Sysbox status",
+      fix: "Run: clawster sysbox status",
     });
   }
 
