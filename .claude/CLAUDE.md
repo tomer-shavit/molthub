@@ -311,3 +311,45 @@ Every error path in the reconciler must:
 4. **Be retryable** — clicking "Reconcile" from the dashboard must work without needing CLI access
 
 The user should NEVER need to open a terminal to fix a bot. Everything must be fixable from the web dashboard.
+
+---
+
+## OpenClaw Sandbox Mode — Security Architecture
+
+### The Core Threat: Prompt Injection
+
+The threat model for a personal assistant isn't "malicious LLM" — it's **"LLM tricked by malicious input."**
+
+OpenClaw processes untrusted content: documents, emails, web pages, messages from contacts. An attacker can embed hidden instructions that trick the LLM into executing commands with your permissions. Sandbox mode isolates agent code execution, limiting the blast radius of a successful injection.
+
+### How OpenClaw Sandbox Works
+
+OpenClaw sandbox spawns **nested Docker containers** for each agent task. The sandbox container has:
+- Limited filesystem access (only the workspace)
+- Network isolation (`network: none` blocks exfiltration)
+- No access to environment variables (API keys stay in parent)
+- Ephemeral lifecycle (destroyed after task)
+
+**The DinD Problem**: Standard Docker containers cannot spawn nested containers — no daemon, no CLI, no socket access. Error: `spawn docker ENOENT`.
+
+### Three Options for Enabling Sandbox
+
+| Option | Security | Why |
+|--------|----------|-----|
+| **Socket mount** (`-v /var/run/docker.sock:...`) | ❌ Bad | Container gets root-equivalent host access |
+| **--privileged** | ❌ Worse | Container has nearly all host capabilities |
+| **Sysbox runtime** (`--runtime=sysbox-runc`) | ✅ Good | True VM-like isolation via UID mapping |
+
+**Sysbox** enables Docker-in-Docker without compromising security. Container root maps to unprivileged host UID. The container *thinks* it has root but cannot touch the host.
+
+### Key Security Principles
+
+1. **Sandbox + network: none** = prompt injection can't exfiltrate data
+2. **Sysbox** = nested containers without --privileged
+3. **dmPolicy: pairing** = approval codes for channel access (prevents unauthorized conversations)
+4. **Defense in depth** = VPC isolation, security groups, IMDSv2, encrypted storage all layer on top
+
+### Current State
+
+- **Local Docker**: `sandbox.mode: "off"` (DinD unavailable) — set in `onboarding.service.ts`
+- **EC2 with Sysbox**: Enable `sandbox.mode: "all"` with `docker.network: "none"` for prompt injection protection

@@ -139,19 +139,16 @@ pnpm install || error "Failed to install dependencies"
 success "Dependencies installed"
 
 # -----------------------------------------------------------------------------
-# Generate Prisma client and build CLI
+# Generate Prisma client and build all packages
 # -----------------------------------------------------------------------------
 
 info "Generating Prisma client..."
 cd packages/database && pnpm prisma generate && cd ../..
 success "Prisma client generated"
 
-info "Building CLI dependencies..."
-pnpm --filter @clawster/core build || error "Failed to build core"
-pnpm --filter @clawster/database build || error "Failed to build database"
-pnpm --filter @clawster/cloud-providers build || error "Failed to build cloud-providers"
-pnpm --filter @clawster/cli build || error "Failed to build CLI"
-success "CLI built"
+info "Building all packages..."
+pnpm build || error "Failed to build packages"
+success "All packages built"
 
 # -----------------------------------------------------------------------------
 # Run setup

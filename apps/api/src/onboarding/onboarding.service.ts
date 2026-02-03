@@ -11,6 +11,11 @@ import { CredentialVaultService } from "../connectors/credential-vault.service";
 import { randomBytes } from "crypto";
 import * as os from "os";
 import * as path from "path";
+import {
+  DeploymentTargetType,
+  applySecurityDefaults,
+  getSecuritySummary,
+} from "@clawster/cloud-providers";
 
 @Injectable()
 export class OnboardingService {
@@ -220,6 +225,27 @@ export class OnboardingService {
       defaults.workspace = `~/openclaw/${dto.botName}`;
     }
 
+    // Map string target type to DeploymentTargetType enum
+    const targetTypeStr = dto.deploymentTarget?.type || "docker";
+    const deploymentTargetTypeMap: Record<string, DeploymentTargetType> = {
+      "docker": DeploymentTargetType.DOCKER,
+      "local": DeploymentTargetType.LOCAL,
+      "ecs-ec2": DeploymentTargetType.ECS_EC2,
+      "gce": DeploymentTargetType.GCE,
+      "azure-vm": DeploymentTargetType.AZURE_VM,
+      "kubernetes": DeploymentTargetType.KUBERNETES,
+      "remote-vm": DeploymentTargetType.REMOTE_VM,
+      "cloudflare-workers": DeploymentTargetType.CLOUDFLARE_WORKERS,
+    };
+    const deploymentTargetType = deploymentTargetTypeMap[targetTypeStr] || DeploymentTargetType.DOCKER;
+
+    // Apply security defaults based on deployment target type.
+    // This configures: sandbox mode, network isolation, dmPolicy, logging redaction.
+    // Cloud VMs (ECS, GCE, Azure): sandbox.mode="all" + docker.network="none" (blocks exfiltration)
+    // Local Docker: sandbox.mode="off" (no Docker-in-Docker without Sysbox)
+    const securitySummary = getSecuritySummary(deploymentTargetType);
+    this.logger.debug(`Applying security defaults for ${targetTypeStr}:\n${securitySummary}`);
+
     // Apply model config from wizard
     const containerEnv: Record<string, string> = {};
     if (dto.modelConfig) {
@@ -255,7 +281,11 @@ export class OnboardingService {
       Object.assign(config, dto.configOverrides);
     }
 
-    // 5. Build manifest
+    // Apply security defaults based on deployment target type
+    // This ensures: sandbox mode, network isolation, dmPolicy, logging redaction
+    const securedConfig = applySecurityDefaults(config, deploymentTargetType, gatewayAuthToken);
+
+    // 5. Build manifest with security-hardened config
     const manifest = {
       apiVersion: "clawster/v2",
       kind: "OpenClawInstance",
@@ -265,7 +295,7 @@ export class OnboardingService {
         environment: env,
       },
       spec: {
-        openclawConfig: config,
+        openclawConfig: securedConfig,
       },
     };
 

@@ -1,6 +1,5 @@
 import { Controller, Get, Post, Body, Param, Req } from "@nestjs/common";
 import { Request as ExpressRequest } from "express";
-import { Public } from "../auth/public.decorator";
 import { OnboardingService } from "./onboarding.service";
 import { OnboardingDeployDto, OnboardingPreviewDto, ValidateAwsDto } from "./onboarding.dto";
 
@@ -8,13 +7,11 @@ import { OnboardingDeployDto, OnboardingPreviewDto, ValidateAwsDto } from "./onb
 export class OnboardingController {
   constructor(private readonly onboardingService: OnboardingService) {}
 
-  @Public()
   @Get("status")
   async getStatus() {
     return this.onboardingService.checkFirstRun();
   }
 
-  @Public()
   @Get("templates")
   getTemplates() {
     return this.onboardingService.getTemplates();

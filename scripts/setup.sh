@@ -350,8 +350,8 @@ cmd_doctor() {
     # Find the database file — check common locations
     local db_file=""
     local db_url=""
-    if [ -f "$PROJECT_ROOT/apps/api/.env" ]; then
-        db_url=$(grep '^DATABASE_URL=' "$PROJECT_ROOT/apps/api/.env" | cut -d'=' -f2-)
+    if [ -f "$PROJECT_ROOT/.env" ]; then
+        db_url=$(grep '^DATABASE_URL=' "$PROJECT_ROOT/.env" | cut -d'=' -f2-)
     fi
     db_url="${db_url:-file:./dev.db}"
 
@@ -533,27 +533,20 @@ cmd_doctor() {
 
     if [ -f "$PROJECT_ROOT/.env" ]; then
         log_ok "Root .env exists"
-    else
-        log_warn "Root .env missing"
-        printf "         Fix: ${BOLD}cp .env.example .env${RESET}\n"
-    fi
-
-    if [ -f "$PROJECT_ROOT/apps/api/.env" ]; then
-        log_ok "API .env exists"
-        if grep -q "DATABASE_URL" "$PROJECT_ROOT/apps/api/.env"; then
-            log_ok "API .env has DATABASE_URL"
+        if grep -q "DATABASE_URL" "$PROJECT_ROOT/.env"; then
+            log_ok ".env has DATABASE_URL"
         else
-            log_fail "API .env missing DATABASE_URL"
+            log_fail ".env missing DATABASE_URL"
             all_ok=false
         fi
-        if grep -q "JWT_SECRET" "$PROJECT_ROOT/apps/api/.env"; then
-            log_ok "API .env has JWT_SECRET"
+        if grep -q "JWT_SECRET" "$PROJECT_ROOT/.env"; then
+            log_ok ".env has JWT_SECRET"
         else
-            log_fail "API .env missing JWT_SECRET"
+            log_fail ".env missing JWT_SECRET"
             all_ok=false
         fi
     else
-        log_fail "API .env missing"
+        log_fail "Root .env missing"
         printf "         Fix: ${BOLD}bash scripts/setup.sh setup --no-start${RESET}\n"
         all_ok=false
     fi
@@ -1216,57 +1209,54 @@ check_prerequisites() {
 setup_env_files() {
     log_step "Setting up environment files"
 
-    # Root .env
+    # Root .env (API reads from here via envFilePath: '../../.env')
     if [ -f "$PROJECT_ROOT/.env" ]; then
         log_skip "Root .env already exists"
+        local missing_keys=""
         if ! grep -q "DATABASE_URL" "$PROJECT_ROOT/.env"; then
-            log_warn "Root .env is missing DATABASE_URL"
+            missing_keys="${missing_keys} DATABASE_URL"
+        fi
+        if ! grep -q "JWT_SECRET" "$PROJECT_ROOT/.env"; then
+            missing_keys="${missing_keys} JWT_SECRET"
+        fi
+        if [ -n "$missing_keys" ]; then
+            log_warn "Root .env is missing:${missing_keys}"
+        fi
+        # Ensure required keys exist
+        if ! grep -q "JWT_SECRET" "$PROJECT_ROOT/.env"; then
+            echo "JWT_SECRET=clawster-dev-jwt-secret-change-in-production-min32chars" >> "$PROJECT_ROOT/.env"
+            log_ok "Added JWT_SECRET to .env"
+        fi
+        if ! grep -q "DEFAULT_DEPLOYMENT_TARGET" "$PROJECT_ROOT/.env"; then
+            echo "DEFAULT_DEPLOYMENT_TARGET=docker" >> "$PROJECT_ROOT/.env"
+            log_ok "Added DEFAULT_DEPLOYMENT_TARGET to .env"
         fi
     else
         if [ -f "$PROJECT_ROOT/.env.example" ]; then
             cp "$PROJECT_ROOT/.env.example" "$PROJECT_ROOT/.env"
             log_ok "Created .env from .env.example"
         else
-            log_warn "No .env.example found, creating minimal .env"
+            log_warn "No .env.example found, creating .env with defaults"
             cat > "$PROJECT_ROOT/.env" <<'ENVEOF'
+# Clawster Environment Configuration
+
+# Database (path relative to packages/database/prisma/)
 DATABASE_URL=file:./dev.db
+
+# Authentication
+JWT_SECRET=clawster-dev-jwt-secret-change-in-production-min32chars
+
+# API
 API_URL=http://localhost:4000
 PORT=4000
+DEFAULT_DEPLOYMENT_TARGET=docker
+
+# Frontend
 FRONTEND_URL=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:4000
 ENVEOF
-            log_ok "Created minimal .env"
+            log_ok "Created .env with dev defaults"
         fi
-    fi
-
-    # API .env
-    if [ -f "$PROJECT_ROOT/apps/api/.env" ]; then
-        log_skip "API .env already exists"
-        local missing_keys=""
-        if ! grep -q "DATABASE_URL" "$PROJECT_ROOT/apps/api/.env"; then
-            missing_keys="${missing_keys} DATABASE_URL"
-        fi
-        if ! grep -q "JWT_SECRET" "$PROJECT_ROOT/apps/api/.env"; then
-            missing_keys="${missing_keys} JWT_SECRET"
-        fi
-        if [ -n "$missing_keys" ]; then
-            log_warn "API .env is missing:${missing_keys}"
-            printf "         Check ${BOLD}apps/api/.env.example${RESET} for reference\n"
-        fi
-    else
-        cat > "$PROJECT_ROOT/apps/api/.env" <<'ENVEOF'
-DATABASE_URL=file:./dev.db
-JWT_SECRET=clawster-dev-jwt-secret-change-in-production-min32chars
-PORT=4000
-DEFAULT_DEPLOYMENT_TARGET=docker
-ENVEOF
-        log_ok "Created apps/api/.env with dev defaults"
-    fi
-
-    # Ensure DEFAULT_DEPLOYMENT_TARGET is set in existing API .env
-    if [ -f "$PROJECT_ROOT/apps/api/.env" ] && ! grep -q "DEFAULT_DEPLOYMENT_TARGET" "$PROJECT_ROOT/apps/api/.env"; then
-        echo "DEFAULT_DEPLOYMENT_TARGET=docker" >> "$PROJECT_ROOT/apps/api/.env"
-        log_ok "Added DEFAULT_DEPLOYMENT_TARGET=docker to API .env"
     fi
 }
 
@@ -1404,8 +1394,8 @@ setup_database() {
     log_step "Setting up database"
 
     local db_url
-    if [ -f "$PROJECT_ROOT/apps/api/.env" ]; then
-        db_url=$(grep '^DATABASE_URL=' "$PROJECT_ROOT/apps/api/.env" | cut -d'=' -f2-)
+    if [ -f "$PROJECT_ROOT/.env" ]; then
+        db_url=$(grep '^DATABASE_URL=' "$PROJECT_ROOT/.env" | cut -d'=' -f2-)
     fi
     db_url="${db_url:-file:./dev.db}"
     log_debug "DATABASE_URL=$db_url"
@@ -1452,7 +1442,7 @@ check_dev_ports() {
 
     if port_in_use 4000; then
         log_warn "Port 4000 is already in use (API)"
-        printf "         The API server may fail to start. Kill the process or change PORT in apps/api/.env\n"
+        printf "         The API server may fail to start. Kill the process or change PORT in .env\n"
         has_conflict=true
     else
         log_ok "Port 4000 is available (API)"

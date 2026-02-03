@@ -1,6 +1,4 @@
 import { Module, forwardRef } from "@nestjs/common";
-import { JwtModule } from "@nestjs/jwt";
-import { ConfigModule, ConfigService } from "@nestjs/config";
 import { HealthService } from "./health.service";
 import { HealthController } from "./health.controller";
 import { OpenClawHealthService } from "./openclaw-health.service";
@@ -15,13 +13,6 @@ import { NotificationChannelsModule } from "../notification-channels/notificatio
   imports: [
     forwardRef(() => AlertsModule),
     NotificationChannelsModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>("JWT_SECRET"),
-      }),
-      inject: [ConfigService],
-    }),
   ],
   controllers: [HealthController],
   providers: [

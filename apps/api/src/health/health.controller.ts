@@ -16,7 +16,6 @@ import { OpenClawHealthService } from "./openclaw-health.service";
 import { HealthAggregatorService } from "./health-aggregator.service";
 import { DiagnosticsService } from "./diagnostics.service";
 import { AlertingService } from "./alerting.service";
-import { Public } from "../auth/public.decorator";
 
 @ApiTags("health")
 @Controller()
@@ -29,9 +28,8 @@ export class HealthController {
     private readonly alerting: AlertingService,
   ) {}
 
-  // ---- System health check (public) ----------------------------------------
+  // ---- System health check ----------------------------------------
 
-  @Public()
   @Get("health")
   @ApiOperation({ summary: "System health check endpoint" })
   async check(): Promise<HealthCheckResult> {

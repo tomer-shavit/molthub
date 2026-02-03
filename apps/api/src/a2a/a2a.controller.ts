@@ -1,7 +1,6 @@
 import { Controller, Get, Post, Delete, Param, Body, Res, Logger, UseGuards, NotFoundException, HttpException, HttpStatus } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiParam } from "@nestjs/swagger";
 import type { Response } from "express";
-import { Public } from "../auth/public.decorator";
 import { A2aAgentCardService } from "./a2a-agent-card.service";
 import { A2aMessageService } from "./a2a-message.service";
 import { A2aApiKeyService } from "./a2a-api-key.service";
@@ -26,16 +25,14 @@ export class A2aController {
   // ---- Public discovery endpoints (no auth) ----
 
   @Get(":botInstanceId/agent-card")
-  @Public()
-  @ApiOperation({ summary: "Get A2A Agent Card for a bot instance" })
+    @ApiOperation({ summary: "Get A2A Agent Card for a bot instance" })
   @ApiParam({ name: "botInstanceId", description: "Bot instance ID" })
   async getAgentCard(@Param("botInstanceId") botInstanceId: string) {
     return this.agentCardService.generate(botInstanceId);
   }
 
   @Get(":botInstanceId/.well-known/agent")
-  @Public()
-  @ApiOperation({ summary: "A2A spec discovery endpoint (alias for agent-card)" })
+    @ApiOperation({ summary: "A2A spec discovery endpoint (alias for agent-card)" })
   @ApiParam({ name: "botInstanceId", description: "Bot instance ID" })
   async getWellKnownAgent(@Param("botInstanceId") botInstanceId: string) {
     return this.agentCardService.generate(botInstanceId);
@@ -44,8 +41,7 @@ export class A2aController {
   // ---- A2A JSON-RPC endpoint (requires API key) ----
 
   @Post(":botInstanceId")
-  @Public()
-  @UseGuards(A2aApiKeyGuard)
+    @UseGuards(A2aApiKeyGuard)
   @ApiOperation({ summary: "A2A JSON-RPC 2.0 endpoint" })
   @ApiParam({ name: "botInstanceId", description: "Bot instance ID" })
   async handleJsonRpc(
@@ -166,8 +162,7 @@ export class A2aController {
   // ---- A2A Streaming endpoint (SSE, requires API key) ----
 
   @Post(":botInstanceId/stream")
-  @Public()
-  @UseGuards(A2aApiKeyGuard)
+    @UseGuards(A2aApiKeyGuard)
   @ApiOperation({ summary: "A2A streaming endpoint (SSE)" })
   @ApiParam({ name: "botInstanceId", description: "Bot instance ID" })
   async handleStream(

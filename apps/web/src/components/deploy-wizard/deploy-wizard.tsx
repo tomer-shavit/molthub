@@ -6,11 +6,10 @@ import { ChannelConfig } from "@/components/onboarding/channel-setup-step";
 import { api, type Fleet } from "@/lib/api";
 import { StepPlatform, Platform } from "./step-platform";
 import { AwsConfig } from "./aws-config-panel";
-import { StepChannels } from "./step-channels";
 import { StepModel, ModelConfig } from "./step-model";
 import { StepNameDeploy } from "./step-name-deploy";
 import { StepDeploying } from "./step-deploying";
-import { Monitor, MessageSquare, Brain, Rocket, PenLine } from "lucide-react";
+import { Monitor, Brain, Rocket, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
@@ -20,11 +19,13 @@ interface DeployWizardProps {
 
 const STEPS = [
   { name: "Platform", icon: Monitor },
-  { name: "Channels", icon: MessageSquare },
   { name: "AI Model", icon: Brain },
   { name: "Name & Deploy", icon: PenLine },
   { name: "Deploying", icon: Rocket },
 ];
+
+// No channel config by default - let OpenClaw use its defaults
+const DEFAULT_CHANNEL_CONFIGS: ChannelConfig[] = [];
 
 export function DeployWizard({ isFirstTime }: DeployWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
@@ -32,7 +33,7 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
   // Form state
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
   const [botName, setBotName] = useState("");
-  const [channelConfigs, setChannelConfigs] = useState<ChannelConfig[]>([]);
+  const [channelConfigs] = useState<ChannelConfig[]>(DEFAULT_CHANNEL_CONFIGS);
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
   const [awsConfig, setAwsConfig] = useState<AwsConfig>({
     accessKeyId: "",
@@ -68,14 +69,13 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
         }
         return true;
       }
-      case 1: return true; // channels are optional
-      case 2: return true; // model is optional
+      case 1: return true; // model is optional
       default: return false;
     }
   }, [currentStep, selectedPlatform, awsConfig]);
 
   const handleNext = () => {
-    if (currentStep < 4) {
+    if (currentStep < 3) {
       setCurrentStep((s) => s + 1);
     }
   };
@@ -86,14 +86,9 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
     }
   };
 
-  const handleSkipChannels = () => {
-    setChannelConfigs([]);
-    setCurrentStep(2);
-  };
-
   const handleSkipModel = () => {
     setModelConfig(null);
-    setCurrentStep(3);
+    setCurrentStep(2);
   };
 
   const handleDeploy = async () => {
@@ -156,7 +151,7 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
       });
 
       setDeployedInstanceId(result.instanceId);
-      setCurrentStep(4);
+      setCurrentStep(3);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Deployment failed. Please try again.");
     } finally {
@@ -177,10 +172,10 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
       )}
 
       {/* Step indicator (hidden during deploying step) */}
-      {currentStep < 4 && (
+      {currentStep < 3 && (
         <nav className="mb-8">
           <ol className="flex items-center justify-center">
-            {STEPS.slice(0, 4).map((step, index) => {
+            {STEPS.slice(0, 3).map((step, index) => {
               const StepIcon = step.icon;
               const isActive = index === currentStep;
               const isCompleted = index < currentStep;
@@ -191,7 +186,7 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
                   key={step.name}
                   className={cn(
                     "flex items-center",
-                    index < 3 && "flex-1 max-w-[160px]"
+                    index < 2 && "flex-1 max-w-[160px]"
                   )}
                 >
                   <button
@@ -223,7 +218,7 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
                       {step.name}
                     </span>
                   </button>
-                  {index < 3 && (
+                  {index < 2 && (
                     <div
                       className={cn(
                         "flex-1 h-0.5 mx-4",
@@ -250,14 +245,6 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
         )}
 
         {currentStep === 1 && (
-          <StepChannels
-            channelConfigs={channelConfigs}
-            onChannelChange={setChannelConfigs}
-            onSkip={handleSkipChannels}
-          />
-        )}
-
-        {currentStep === 2 && (
           <StepModel
             modelConfig={modelConfig}
             onModelConfigChange={setModelConfig}
@@ -265,7 +252,7 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
           />
         )}
 
-        {currentStep === 3 && selectedPlatform && (
+        {currentStep === 2 && selectedPlatform && (
           <StepNameDeploy
             botName={botName}
             onBotNameChange={setBotName}
@@ -281,20 +268,20 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
           />
         )}
 
-        {currentStep === 4 && deployedInstanceId && (
+        {currentStep === 3 && deployedInstanceId && (
           <StepDeploying
             instanceId={deployedInstanceId}
             botName={botName}
             onRetryDeploy={() => {
               setDeployedInstanceId(null);
-              setCurrentStep(3);
+              setCurrentStep(2);
             }}
           />
         )}
       </div>
 
-      {/* Navigation buttons (steps 0-2 only, channels and model have their own skip) */}
-      {currentStep < 3 && (
+      {/* Navigation buttons (steps 0-1 only, model has its own skip) */}
+      {currentStep < 2 && (
         <div className="flex items-center justify-between border-t pt-4">
           <Button
             variant="outline"
@@ -312,7 +299,7 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
       )}
 
       {/* Back button on name+deploy step */}
-      {currentStep === 3 && (
+      {currentStep === 2 && (
         <div className="flex items-center border-t pt-4">
           <Button variant="outline" onClick={handleBack}>
             <ArrowLeft className="w-4 h-4 mr-2" />

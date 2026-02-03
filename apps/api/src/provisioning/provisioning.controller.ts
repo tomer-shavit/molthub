@@ -1,6 +1,5 @@
 import { Controller, Get, Param } from "@nestjs/common";
 import { prisma } from "@clawster/database";
-import { Public } from "../auth/public.decorator";
 import { ProvisioningEventsService } from "./provisioning-events.service";
 
 @Controller("instances")
@@ -9,7 +8,6 @@ export class ProvisioningController {
     private readonly provisioningEvents: ProvisioningEventsService,
   ) {}
 
-  @Public()
   @Get(":id/provisioning/status")
   async getProvisioningStatus(@Param("id") instanceId: string) {
     const progress = this.provisioningEvents.getProgress(instanceId);

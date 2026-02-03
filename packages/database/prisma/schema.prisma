@@ -49,12 +49,11 @@ model User {
 
   @@unique([email, workspaceId])
 }
-// Auth model for simple JWT-based authentication
+// Auth model for simple JWT-based authentication (single admin user)
 model AuthUser {
   id          String    @id @default(cuid())
   username    String    @unique
   passwordHash String
-  role        String  @default("OPERATOR")
   isActive    Boolean   @default(true)
   lastLoginAt DateTime?
   createdAt   DateTime  @default(now())

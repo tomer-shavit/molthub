@@ -20,7 +20,6 @@ import { HealthModule } from "./health/health.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
 import { SkillPacksModule } from "./skill-packs/skill-packs.module";
 import { ChannelsModule } from "./channels/channels.module";
-import { AuthModule } from "./auth/auth.module";
 import { SecurityAuditModule } from "./security/security-audit.module";
 import { SecurityModule } from "./security/security.module";
 import { OnboardingModule } from "./onboarding/onboarding.module";
@@ -36,12 +35,12 @@ import { NotificationChannelsModule } from "./notification-channels/notification
 import { BotRoutingModule } from "./bot-routing/bot-routing.module";
 import { BotTeamsModule } from "./bot-teams/bot-teams.module";
 import { A2aModule } from "./a2a/a2a.module";
-import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '../../.env',
       validationSchema: configValidationSchema,
       validationOptions: {
         allowUnknown: true,
@@ -53,7 +52,6 @@ import { JwtAuthGuard } from "./auth/jwt-auth.guard";
       ttl: 60000,
       limit: 100,
     }]),
-    AuthModule,
     HealthModule,
     BotInstancesModule,
     FleetModule,
@@ -87,10 +85,6 @@ import { JwtAuthGuard } from "./auth/jwt-auth.guard";
     A2aModule,
   ],
   providers: [
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,

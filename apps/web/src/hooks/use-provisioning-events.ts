@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { api } from "@/lib/api";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // ---------------------------------------------------------------------------
 // Types (mirrors backend ProvisioningProgress)
 // ---------------------------------------------------------------------------
@@ -119,27 +121,24 @@ export function useProvisioningEvents(
       try {
         const { io } = await import("socket.io-client");
 
-        // Get auth token for WebSocket authentication
-        const token = api.getToken();
-
-        socket = io(`${API_URL}/provisioning`, {
+        const newSocket = io(`${API_URL}/provisioning`, {
           transports: ["websocket", "polling"],
           reconnection: false, // We handle reconnection manually
-          auth: token ? { token } : undefined,
         });
+        socket = newSocket as any;
         socketRef.current = socket;
 
-        socket.on("connect", () => {
+        newSocket.on("connect", () => {
           if (!mountedRef.current) return;
           setIsConnected(true);
           reconnectAttempts.current = 0;
           // Stop polling when WebSocket is connected
           stopPolling();
           // Subscribe to instance events
-          socket!.emit("subscribe", { instanceId });
+          newSocket.emit("subscribe", { instanceId });
         });
 
-        socket.on("progress", (data: ProvisioningProgress) => {
+        newSocket.on("progress", (data: ProvisioningProgress) => {
           if (!mountedRef.current) return;
           setProgress(data);
           // Stop on terminal state
@@ -149,12 +148,12 @@ export function useProvisioningEvents(
             data.status === "timeout"
           ) {
             setTimeout(() => {
-              socket?.disconnect();
+              newSocket.disconnect();
             }, 1000);
           }
         });
 
-        socket.on("provisioning-log", (entry: ProvisioningLogEntry) => {
+        newSocket.on("provisioning-log", (entry: ProvisioningLogEntry) => {
           if (!mountedRef.current) return;
           setLogs((prev) => {
             const next = [...prev, entry];
@@ -164,7 +163,7 @@ export function useProvisioningEvents(
           });
         });
 
-        socket.on("provisioning-logs-buffer", (buffer: ProvisioningLogEntry[]) => {
+        newSocket.on("provisioning-logs-buffer", (buffer: ProvisioningLogEntry[]) => {
           if (!mountedRef.current) return;
           setLogs((prev) => {
             const merged = [...prev, ...buffer];
@@ -174,7 +173,7 @@ export function useProvisioningEvents(
           });
         });
 
-        socket.on("disconnect", () => {
+        newSocket.on("disconnect", () => {
           if (!mountedRef.current) return;
           setIsConnected(false);
           // Resume polling
@@ -194,7 +193,7 @@ export function useProvisioningEvents(
           }
         });
 
-        socket.on("connect_error", () => {
+        newSocket.on("connect_error", () => {
           if (!mountedRef.current) return;
           setIsConnected(false);
           // Fall back to polling

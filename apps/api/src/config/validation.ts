@@ -11,17 +11,17 @@ export const configValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid("development", "production", "test").default("development"),
   FRONTEND_URL: Joi.string().uri().default("http://localhost:3000"),
 
-  // AWS (required for reconciler)
-  AWS_ACCESS_KEY_ID: Joi.string().optional(),
-  AWS_SECRET_ACCESS_KEY: Joi.string().optional(),
-  AWS_ACCOUNT_ID: Joi.string().optional(),
+  // AWS (optional - only required for ECS/cloud deployments)
+  AWS_ACCESS_KEY_ID: Joi.string().allow('').optional(),
+  AWS_SECRET_ACCESS_KEY: Joi.string().allow('').optional(),
+  AWS_ACCOUNT_ID: Joi.string().allow('').optional(),
 
-  // ECS Infrastructure
-  ECS_CLUSTER_ARN: Joi.string().optional(),
-  ECS_EXECUTION_ROLE_ARN: Joi.string().optional(),
-  ECS_TASK_ROLE_ARN: Joi.string().optional(),
-  PRIVATE_SUBNET_IDS: Joi.string().optional(),
-  SECURITY_GROUP_ID: Joi.string().optional(),
+  // ECS Infrastructure (optional - only required for ECS deployments)
+  ECS_CLUSTER_ARN: Joi.string().allow('').optional(),
+  ECS_EXECUTION_ROLE_ARN: Joi.string().allow('').optional(),
+  ECS_TASK_ROLE_ARN: Joi.string().allow('').optional(),
+  PRIVATE_SUBNET_IDS: Joi.string().allow('').optional(),
+  SECURITY_GROUP_ID: Joi.string().allow('').optional(),
 
   // Features
   AUTO_RECONCILE_ON_DRIFT: Joi.boolean().default(false),

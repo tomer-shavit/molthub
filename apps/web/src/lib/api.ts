@@ -539,38 +539,12 @@ export interface UserContextResponse {
   stage: 'empty' | 'getting-started' | 'fleet';
 }
 
-export interface AuthResponse {
-  accessToken: string;
-  expiresIn: number;
-  user: { id: string; username: string; role: string };
-}
-
-export interface AuthUser {
-  id: string;
-  username: string;
-  role: string;
-}
-
 class ApiClient {
-  private token: string | null = null;
-
-  setToken(token: string | null) {
-    this.token = token;
-  }
-
-  getToken(): string | null {
-    return this.token;
-  }
-
   private async fetch(path: string, options?: RequestInit) {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...options?.headers as Record<string, string>,
     };
-
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
 
     const response = await fetch(`${API_URL}${path}`, {
       ...options,
@@ -593,27 +567,6 @@ class ApiClient {
     }
 
     return response.json();
-  }
-
-  // Auth
-  async login(username: string, password: string): Promise<AuthResponse> {
-    this.token = null;
-    return this.fetch('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    });
-  }
-
-  async register(username: string, password: string): Promise<AuthResponse> {
-    this.token = null;
-    return this.fetch('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    });
-  }
-
-  async getMe(): Promise<AuthUser> {
-    return this.fetch('/auth/me');
   }
 
   // Bot Instances

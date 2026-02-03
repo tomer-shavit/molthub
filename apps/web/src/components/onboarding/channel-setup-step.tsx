@@ -46,13 +46,14 @@ export function ChannelSetupStep({
   channelConfigs,
   onChannelChange,
 }: ChannelSetupStepProps) {
+  // Only whatsapp and telegram support dmPolicy
+  const supportsDmPolicy = (type: string) => ["whatsapp", "telegram"].includes(type.toLowerCase());
+
   const getConfigForChannel = (type: string): ChannelConfig => {
-    return (
-      channelConfigs.find((c) => c.type === type) || {
-        type,
-        config: { enabled: false, dmPolicy: "pairing" },
-      }
-    );
+    const defaultConfig = supportsDmPolicy(type)
+      ? { enabled: false, dmPolicy: "pairing" }
+      : { enabled: false };
+    return channelConfigs.find((c) => c.type === type) || { type, config: defaultConfig };
   };
 
   const updateChannel = (type: string, updates: Record<string, unknown>) => {
@@ -118,19 +119,21 @@ export function ChannelSetupStep({
                     onUpdate={(updates) => updateChannel(preset.type, updates)}
                   />
 
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium">DM Policy</label>
-                    <Select
-                      value={(channelConfig.config.dmPolicy as string) || "pairing"}
-                      onChange={(e) =>
-                        updateChannel(preset.type, { dmPolicy: e.target.value })
-                      }
-                    >
-                      <option value="pairing">Pairing</option>
-                      <option value="allowlist">Allowlist</option>
-                      <option value="open">Open</option>
-                    </Select>
-                  </div>
+                  {supportsDmPolicy(preset.type) && (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">DM Policy</label>
+                      <Select
+                        value={(channelConfig.config.dmPolicy as string) || "pairing"}
+                        onChange={(e) =>
+                          updateChannel(preset.type, { dmPolicy: e.target.value })
+                        }
+                      >
+                        <option value="pairing">Pairing</option>
+                        <option value="allowlist">Allowlist</option>
+                        <option value="open">Open</option>
+                      </Select>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

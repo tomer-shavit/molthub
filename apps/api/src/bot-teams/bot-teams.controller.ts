@@ -14,7 +14,6 @@ import {
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiParam } from "@nestjs/swagger";
 import { Request } from "express";
-import { Public } from "../auth/public.decorator";
 import { BotTeamsService } from "./bot-teams.service";
 import {
   CreateBotTeamMemberDto,
@@ -34,7 +33,6 @@ export class BotTeamsController {
   // ---- Delegate (must be before :id route) ---------------------------------
 
   @Post("delegate")
-  @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Delegate a task to a team member (called by bots)" })
   async delegate(@Body() dto: DelegateTaskDto, @Req() req: Request) {

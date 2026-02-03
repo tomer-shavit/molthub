@@ -5,7 +5,6 @@ import chalk from "chalk";
 import { bootstrap } from "./commands/bootstrap";
 import { status } from "./commands/status";
 import { doctor } from "./commands/doctor";
-import { createUser, login, listUsers, deleteUser } from "./commands/auth";
 import { setup } from "./commands/setup";
 import { CLAWSTER_VERSION } from "@clawster/core";
 
@@ -19,12 +18,10 @@ program
 // Setup command - primary entry point for new users
 program
   .command("setup")
-  .description("Set up Clawster for local development (environment, database, admin user)")
+  .description("Set up Clawster for local development (environment, database)")
   .option("--skip-start", "Don't start development servers after setup")
   .option("--skip-open", "Don't open browser after setup")
   .option("--non-interactive", "Use defaults without prompting")
-  .option("-u, --username <username>", "Admin username (default: admin)")
-  .option("-p, --password <password>", "Admin password (prompted if not provided)")
   .action(setup);
 
 // Bootstrap command
@@ -57,37 +54,6 @@ program
   .command("doctor")
   .description("Diagnose common issues with Clawster setup")
   .action(doctor);
-
-// Authentication commands
-const auth = program
-  .command("auth")
-  .description("Authentication management commands");
-
-auth
-  .command("create-user")
-  .description("Create a new user account")
-  .option("-u, --username <username>", "Username")
-  .option("-p, --password <password>", "Password")
-  .option("-r, --role <role>", "Role (admin, operator, viewer)")
-  .action(createUser);
-
-auth
-  .command("login")
-  .description("Login and get JWT token")
-  .option("-u, --username <username>", "Username")
-  .option("-p, --password <password>", "Password")
-  .action(login);
-
-auth
-  .command("list-users")
-  .description("List all users")
-  .action(listUsers);
-
-auth
-  .command("delete-user")
-  .description("Delete a user account")
-  .option("-u, --username <username>", "Username to delete")
-  .action(deleteUser);
 
 // Database commands
 const db = program
@@ -153,21 +119,22 @@ const provider = program
 
 provider
   .command("list")
-  .description("List available cloud providers")
+  .description("List available deployment targets")
   .action(() => {
-    const { CloudProviderFactory } = require("@clawster/cloud-providers");
-    const providers = CloudProviderFactory.getAvailableProviders();
-    
-    console.log(chalk.blue.bold("\nAvailable Cloud Providers\n"));
-    
-    for (const p of providers) {
-      const status = p.status === "ready" 
-        ? chalk.green("✓ Ready") 
-        : p.status === "beta" 
+    const { DeploymentTargetFactory } = require("@clawster/cloud-providers");
+    const targets = DeploymentTargetFactory.getAvailableTargets();
+
+    console.log(chalk.blue.bold("\nAvailable Deployment Targets\n"));
+
+    for (const t of targets) {
+      const status = t.status === "ready"
+        ? chalk.green("✓ Ready")
+        : t.status === "beta"
           ? chalk.yellow("β Beta")
           : chalk.gray("○ Coming Soon");
-      
-      console.log(`  ${chalk.cyan(p.name)} ${status}`);
+
+      console.log(`  ${chalk.cyan(t.name)} ${status}`);
+      console.log(chalk.gray(`      ${t.description}`));
     }
     console.log();
   });

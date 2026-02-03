@@ -26,23 +26,23 @@ const PLATFORMS: PlatformOption[] = [
   {
     id: "aws",
     name: "AWS",
-    description: "Deploy to Amazon Web Services (ECS Fargate).",
+    description: "Deploy to Amazon Web Services (ECS EC2).",
     icon: <Cloud className="w-6 h-6" />,
     available: true,
   },
   {
     id: "azure",
     name: "Azure",
-    description: "Deploy to Microsoft Azure Container Instances.",
+    description: "Deploy to Microsoft Azure Virtual Machine.",
     icon: <Cloud className="w-6 h-6" />,
-    available: false,
+    available: true,
   },
   {
     id: "gcp",
     name: "Google Cloud",
-    description: "Deploy to Google Cloud Run.",
+    description: "Deploy to Google Compute Engine.",
     icon: <Cloud className="w-6 h-6" />,
-    available: false,
+    available: true,
   },
 ];
 

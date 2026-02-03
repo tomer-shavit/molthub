@@ -8,9 +8,7 @@ import {
   OnGatewayDisconnect,
 } from "@nestjs/websockets";
 import { Logger } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
 import { Server, Socket } from "socket.io";
-import { createWsAuthMiddleware } from "../common/ws-auth.middleware";
 import type {
   ProvisioningProgress,
   ProvisioningLogEntry,
@@ -39,12 +37,8 @@ export class ProvisioningEventsGateway
     | ((instanceId: string) => ProvisioningLogEntry[])
     | null = null;
 
-  constructor(private readonly jwtService: JwtService) {}
-
-  afterInit(server: Server): void {
-    // Add JWT authentication middleware
-    server.use(createWsAuthMiddleware(this.jwtService));
-    this.logger.log("Provisioning WebSocket gateway initialized with auth");
+  afterInit(): void {
+    this.logger.log("Provisioning WebSocket gateway initialized");
   }
 
   setRecentLogsProvider(
