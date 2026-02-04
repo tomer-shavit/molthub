@@ -15,6 +15,17 @@ export { DockerContainerTarget } from "./targets/docker/docker-target";
 export { KubernetesTarget, KubernetesManifests } from "./targets/kubernetes/kubernetes-target";
 export { EcsEc2Target } from "./targets/ecs-ec2/ecs-ec2-target";
 export type { EcsEc2Config } from "./targets/ecs-ec2/ecs-ec2-config";
+export type { EcsEc2TargetOptions, EcsEc2Services } from "./targets/ecs-ec2/ecs-ec2-target";
+export type {
+  ICloudFormationService,
+  IECSService,
+  ISecretsManagerService,
+  ICloudWatchLogsService,
+  EcsServiceDescription,
+  EcsDeployment,
+  EcsServiceEvent,
+  LogEventInfo,
+} from "./targets/ecs-ec2/ecs-ec2-services.interface";
 export { pushImageToEcr } from "./targets/ecs-ec2/ecr-push";
 export { GceTarget } from "./targets/gce/gce-target";
 export type { GceTargetOptions } from "./targets/gce/gce-target";
@@ -26,6 +37,19 @@ export type {
   IGceNetworkManager,
   IGceComputeManager,
   IGceLoadBalancerManager,
+  IGceSecretManager,
+  IGceLoggingManager,
+  GceLogQueryOptions,
+} from "./targets/gce/managers";
+export {
+  GceSecretManagerAdapter,
+  GceLoggingManagerAdapter,
+  GceDefaultSecretManager,
+  GceDefaultLoggingManager,
+} from "./targets/gce/managers";
+export type {
+  ISecretManagerService,
+  ICloudLoggingService,
 } from "./targets/gce/managers";
 export { AzureVmTarget } from "./targets/azure-vm/azure-vm-target";
 export type { AzureVmTargetOptions } from "./targets/azure-vm/azure-vm-target";

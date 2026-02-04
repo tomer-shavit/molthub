@@ -1,5 +1,5 @@
 {
-  "name": "@clawster/adapters-azure",
+  "name": "@clawster/adapters-gcp",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -10,13 +10,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@azure/arm-compute": "^21.6.0",
-    "@azure/arm-containerinstance": "^9.1.0",
-    "@azure/arm-network": "^33.2.0",
-    "@azure/arm-resources": "^5.2.0",
-    "@azure/identity": "^4.2.0",
-    "@azure/keyvault-secrets": "^4.8.0",
-    "@azure/monitor-query": "^1.3.0",
+    "@google-cloud/compute": "^4.8.0",
+    "@google-cloud/secret-manager": "^5.6.0",
+    "@google-cloud/logging": "^11.2.0",
     "@clawster/core": "workspace:*"
   },
   "devDependencies": {

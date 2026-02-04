@@ -2,4 +2,8 @@ export * from "./gce-operation-manager";
 export * from "./gce-network-manager";
 export * from "./gce-compute-manager";
 export * from "./gce-loadbalancer-manager";
+export * from "./gce-default-secret-manager";
+export * from "./gce-default-logging-manager";
+export * from "./gce-secret-manager-adapter";
+export * from "./gce-logging-manager-adapter";
 export * from "./interfaces";

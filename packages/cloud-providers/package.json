@@ -12,6 +12,12 @@
     "test:integration": "jest --config jest.integration.config.js --no-cache --runInBand"
   },
   "dependencies": {
+    "@clawster/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@clawster/adapters-aws": "workspace:*",
+    "@clawster/adapters-azure": "workspace:*",
+    "@clawster/adapters-gcp": "workspace:*",
     "@aws-sdk/client-cloudformation": "^3.490.0",
     "@aws-sdk/client-ecr": "^3.490.0",
     "@aws-sdk/client-ecs": "^3.490.0",
@@ -32,13 +38,39 @@
     "@google-cloud/compute": "^4.0.0",
     "@google-cloud/logging": "^11.0.0",
     "@google-cloud/run": "^1.2.0",
-    "@google-cloud/secret-manager": "^5.0.0",
-    "@clawster/core": "workspace:*"
+    "@google-cloud/secret-manager": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@clawster/adapters-aws": { "optional": true },
+    "@clawster/adapters-azure": { "optional": true },
+    "@clawster/adapters-gcp": { "optional": true },
+    "@aws-sdk/client-cloudformation": { "optional": true },
+    "@aws-sdk/client-ecr": { "optional": true },
+    "@aws-sdk/client-ecs": { "optional": true },
+    "@aws-sdk/client-secrets-manager": { "optional": true },
+    "@aws-sdk/client-cloudwatch-logs": { "optional": true },
+    "@aws-sdk/client-ec2": { "optional": true },
+    "@aws-sdk/client-iam": { "optional": true },
+    "@aws-sdk/client-elastic-load-balancing-v2": { "optional": true },
+    "@aws-sdk/client-sts": { "optional": true },
+    "@aws-sdk/client-resource-groups-tagging-api": { "optional": true },
+    "@azure/arm-compute": { "optional": true },
+    "@azure/arm-containerinstance": { "optional": true },
+    "@azure/arm-network": { "optional": true },
+    "@azure/arm-resources": { "optional": true },
+    "@azure/identity": { "optional": true },
+    "@azure/keyvault-secrets": { "optional": true },
+    "@azure/monitor-query": { "optional": true },
+    "@google-cloud/compute": { "optional": true },
+    "@google-cloud/logging": { "optional": true },
+    "@google-cloud/run": { "optional": true },
+    "@google-cloud/secret-manager": { "optional": true }
   },
   "optionalDependencies": {
     "axios": "^1.6.0"
   },
   "devDependencies": {
+    "@clawster/adapters-aws": "workspace:*",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.11.0",
     "jest": "^29.7.0",

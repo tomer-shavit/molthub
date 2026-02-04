@@ -29,6 +29,8 @@ import {
   GceNetworkManager,
   GceComputeManager,
   GceLoadBalancerManager,
+  GceDefaultSecretManager,
+  GceDefaultLoggingManager,
 } from "./managers";
 
 import type {
@@ -36,6 +38,8 @@ import type {
   IGceNetworkManager,
   IGceComputeManager,
   IGceLoadBalancerManager,
+  IGceSecretManager,
+  IGceLoggingManager,
 } from "./managers";
 
 import type { GceLogCallback } from "./types";
@@ -68,6 +72,10 @@ export interface GceManagers {
   computeManager: IGceComputeManager;
   /** Load balancer manager for backend services, URL maps, proxies */
   loadBalancerManager: IGceLoadBalancerManager;
+  /** Secret manager for storing OpenClaw config (optional - uses default if not provided) */
+  secretManager?: IGceSecretManager;
+  /** Logging manager for retrieving logs (optional - uses default if not provided) */
+  loggingManager?: IGceLoggingManager;
 }
 
 /**
@@ -177,11 +185,27 @@ export class GceManagerFactory {
       log
     );
 
+    // Create secret manager (default implementation using direct SDK)
+    const secretManager = new GceDefaultSecretManager({
+      projectId,
+      keyFilePath,
+      log,
+    });
+
+    // Create logging manager (default implementation using direct SDK)
+    const loggingManager = new GceDefaultLoggingManager({
+      projectId,
+      keyFilePath,
+      log,
+    });
+
     return {
       operationManager,
       networkManager,
       computeManager,
       loadBalancerManager,
+      secretManager,
+      loggingManager,
     };
   }
 }

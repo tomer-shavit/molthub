@@ -17,9 +17,6 @@
  *                                                 Persistent Disk
  */
 
-import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
-import { Logging } from "@google-cloud/logging";
-
 import { BaseDeploymentTarget } from "../../base/base-deployment-target";
 import {
   DeploymentTargetType,
@@ -39,8 +36,15 @@ import type {
   IGceNetworkManager,
   IGceComputeManager,
   IGceLoadBalancerManager,
+  IGceSecretManager,
+  IGceLoggingManager,
 } from "./managers";
-import { GceManagerFactory, GceManagers } from "./gce-manager-factory";
+import {
+  GceDefaultSecretManager,
+  GceDefaultLoggingManager,
+} from "./managers";
+import { GceManagerFactory } from "./gce-manager-factory";
+import type { GceManagers } from "./gce-manager-factory";
 import type { GceConfig } from "./gce-config";
 import type { VmInstanceConfig, LoadBalancerNames, FirewallRule } from "./types";
 
@@ -50,11 +54,36 @@ const DEFAULT_DATA_DISK_SIZE_GB = 10;
 
 /**
  * Options for constructing a GceTarget with dependency injection support.
+ *
+ * @example
+ * ```typescript
+ * // Using with @clawster/adapters-gcp services for secret and logging
+ * import { SecretManagerService, CloudLoggingService } from "@clawster/adapters-gcp";
+ * import { GceSecretManagerAdapter, GceLoggingManagerAdapter } from "@clawster/cloud-providers";
+ *
+ * const secretService = new SecretManagerService({ projectId: "my-project" });
+ * const loggingService = new CloudLoggingService({ projectId: "my-project" });
+ *
+ * const target = new GceTarget({
+ *   config: gceConfig,
+ *   managers: {
+ *     ...coreManagers,
+ *     secretManager: new GceSecretManagerAdapter(secretService),
+ *     loggingManager: new GceLoggingManagerAdapter(loggingService),
+ *   },
+ * });
+ * ```
  */
 export interface GceTargetOptions {
   /** GCE configuration */
   config: GceConfig;
-  /** Optional managers for dependency injection (useful for testing) */
+  /**
+   * Optional managers for dependency injection (useful for testing or using
+   * @clawster/adapters-gcp services instead of direct SDK imports).
+   *
+   * If secretManager or loggingManager are not provided, defaults using
+   * direct @google-cloud/* SDK will be created internally.
+   */
   managers?: GceManagers;
 }
 
@@ -74,10 +103,8 @@ export class GceTarget extends BaseDeploymentTarget {
   private readonly networkManager: IGceNetworkManager;
   private readonly computeManager: IGceComputeManager;
   private readonly loadBalancerManager: IGceLoadBalancerManager;
-
-  // GCP clients (only for secret manager and logging which aren't in managers)
-  private readonly secretClient: SecretManagerServiceClient;
-  private readonly logging: Logging;
+  private readonly secretManager: IGceSecretManager;
+  private readonly loggingManager: IGceLoggingManager;
 
   /** Derived resource names - set during install */
   private instanceName = "";
@@ -124,25 +151,26 @@ export class GceTarget extends BaseDeploymentTarget {
     this.bootDiskSizeGb = config.bootDiskSizeGb ?? DEFAULT_BOOT_DISK_SIZE_GB;
     this.dataDiskSizeGb = config.dataDiskSizeGb ?? DEFAULT_DATA_DISK_SIZE_GB;
 
-    // GCP client options (for secret manager and logging)
-    const clientOptions = config.keyFilePath
-      ? { keyFilename: config.keyFilePath }
-      : {};
-
-    // Initialize secret manager and logging clients (not part of managers)
-    this.secretClient = new SecretManagerServiceClient(clientOptions);
-    this.logging = new Logging({
-      projectId: config.projectId,
-      ...clientOptions,
-    });
-
-    // Use provided managers (for testing) or create via factory (production)
+    // Use provided managers (for testing/DI) or create via factory (production)
     if (providedManagers) {
       // Dependency injection path - use provided managers
       this.operationManager = providedManagers.operationManager;
       this.networkManager = providedManagers.networkManager;
       this.computeManager = providedManagers.computeManager;
       this.loadBalancerManager = providedManagers.loadBalancerManager;
+
+      // Use provided secret/logging managers or create defaults
+      const logCallback = (msg: string, stream: "stdout" | "stderr") => this.log(msg, stream);
+      this.secretManager = providedManagers.secretManager ?? new GceDefaultSecretManager({
+        projectId: config.projectId,
+        keyFilePath: config.keyFilePath,
+        log: logCallback,
+      });
+      this.loggingManager = providedManagers.loggingManager ?? new GceDefaultLoggingManager({
+        projectId: config.projectId,
+        keyFilePath: config.keyFilePath,
+        log: logCallback,
+      });
     } else {
       // Factory path - create managers with proper wiring
       const logCallback = (msg: string, stream: "stdout" | "stderr") => this.log(msg, stream);
@@ -158,6 +186,8 @@ export class GceTarget extends BaseDeploymentTarget {
       this.networkManager = managers.networkManager;
       this.computeManager = managers.computeManager;
       this.loadBalancerManager = managers.loadBalancerManager;
+      this.secretManager = managers.secretManager!;
+      this.loggingManager = managers.loggingManager!;
     }
 
     // Derive resource names from profileName if available (for re-instantiation)
@@ -505,45 +535,11 @@ export class GceTarget extends BaseDeploymentTarget {
   // ------------------------------------------------------------------
 
   async getLogs(options?: DeploymentLogOptions): Promise<string[]> {
-    try {
-      const log = this.logging.log("compute.googleapis.com%2Fstartup-script");
-
-      const filter = [
-        `resource.type="gce_instance"`,
-        `resource.labels.instance_id="${this.instanceName}"`,
-        `resource.labels.zone="${this.config.zone}"`,
-      ];
-
-      if (options?.since) {
-        filter.push(`timestamp>="${options.since.toISOString()}"`);
-      }
-
-      const [entries] = await log.getEntries({
-        filter: filter.join(" AND "),
-        orderBy: "timestamp desc",
-        pageSize: options?.lines ?? 100,
-      });
-
-      let lines = entries.map((entry) => {
-        const data = entry.data as { message?: string; textPayload?: string } | string;
-        if (typeof data === "string") return data;
-        return data?.message ?? data?.textPayload ?? JSON.stringify(data);
-      });
-
-      if (options?.filter) {
-        try {
-          const pattern = new RegExp(options.filter, "i");
-          lines = lines.filter((line) => pattern.test(line));
-        } catch {
-          const literal = options.filter.toLowerCase();
-          lines = lines.filter((line) => line.toLowerCase().includes(literal));
-        }
-      }
-
-      return lines.reverse(); // Return in chronological order
-    } catch {
-      return [];
-    }
+    return this.loggingManager.getLogs(this.instanceName, this.config.zone, {
+      since: options?.since,
+      lines: options?.lines,
+      filter: options?.filter,
+    });
   }
 
   // ------------------------------------------------------------------
@@ -617,8 +613,7 @@ export class GceTarget extends BaseDeploymentTarget {
     // Delete Secret
     this.log(`[11/11] Deleting secret: ${this.secretName}`);
     try {
-      const secretPath = `projects/${this.config.projectId}/secrets/${this.secretName}`;
-      await this.secretClient.deleteSecret({ name: secretPath });
+      await this.secretManager.deleteSecret(this.secretName);
       this.log(`Secret deleted`);
     } catch {
       this.log(`Secret not found (skipped)`);
@@ -729,51 +724,11 @@ export class GceTarget extends BaseDeploymentTarget {
   }
 
   // ------------------------------------------------------------------
-  // Private helpers - Secret Manager
+  // Private helpers - Secret Manager (now uses manager interface)
   // ------------------------------------------------------------------
 
   private async ensureSecret(name: string, value: string): Promise<void> {
-    const parent = `projects/${this.config.projectId}`;
-    const secretPath = `${parent}/secrets/${name}`;
-
-    try {
-      // Check if secret exists
-      await this.secretClient.getSecret({ name: secretPath });
-
-      // Secret exists, add new version
-      await this.secretClient.addSecretVersion({
-        parent: secretPath,
-        payload: {
-          data: Buffer.from(value, "utf8"),
-        },
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-      ) {
-        // Create secret
-        await this.secretClient.createSecret({
-          parent,
-          secretId: name,
-          secret: {
-            replication: {
-              automatic: {},
-            },
-          },
-        });
-
-        // Add initial version
-        await this.secretClient.addSecretVersion({
-          parent: secretPath,
-          payload: {
-            data: Buffer.from(value, "utf8"),
-          },
-        });
-      } else {
-        throw error;
-      }
-    }
+    await this.secretManager.ensureSecret(name, value);
   }
 
   // ------------------------------------------------------------------
