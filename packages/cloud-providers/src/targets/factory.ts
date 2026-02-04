@@ -81,20 +81,6 @@ export class DeploymentTargetFactory {
   }
 
   /**
-   * Create a deployment target by type enum, providing configuration separately.
-   *
-   * @param type - The deployment target type
-   * @param config - Full deployment target configuration
-   * @returns A DeploymentTarget instance
-   */
-  static createByType(type: DeploymentTargetType, config: DeploymentTargetConfig): DeploymentTarget {
-    if (config.type !== type) {
-      throw new Error(`Config type "${config.type}" does not match requested type "${type}"`);
-    }
-    return this.create(config);
-  }
-
-  /**
    * Returns metadata about all available deployment target types.
    */
   static getAvailableTargets(): Array<{
