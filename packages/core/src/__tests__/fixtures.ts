@@ -37,7 +37,6 @@ export interface FleetOptions {
   description?: string;
   tags?: Record<string, string>;
   defaultProfileId?: string;
-  enforcedPolicyPackIds?: string[];
 }
 
 export function createFleet(options: FleetOptions = {}) {
@@ -50,7 +49,6 @@ export function createFleet(options: FleetOptions = {}) {
     description: options.description ?? 'Test fleet',
     tags: options.tags ?? { team: 'test', environment: 'dev' },
     defaultProfileId: options.defaultProfileId,
-    enforcedPolicyPackIds: options.enforcedPolicyPackIds ?? [],
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -79,11 +77,6 @@ export interface BotInstanceOptions {
   lastError?: string | null;
   errorCount?: number;
   restartCount?: number;
-  uptimeSeconds?: number;
-  ecsClusterArn?: string;
-  ecsServiceArn?: string;
-  taskDefinitionArn?: string;
-  cloudwatchLogGroup?: string;
   createdAt?: Date;
   updatedAt?: Date;
   createdBy?: string;
@@ -145,14 +138,9 @@ export function createBotInstance(options: BotInstanceOptions = {}) {
     metadata: options.metadata ?? {},
     errorCount: options.errorCount ?? 0,
     restartCount: options.restartCount ?? 0,
-    uptimeSeconds: options.uptimeSeconds ?? 0,
     lastError: options.lastError ?? null,
     lastReconcileAt: 'lastReconcileAt' in options ? options.lastReconcileAt : undefined,
     lastHealthCheckAt: 'lastHealthCheckAt' in options ? options.lastHealthCheckAt : undefined,
-    ecsClusterArn: options.ecsClusterArn,
-    ecsServiceArn: options.ecsServiceArn,
-    taskDefinitionArn: options.taskDefinitionArn,
-    cloudwatchLogGroup: options.cloudwatchLogGroup,
     createdAt: options.createdAt ?? new Date(),
     updatedAt: options.updatedAt ?? new Date(),
     createdBy: options.createdBy ?? 'test-user',

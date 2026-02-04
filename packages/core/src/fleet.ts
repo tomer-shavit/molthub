@@ -35,13 +35,7 @@ export const FleetSchema = z.object({
   
   // Default configurations applied to all instances in fleet
   defaultProfileId: z.string().optional(),
-  enforcedPolicyPackIds: z.array(z.string())
-    .default([])
-    .refine(
-      (ids) => new Set(ids).size === ids.length,
-      { message: "Duplicate policy pack IDs are not allowed" }
-    ),
-  
+
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
@@ -95,18 +89,7 @@ export const BotInstanceSchema = z.object({
   ]).optional().nullable(),
   errorCount: z.number().int().min(0).default(0),
   
-  // AWS resources (populated by reconciler)
-  /** @deprecated Use deploymentTargetId and cloud-agnostic fields instead */
-  ecsClusterArn: z.string().optional(),
-  /** @deprecated Use deploymentTargetId and cloud-agnostic fields instead */
-  ecsServiceArn: z.string().optional(),
-  /** @deprecated Use deploymentTargetId and cloud-agnostic fields instead */
-  taskDefinitionArn: z.string().optional(),
-  /** @deprecated Use deploymentTargetId and cloud-agnostic fields instead */
-  cloudwatchLogGroup: z.string().optional(),
-  
   // Health metrics
-  uptimeSeconds: z.number().int().min(0).default(0),
   restartCount: z.number().int().min(0).default(0),
   
   createdAt: z.coerce.date(),

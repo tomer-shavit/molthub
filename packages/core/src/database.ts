@@ -32,12 +32,6 @@ export interface Instance {
   lastError: string | null;
   createdAt: Date;
   updatedAt: Date;
-  
-  // Runtime info (populated by reconciler)
-  ecsClusterArn?: string;
-  ecsServiceArn?: string;
-  taskDefinitionArn?: string;
-  cloudwatchLogGroup?: string;
 }
 
 export interface ManifestVersion {

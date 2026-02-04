@@ -137,7 +137,6 @@ export class OpenClawHealthService {
           lastHealthCheckAt: new Date(),
           errorCount: 0,
           lastError: healthReason,
-          uptimeSeconds: Math.floor(snapshot.uptime ?? 0),
         },
       });
 

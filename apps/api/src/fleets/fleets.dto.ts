@@ -23,11 +23,6 @@ export class CreateFleetDto {
   @IsString()
   @IsOptional()
   defaultProfileId?: string;
-
-  @IsArray()
-  @IsString({ each: true })
-  @IsOptional()
-  enforcedPolicyPackIds?: string[];
 }
 
 export class UpdateFleetDto {
@@ -46,11 +41,6 @@ export class UpdateFleetDto {
   @IsString()
   @IsOptional()
   defaultProfileId?: string;
-
-  @IsArray()
-  @IsString({ each: true })
-  @IsOptional()
-  enforcedPolicyPackIds?: string[];
 }
 
 export class UpdateFleetStatusDto {

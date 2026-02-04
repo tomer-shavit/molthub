@@ -175,7 +175,6 @@ describe("ClawsterSettingsSchema", () => {
     const result = ClawsterSettingsSchema.safeParse({
       fleetId: "fleet-1",
       templateId: "tmpl-1",
-      enforcedPolicyPackIds: ["pack-1"],
       autoRestart: false,
       healthCheckIntervalSec: 60,
       tags: { env: "prod" },

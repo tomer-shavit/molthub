@@ -10,8 +10,6 @@ export const ClawsterSettingsSchema = z.object({
   fleetId: z.string().optional(),
   /** Template used to seed initial config. */
   templateId: z.string().optional(),
-  /** Policy pack IDs enforced on this instance. */
-  enforcedPolicyPackIds: z.array(z.string()).optional(),
   /** Auto-restart on crash. */
   autoRestart: z.boolean().default(true),
   /** Health-check interval in seconds. */

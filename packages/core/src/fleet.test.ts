@@ -20,7 +20,6 @@ describe('Fleet', () => {
     status: 'ACTIVE',
     tags: { team: 'platform', cost_center: 'engineering' },
     defaultProfileId: 'profile-123',
-    enforcedPolicyPackIds: ['pack-1', 'pack-2'],
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -77,14 +76,6 @@ describe('Fleet', () => {
     expect(() => validateFleet(invalid)).toThrow();
   });
 
-  it('validates enforced policy pack IDs', () => {
-    const withPacks = {
-      ...validFleet,
-      enforcedPolicyPackIds: ['pack-1', 'pack-2', 'pack-3'],
-    };
-    const result = validateFleet(withPacks);
-    expect(result.enforcedPolicyPackIds).toHaveLength(3);
-  });
 });
 
 describe('BotInstance', () => {
@@ -143,11 +134,6 @@ describe('BotInstance', () => {
     lastHealthCheckAt: new Date(),
     lastError: null,
     errorCount: 0,
-    ecsClusterArn: 'arn:aws:ecs:us-east-1:123456789:cluster/prod',
-    ecsServiceArn: 'arn:aws:ecs:us-east-1:123456789:service/customer-service-bot',
-    taskDefinitionArn: 'arn:aws:ecs:us-east-1:123456789:task-definition/customer-service-bot:5',
-    cloudwatchLogGroup: '/ecs/customer-service-bot',
-    uptimeSeconds: 86400,
     restartCount: 2,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -230,12 +216,6 @@ describe('BotInstance', () => {
     const withRestarts = { ...validBot, restartCount: 10 };
     const result = validateBotInstance(withRestarts);
     expect(result.restartCount).toBe(10);
-  });
-
-  it('validates uptime seconds', () => {
-    const withUptime = { ...validBot, uptimeSeconds: 3600 };
-    const result = validateBotInstance(withUptime);
-    expect(result.uptimeSeconds).toBe(3600);
   });
 
   it('validates metadata object', () => {

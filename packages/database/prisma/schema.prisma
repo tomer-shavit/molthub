@@ -49,19 +49,6 @@ model User {
 
   @@unique([email, workspaceId])
 }
-// Auth model for simple JWT-based authentication (single admin user)
-model AuthUser {
-  id          String    @id @default(cuid())
-  username    String    @unique
-  passwordHash String
-  isActive    Boolean   @default(true)
-  lastLoginAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([username])
-  @@index([isActive])
-}
 
 // Fleet: Grouping concept for environments
 model Fleet {
@@ -76,9 +63,6 @@ model Fleet {
 
   // Configuration
   defaultProfileId      String?
-  enforcedPolicyPackIds String    @default("[]")
-
-  defaultDeploymentType String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -124,14 +108,7 @@ model BotInstance {
   lastError         String?
   errorCount        Int       @default(0)
 
-  // AWS resources
-  ecsClusterArn      String?
-  ecsServiceArn      String?
-  taskDefinitionArn  String?
-  cloudwatchLogGroup String?
-
   // Health metrics
-  uptimeSeconds Int       @default(0)
   restartCount  Int       @default(0)
   runningSince  DateTime?
 
@@ -437,38 +414,6 @@ model Trace {
   @@index([startedAt])
   @@index([status])
 }
-
-// Credential Rotation tracking
-model CredentialRotation {
-  id          String @id @default(cuid())
-  connectorId String
-
-  triggeredBy     String // schedule, manual, security
-  triggeredAt     DateTime
-  triggeredByUser String?
-
-  status String // PENDING, IN_PROGRESS, COMPLETED, FAILED, ROLLED_BACK
-
-  startedAt   DateTime?
-  completedAt DateTime?
-
-  oldSecretArn String?
-  newSecretArn String?
-
-  instancesUpdated Int @default(0)
-  instancesTotal   Int @default(0)
-
-  canRollback  Boolean   @default(false)
-  rolledBackAt DateTime?
-
-  error String?
-
-  createdAt DateTime @default(now())
-
-  @@index([connectorId])
-  @@index([status])
-}
-
 
 model AuditEvent {
   id           String    @id @default(cuid())

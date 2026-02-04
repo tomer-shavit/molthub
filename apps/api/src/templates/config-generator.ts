@@ -135,7 +135,6 @@ export class ConfigGenerator {
         openclawConfig: config,
         clawsterSettings: {
           templateId: template.id,
-          enforcedPolicyPackIds: template.recommendedPolicies,
           autoRestart: true,
           healthCheckIntervalSec: 30,
         },

@@ -271,39 +271,6 @@ export const BotConnectorBindingSchema = z.object({
 
 export type BotConnectorBinding = z.infer<typeof BotConnectorBindingSchema>;
 
-// Credential rotation event
-export const CredentialRotationSchema = z.object({
-  id: z.string(),
-  connectorId: z.string(),
-  
-  triggeredBy: z.enum(["schedule", "manual", "security"]),
-  triggeredAt: z.date(),
-  triggeredByUser: z.string().optional(),
-  
-  // Status
-  status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "ROLLED_BACK"]),
-  
-  // Timeline
-  startedAt: z.date().optional(),
-  completedAt: z.date().optional(),
-  
-  // Old/new secret ARNs
-  oldSecretArn: z.string().optional(),
-  newSecretArn: z.string().optional(),
-  
-  // Rollout status
-  instancesUpdated: z.number().int().default(0),
-  instancesTotal: z.number().int().default(0),
-  
-  // Rollback info
-  canRollback: z.boolean().default(false),
-  rolledBackAt: z.date().optional(),
-  
-  error: z.string().optional(),
-});
-
-export type CredentialRotation = z.infer<typeof CredentialRotationSchema>;
-
 // Test connection result
 export const ConnectionTestResultSchema = z.object({
   connectorId: z.string(),

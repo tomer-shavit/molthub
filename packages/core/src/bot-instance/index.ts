@@ -16,7 +16,6 @@ export type {
   IBotRuntimeState,
   IBotHealthMetrics,
   IBotDeploymentInfo,
-  IBotEcsResources,
   IBotInstance,
   BotInstanceListView,
   BotInstanceConfigView,
@@ -31,7 +30,6 @@ export {
   BotRuntimeStateSchema,
   BotHealthMetricsSchema,
   BotDeploymentInfoSchema,
-  BotEcsResourcesSchema,
   BotInstanceListViewSchema,
   BotInstanceConfigViewSchema,
   BotInstanceHealthViewSchema,
@@ -53,5 +51,4 @@ export type {
   BotRuntimeState,
   BotHealthMetrics,
   BotDeploymentInfo,
-  BotEcsResources,
 } from "./schemas";

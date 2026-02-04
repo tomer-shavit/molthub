@@ -63,7 +63,6 @@ export type BotRuntimeState = z.infer<typeof BotRuntimeStateSchema>;
 
 // ── Health Metrics Schema ────────────────────────────────────────────────
 export const BotHealthMetricsSchema = z.object({
-  uptimeSeconds: z.number().int().min(0).default(0),
   restartCount: z.number().int().min(0).default(0),
   runningSince: z.union([z.date(), z.null()]).optional().transform((val) => val === undefined ? null : val),
 });
@@ -81,19 +80,6 @@ export const BotDeploymentInfoSchema = z.object({
 
 export type BotDeploymentInfo = z.infer<typeof BotDeploymentInfoSchema>;
 
-// ── Legacy ECS Resources Schema ──────────────────────────────────────────
-/**
- * @deprecated Use BotDeploymentInfoSchema for new deployments.
- */
-export const BotEcsResourcesSchema = z.object({
-  ecsClusterArn: z.string().optional(),
-  ecsServiceArn: z.string().optional(),
-  taskDefinitionArn: z.string().optional(),
-  cloudwatchLogGroup: z.string().optional(),
-});
-
-export type BotEcsResources = z.infer<typeof BotEcsResourcesSchema>;
-
 // ── View Schemas ─────────────────────────────────────────────────────────
 export const BotInstanceListViewSchema = BotIdentitySchema.merge(BotRuntimeStateSchema);
 export type BotInstanceListView = z.infer<typeof BotInstanceListViewSchema>;
@@ -109,8 +95,7 @@ export const BotInstanceHealthViewSchema = BotIdentitySchema
 export type BotInstanceHealthView = z.infer<typeof BotInstanceHealthViewSchema>;
 
 export const BotInstanceDeploymentViewSchema = BotIdentitySchema
-  .merge(BotDeploymentInfoSchema)
-  .merge(BotEcsResourcesSchema);
+  .merge(BotDeploymentInfoSchema);
 export type BotInstanceDeploymentView = z.infer<typeof BotInstanceDeploymentViewSchema>;
 
 // ── Validation Helpers ───────────────────────────────────────────────────

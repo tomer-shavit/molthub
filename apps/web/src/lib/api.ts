@@ -17,13 +17,8 @@ export interface BotInstance {
   lastHealthCheckAt?: string;
   lastError?: string;
   errorCount: number;
-  uptimeSeconds: number;
   runningSince?: string;
   restartCount: number;
-  ecsClusterArn?: string;
-  ecsServiceArn?: string;
-  taskDefinitionArn?: string;
-  cloudwatchLogGroup?: string;
   // Relations
   fleet?: { id: string; name: string; environment: string };
   deploymentTarget?: { id: string; name: string; type: string };
@@ -127,7 +122,6 @@ export interface Fleet {
   status: 'ACTIVE' | 'PAUSED' | 'DRAINING' | 'ERROR';
   tags: Record<string, string>;
   defaultProfileId?: string;
-  enforcedPolicyPackIds: string[];
   createdAt: string;
   updatedAt: string;
   _count?: { instances: number };

@@ -223,10 +223,6 @@ export default async function FleetDetailPage({ params }: { params: { id: string
                 <dt className="text-sm text-muted-foreground">Default Profile</dt>
                 <dd className="text-sm">{fleet.defaultProfileId || "None"}</dd>
               </div>
-              <div>
-                <dt className="text-sm text-muted-foreground">Policy Packs</dt>
-                <dd className="text-sm">{fleet.enforcedPolicyPackIds?.length || 0} enforced</dd>
-              </div>
             </dl>
           </CardContent>
         </Card>

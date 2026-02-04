@@ -36,7 +36,6 @@ export class FleetService {
         description: dto.description,
         status: "ACTIVE",
         tags: JSON.stringify(dto.tags || {}),
-        enforcedPolicyPackIds: JSON.stringify(dto.enforcedPolicyPackIds || []),
       },
     });
 
@@ -108,7 +107,6 @@ export class FleetService {
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.tags && { tags: JSON.stringify(dto.tags) }),
         ...(dto.defaultProfileId !== undefined && { defaultProfileId: dto.defaultProfileId }),
-        ...(dto.enforcedPolicyPackIds && { enforcedPolicyPackIds: JSON.stringify(dto.enforcedPolicyPackIds) }),
       },
     });
   }

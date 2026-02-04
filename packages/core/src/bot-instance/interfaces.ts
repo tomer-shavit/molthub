@@ -54,7 +54,6 @@ export interface IBotRuntimeState {
  * Used by dashboards and alerting systems.
  */
 export interface IBotHealthMetrics {
-  uptimeSeconds: number;
   restartCount: number;
   runningSince?: Date | null;
 }
@@ -72,21 +71,6 @@ export interface IBotDeploymentInfo {
   openclawVersion: string | null;
 }
 
-/**
- * @deprecated Legacy ECS-specific fields. Use cloud-agnostic deployment info instead.
- * These fields will be removed in a future version.
- */
-export interface IBotEcsResources {
-  /** @deprecated Use IBotDeploymentInfo instead */
-  ecsClusterArn?: string;
-  /** @deprecated Use IBotDeploymentInfo instead */
-  ecsServiceArn?: string;
-  /** @deprecated Use IBotDeploymentInfo instead */
-  taskDefinitionArn?: string;
-  /** @deprecated Use IBotDeploymentInfo instead */
-  cloudwatchLogGroup?: string;
-}
-
 // ── Composed Types ───────────────────────────────────────────────────────
 /**
  * Full BotInstance interface - composition of all segregated interfaces.
@@ -97,8 +81,7 @@ export interface IBotInstance extends
   IBotConfigRefs,
   IBotRuntimeState,
   IBotHealthMetrics,
-  IBotDeploymentInfo,
-  IBotEcsResources {
+  IBotDeploymentInfo {
   /** Additional metadata that doesn't fit other categories */
   tags: Record<string, string>;
   metadata: Record<string, unknown>;
@@ -129,4 +112,4 @@ export type BotInstanceHealthView = IBotIdentity & IBotRuntimeState & IBotHealth
  * Deployment-focused view for infrastructure operations.
  * Contains identity and deployment information.
  */
-export type BotInstanceDeploymentView = IBotIdentity & IBotDeploymentInfo & IBotEcsResources;
+export type BotInstanceDeploymentView = IBotIdentity & IBotDeploymentInfo;

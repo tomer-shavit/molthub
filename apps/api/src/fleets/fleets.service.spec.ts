@@ -65,7 +65,6 @@ describe('FleetService', () => {
         id: 'fleet-123',
         ...createDto,
         status: 'ACTIVE',
-        enforcedPolicyPackIds: [],
         createdAt: new Date(),
         updatedAt: new Date(),
       } as any);

@@ -181,17 +181,6 @@ describe('Fleet API (e2e)', () => {
       expect(response.body.tags.team).toBe('platform');
     });
 
-    it('should update enforced policy packs', async () => {
-      const response = await request(app.getHttpServer())
-        .patch(`/fleets/${createdFleetId}`)
-        .send({
-          enforcedPolicyPackIds: ['pack-1', 'pack-2'],
-        })
-        .expect(200);
-
-      expect(response.body.enforcedPolicyPackIds).toEqual(['pack-1', 'pack-2']);
-    });
-
     it('should return 404 for non-existent fleet', async () => {
       await request(app.getHttpServer())
         .patch('/fleets/non-existent-id')
