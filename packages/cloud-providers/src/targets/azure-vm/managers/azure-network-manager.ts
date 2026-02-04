@@ -6,11 +6,12 @@
 
 import type { NetworkManagementClient, VirtualNetwork, NetworkSecurityGroup, Subnet } from "@azure/arm-network";
 import type { SecurityRule, AzureLogCallback } from "../types";
+import type { IAzureNetworkManager } from "./interfaces";
 
 const DEFAULT_VNET_PREFIX = "10.0.0.0/16";
 const DEFAULT_VM_SUBNET_PREFIX = "10.0.1.0/24";
 
-export class AzureNetworkManager {
+export class AzureNetworkManager implements IAzureNetworkManager {
   constructor(
     private readonly networkClient: NetworkManagementClient,
     private readonly resourceGroup: string,

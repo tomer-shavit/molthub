@@ -13,13 +13,13 @@ import {
   GlobalForwardingRulesClient,
   SecurityPoliciesClient,
 } from "@google-cloud/compute";
-import { GceOperationManager } from "./gce-operation-manager";
 import type { LoadBalancerNames, GceLogCallback } from "../types";
+import type { IGceLoadBalancerManager, IGceOperationManager } from "./interfaces";
 
 /**
  * Manages GCE load balancer resources.
  */
-export class GceLoadBalancerManager {
+export class GceLoadBalancerManager implements IGceLoadBalancerManager {
   constructor(
     private readonly backendServicesClient: BackendServicesClient,
     private readonly urlMapsClient: UrlMapsClient,
@@ -27,7 +27,7 @@ export class GceLoadBalancerManager {
     private readonly httpsProxiesClient: TargetHttpsProxiesClient,
     private readonly forwardingRulesClient: GlobalForwardingRulesClient,
     private readonly securityPoliciesClient: SecurityPoliciesClient,
-    private readonly operationManager: GceOperationManager,
+    private readonly operationManager: IGceOperationManager,
     private readonly project: string,
     private readonly zone: string,
     private readonly log: GceLogCallback

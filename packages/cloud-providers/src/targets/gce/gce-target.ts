@@ -17,24 +17,6 @@
  *                                                 Persistent Disk
  */
 
-import {
-  InstancesClient,
-  DisksClient,
-  NetworksClient,
-  SubnetworksClient,
-  FirewallsClient,
-  GlobalAddressesClient,
-  BackendServicesClient,
-  UrlMapsClient,
-  TargetHttpProxiesClient,
-  TargetHttpsProxiesClient,
-  GlobalForwardingRulesClient,
-  InstanceGroupsClient,
-  SecurityPoliciesClient,
-  GlobalOperationsClient,
-  ZoneOperationsClient,
-  RegionOperationsClient,
-} from "@google-cloud/compute";
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { Logging } from "@google-cloud/logging";
 
@@ -52,18 +34,29 @@ import {
 import type { ResourceSpec, ResourceUpdateResult } from "../../interface/resource-spec";
 import { GCE_TIER_SPECS } from "../../interface/resource-spec";
 
-import {
-  GceOperationManager,
-  GceNetworkManager,
-  GceComputeManager,
-  GceLoadBalancerManager,
+import type {
+  IGceOperationManager,
+  IGceNetworkManager,
+  IGceComputeManager,
+  IGceLoadBalancerManager,
 } from "./managers";
+import { GceManagerFactory, GceManagers } from "./gce-manager-factory";
 import type { GceConfig } from "./gce-config";
 import type { VmInstanceConfig, LoadBalancerNames, FirewallRule } from "./types";
 
 const DEFAULT_MACHINE_TYPE = "e2-small";
 const DEFAULT_BOOT_DISK_SIZE_GB = 20;
 const DEFAULT_DATA_DISK_SIZE_GB = 10;
+
+/**
+ * Options for constructing a GceTarget with dependency injection support.
+ */
+export interface GceTargetOptions {
+  /** GCE configuration */
+  config: GceConfig;
+  /** Optional managers for dependency injection (useful for testing) */
+  managers?: GceManagers;
+}
 
 /**
  * GCE deployment target for OpenClaw gateway.
@@ -76,11 +69,11 @@ export class GceTarget extends BaseDeploymentTarget {
   private readonly bootDiskSizeGb: number;
   private readonly dataDiskSizeGb: number;
 
-  // Managers
-  private readonly operationManager: GceOperationManager;
-  private readonly networkManager: GceNetworkManager;
-  private readonly computeManager: GceComputeManager;
-  private readonly loadBalancerManager: GceLoadBalancerManager;
+  // Managers (using interfaces for dependency inversion)
+  private readonly operationManager: IGceOperationManager;
+  private readonly networkManager: IGceNetworkManager;
+  private readonly computeManager: IGceComputeManager;
+  private readonly loadBalancerManager: IGceLoadBalancerManager;
 
   // GCP clients (only for secret manager and logging which aren't in managers)
   private readonly secretClient: SecretManagerServiceClient;
@@ -106,92 +99,66 @@ export class GceTarget extends BaseDeploymentTarget {
   /** Cached external IP for getEndpoint */
   private cachedExternalIp = "";
 
-  constructor(config: GceConfig) {
+  /**
+   * Create a GceTarget with just a config (backward compatible).
+   * @param config - GCE configuration
+   */
+  constructor(config: GceConfig);
+  /**
+   * Create a GceTarget with options including optional managers for DI.
+   * @param options - Options including config and optional managers
+   */
+  constructor(options: GceTargetOptions);
+  constructor(configOrOptions: GceConfig | GceTargetOptions) {
     super();
+
+    // Determine if we received options or just config (backward compatibility)
+    const isOptions = (arg: GceConfig | GceTargetOptions): arg is GceTargetOptions =>
+      "config" in arg && typeof (arg as GceTargetOptions).config === "object";
+
+    const config = isOptions(configOrOptions) ? configOrOptions.config : configOrOptions;
+    const providedManagers = isOptions(configOrOptions) ? configOrOptions.managers : undefined;
+
     this.config = config;
     this.machineType = config.machineType ?? DEFAULT_MACHINE_TYPE;
     this.bootDiskSizeGb = config.bootDiskSizeGb ?? DEFAULT_BOOT_DISK_SIZE_GB;
     this.dataDiskSizeGb = config.dataDiskSizeGb ?? DEFAULT_DATA_DISK_SIZE_GB;
 
-    // GCP client options
+    // GCP client options (for secret manager and logging)
     const clientOptions = config.keyFilePath
       ? { keyFilename: config.keyFilePath }
       : {};
 
-    // Initialize GCP clients
-    const instancesClient = new InstancesClient(clientOptions);
-    const disksClient = new DisksClient(clientOptions);
-    const networksClient = new NetworksClient(clientOptions);
-    const subnetworksClient = new SubnetworksClient(clientOptions);
-    const firewallsClient = new FirewallsClient(clientOptions);
-    const addressesClient = new GlobalAddressesClient(clientOptions);
-    const backendServicesClient = new BackendServicesClient(clientOptions);
-    const urlMapsClient = new UrlMapsClient(clientOptions);
-    const httpProxiesClient = new TargetHttpProxiesClient(clientOptions);
-    const httpsProxiesClient = new TargetHttpsProxiesClient(clientOptions);
-    const forwardingRulesClient = new GlobalForwardingRulesClient(clientOptions);
-    const instanceGroupsClient = new InstanceGroupsClient(clientOptions);
-    const securityPoliciesClient = new SecurityPoliciesClient(clientOptions);
-    const globalOperationsClient = new GlobalOperationsClient(clientOptions);
-    const zoneOperationsClient = new ZoneOperationsClient(clientOptions);
-    const regionOperationsClient = new RegionOperationsClient(clientOptions);
+    // Initialize secret manager and logging clients (not part of managers)
     this.secretClient = new SecretManagerServiceClient(clientOptions);
     this.logging = new Logging({
       projectId: config.projectId,
       ...clientOptions,
     });
 
-    // Create log callback that uses base class log method
-    const logCallback = (msg: string, stream: "stdout" | "stderr") => this.log(msg, stream);
+    // Use provided managers (for testing) or create via factory (production)
+    if (providedManagers) {
+      // Dependency injection path - use provided managers
+      this.operationManager = providedManagers.operationManager;
+      this.networkManager = providedManagers.networkManager;
+      this.computeManager = providedManagers.computeManager;
+      this.loadBalancerManager = providedManagers.loadBalancerManager;
+    } else {
+      // Factory path - create managers with proper wiring
+      const logCallback = (msg: string, stream: "stdout" | "stderr") => this.log(msg, stream);
+      const managers = GceManagerFactory.createManagers({
+        projectId: config.projectId,
+        zone: config.zone,
+        region: this.region,
+        keyFilePath: config.keyFilePath,
+        log: logCallback,
+      });
 
-    // Initialize operation manager
-    this.operationManager = new GceOperationManager(
-      globalOperationsClient,
-      zoneOperationsClient,
-      regionOperationsClient,
-      config.projectId,
-      config.zone,
-      this.region,
-      logCallback
-    );
-
-    // Initialize network manager
-    this.networkManager = new GceNetworkManager(
-      networksClient,
-      subnetworksClient,
-      firewallsClient,
-      addressesClient,
-      this.operationManager,
-      config.projectId,
-      this.region,
-      logCallback
-    );
-
-    // Initialize compute manager
-    this.computeManager = new GceComputeManager(
-      instancesClient,
-      disksClient,
-      instanceGroupsClient,
-      this.operationManager,
-      config.projectId,
-      config.zone,
-      this.region,
-      logCallback
-    );
-
-    // Initialize load balancer manager
-    this.loadBalancerManager = new GceLoadBalancerManager(
-      backendServicesClient,
-      urlMapsClient,
-      httpProxiesClient,
-      httpsProxiesClient,
-      forwardingRulesClient,
-      securityPoliciesClient,
-      this.operationManager,
-      config.projectId,
-      config.zone,
-      logCallback
-    );
+      this.operationManager = managers.operationManager;
+      this.networkManager = managers.networkManager;
+      this.computeManager = managers.computeManager;
+      this.loadBalancerManager = managers.loadBalancerManager;
+    }
 
     // Derive resource names from profileName if available (for re-instantiation)
     if (config.profileName) {

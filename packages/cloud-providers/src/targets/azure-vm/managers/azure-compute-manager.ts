@@ -7,8 +7,9 @@
 import type { ComputeManagementClient, VirtualMachine, Disk, RunCommandResult } from "@azure/arm-compute";
 import type { NetworkManagementClient, NetworkInterface } from "@azure/arm-network";
 import type { VmStatus, AzureLogCallback } from "../types";
+import type { IAzureComputeManager } from "./interfaces";
 
-export class AzureComputeManager {
+export class AzureComputeManager implements IAzureComputeManager {
   constructor(
     private readonly computeClient: ComputeManagementClient,
     private readonly networkClient: NetworkManagementClient,

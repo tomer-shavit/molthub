@@ -10,19 +10,19 @@ import {
   FirewallsClient,
   GlobalAddressesClient,
 } from "@google-cloud/compute";
-import { GceOperationManager } from "./gce-operation-manager";
 import type { VpcOptions, FirewallRule, GceLogCallback } from "../types";
+import type { IGceNetworkManager, IGceOperationManager } from "./interfaces";
 
 /**
  * Manages GCE networking resources.
  */
-export class GceNetworkManager {
+export class GceNetworkManager implements IGceNetworkManager {
   constructor(
     private readonly networksClient: NetworksClient,
     private readonly subnetworksClient: SubnetworksClient,
     private readonly firewallsClient: FirewallsClient,
     private readonly addressesClient: GlobalAddressesClient,
-    private readonly operationManager: GceOperationManager,
+    private readonly operationManager: IGceOperationManager,
     private readonly project: string,
     private readonly region: string,
     private readonly log: GceLogCallback

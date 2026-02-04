@@ -9,18 +9,18 @@ import {
   DisksClient,
   InstanceGroupsClient,
 } from "@google-cloud/compute";
-import { GceOperationManager } from "./gce-operation-manager";
 import type { VmInstanceConfig, NamedPort, VmStatus, GceLogCallback } from "../types";
+import type { IGceComputeManager, IGceOperationManager } from "./interfaces";
 
 /**
  * Manages GCE compute resources (VMs, disks, instance groups).
  */
-export class GceComputeManager {
+export class GceComputeManager implements IGceComputeManager {
   constructor(
     private readonly instancesClient: InstancesClient,
     private readonly disksClient: DisksClient,
     private readonly instanceGroupsClient: InstanceGroupsClient,
-    private readonly operationManager: GceOperationManager,
+    private readonly operationManager: IGceOperationManager,
     private readonly project: string,
     private readonly zone: string,
     private readonly region: string,

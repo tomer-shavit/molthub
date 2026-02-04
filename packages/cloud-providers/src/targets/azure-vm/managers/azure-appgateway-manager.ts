@@ -7,8 +7,9 @@
 
 import type { NetworkManagementClient, ApplicationGateway } from "@azure/arm-network";
 import type { GatewayEndpointInfo, AzureLogCallback } from "../types";
+import type { IAzureAppGatewayManager } from "./interfaces";
 
-export class AzureAppGatewayManager {
+export class AzureAppGatewayManager implements IAzureAppGatewayManager {
   constructor(
     private readonly networkClient: NetworkManagementClient,
     private readonly subscriptionId: string,

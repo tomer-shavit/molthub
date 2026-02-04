@@ -39,11 +39,13 @@ import type { ResourceSpec, ResourceUpdateResult } from "../../interface/resourc
 import { AZURE_TIER_SPECS } from "../../interface/resource-spec";
 import type { AzureVmConfig } from "./azure-vm-config";
 import type { VmStatus } from "./types";
-import {
-  AzureNetworkManager,
-  AzureComputeManager,
-  AzureAppGatewayManager,
+import type {
+  IAzureNetworkManager,
+  IAzureComputeManager,
+  IAzureAppGatewayManager,
 } from "./managers";
+import { AzureNetworkManager } from "./managers"; // Needed for static method
+import { AzureManagerFactory, AzureManagers } from "./azure-manager-factory";
 
 const DEFAULT_VM_SIZE = "Standard_B2s";
 const DEFAULT_OS_DISK_SIZE_GB = 30;
@@ -51,6 +53,16 @@ const DEFAULT_DATA_DISK_SIZE_GB = 10;
 const DEFAULT_VNET_PREFIX = "10.0.0.0/16";
 const DEFAULT_VM_SUBNET_PREFIX = "10.0.1.0/24";
 const DEFAULT_APPGW_SUBNET_PREFIX = "10.0.2.0/24";
+
+/**
+ * Options for constructing an AzureVmTarget with dependency injection support.
+ */
+export interface AzureVmTargetOptions {
+  /** Azure VM configuration */
+  config: AzureVmConfig;
+  /** Optional managers for dependency injection (useful for testing) */
+  managers?: AzureManagers;
+}
 
 export class AzureVmTarget extends BaseDeploymentTarget {
   readonly type = DeploymentTargetType.AZURE_VM;
@@ -66,10 +78,10 @@ export class AzureVmTarget extends BaseDeploymentTarget {
   private readonly keyVaultClient?: SecretClient;
   private readonly logsClient?: LogsQueryClient;
 
-  // Managers
-  private readonly networkManager: AzureNetworkManager;
-  private readonly computeManager: AzureComputeManager;
-  private readonly appGatewayManager: AzureAppGatewayManager;
+  // Managers (using interfaces for dependency inversion)
+  private readonly networkManager: IAzureNetworkManager;
+  private readonly computeManager: IAzureComputeManager;
+  private readonly appGatewayManager: IAzureAppGatewayManager;
 
   /** Derived resource names - set during install */
   private vmName = "";
@@ -88,8 +100,26 @@ export class AzureVmTarget extends BaseDeploymentTarget {
   private appGatewayPublicIp = "";
   private appGatewayFqdn = "";
 
-  constructor(config: AzureVmConfig) {
+  /**
+   * Create an AzureVmTarget with just a config (backward compatible).
+   * @param config - Azure VM configuration
+   */
+  constructor(config: AzureVmConfig);
+  /**
+   * Create an AzureVmTarget with options including optional managers for DI.
+   * @param options - Options including config and optional managers
+   */
+  constructor(options: AzureVmTargetOptions);
+  constructor(configOrOptions: AzureVmConfig | AzureVmTargetOptions) {
     super();
+
+    // Determine if we received options or just config (backward compatibility)
+    const isOptions = (arg: AzureVmConfig | AzureVmTargetOptions): arg is AzureVmTargetOptions =>
+      "config" in arg && typeof (arg as AzureVmTargetOptions).config === "object";
+
+    const config = isOptions(configOrOptions) ? configOrOptions.config : configOrOptions;
+    const providedManagers = isOptions(configOrOptions) ? configOrOptions.managers : undefined;
+
     this.config = config;
     this.vmSize = config.vmSize ?? DEFAULT_VM_SIZE;
     this.osDiskSizeGb = config.osDiskSizeGb ?? DEFAULT_OS_DISK_SIZE_GB;
@@ -127,31 +157,27 @@ export class AzureVmTarget extends BaseDeploymentTarget {
       this.logsClient = new LogsQueryClient(this.credential);
     }
 
-    // Initialize managers with bound log function
-    const boundLog = (msg: string, stream: "stdout" | "stderr" = "stdout") => this.log(msg, stream);
+    // Use provided managers (for testing) or create via factory (production)
+    if (providedManagers) {
+      // Dependency injection path - use provided managers
+      this.networkManager = providedManagers.networkManager;
+      this.computeManager = providedManagers.computeManager;
+      this.appGatewayManager = providedManagers.appGatewayManager;
+    } else {
+      // Factory path - create managers with proper wiring
+      const boundLog = (msg: string, stream: "stdout" | "stderr" = "stdout") => this.log(msg, stream);
+      const managers = AzureManagerFactory.createManagers({
+        subscriptionId: config.subscriptionId,
+        resourceGroup: config.resourceGroup,
+        location: config.region,
+        credentials: this.credential,
+        log: boundLog,
+      });
 
-    this.networkManager = new AzureNetworkManager(
-      this.networkClient,
-      config.resourceGroup,
-      config.region,
-      boundLog
-    );
-
-    this.computeManager = new AzureComputeManager(
-      this.computeClient,
-      this.networkClient,
-      config.resourceGroup,
-      config.region,
-      boundLog
-    );
-
-    this.appGatewayManager = new AzureAppGatewayManager(
-      this.networkClient,
-      config.subscriptionId,
-      config.resourceGroup,
-      config.region,
-      boundLog
-    );
+      this.networkManager = managers.networkManager;
+      this.computeManager = managers.computeManager;
+      this.appGatewayManager = managers.appGatewayManager;
+    }
 
     // Derive resource names from profileName if available
     if (config.profileName) {

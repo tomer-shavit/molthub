@@ -11,6 +11,7 @@ import {
   RegionOperationsClient,
 } from "@google-cloud/compute";
 import type { GceLogCallback } from "../types";
+import type { IGceOperationManager } from "./interfaces";
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_TIMEOUT_MS = 600_000; // 10 minutes
@@ -35,7 +36,7 @@ interface OperationResult {
 /**
  * Manages GCE operation polling for global, zone, and region scopes.
  */
-export class GceOperationManager {
+export class GceOperationManager implements IGceOperationManager {
   constructor(
     private readonly globalOpsClient: GlobalOperationsClient,
     private readonly zoneOpsClient: ZoneOperationsClient,

@@ -17,9 +17,26 @@ export { EcsEc2Target } from "./targets/ecs-ec2/ecs-ec2-target";
 export type { EcsEc2Config } from "./targets/ecs-ec2/ecs-ec2-config";
 export { pushImageToEcr } from "./targets/ecs-ec2/ecr-push";
 export { GceTarget } from "./targets/gce/gce-target";
+export type { GceTargetOptions } from "./targets/gce/gce-target";
 export type { GceConfig } from "./targets/gce/gce-config";
+export { GceManagerFactory } from "./targets/gce/gce-manager-factory";
+export type { GceManagerFactoryConfig, GceManagers } from "./targets/gce/gce-manager-factory";
+export type {
+  IGceOperationManager,
+  IGceNetworkManager,
+  IGceComputeManager,
+  IGceLoadBalancerManager,
+} from "./targets/gce/managers";
 export { AzureVmTarget } from "./targets/azure-vm/azure-vm-target";
+export type { AzureVmTargetOptions } from "./targets/azure-vm/azure-vm-target";
 export type { AzureVmConfig } from "./targets/azure-vm/azure-vm-config";
+export { AzureManagerFactory } from "./targets/azure-vm/azure-manager-factory";
+export type { AzureManagerFactoryConfig, AzureManagers } from "./targets/azure-vm/azure-manager-factory";
+export type {
+  IAzureNetworkManager,
+  IAzureComputeManager,
+  IAzureAppGatewayManager,
+} from "./targets/azure-vm/managers";
 export type { EcrPushOptions, EcrPushResult } from "./targets/ecs-ec2/ecr-push";
 export { generateProductionTemplate } from "./targets/ecs-ec2/templates/production";
 export type { ProductionTemplateParams } from "./targets/ecs-ec2/templates/production";
