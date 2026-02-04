@@ -2,16 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   OpenClawConfig,
   OpenClawEvaluationContext,
-  evaluateRequireGatewayAuth,
-  evaluateRequireDmPolicy,
-  evaluateRequireConfigPermissions,
-  evaluateForbidElevatedTools,
-  evaluateRequireSandbox,
-  evaluateLimitToolProfile,
-  evaluateRequireModelGuardrails,
-  evaluateRequireWorkspaceIsolation,
-  evaluateRequirePortSpacing,
-  evaluateForbidOpenGroupPolicy,
   evaluateOpenClawRule,
   evaluateOpenClawPolicyPack,
   OPENCLAW_SECURITY_BASELINE,
@@ -72,7 +62,7 @@ describe("OpenClaw Policy Rules", () => {
   describe("require_gateway_auth", () => {
     it("passes when token auth is configured", () => {
       const config = createBaseConfig();
-      const result = evaluateRequireGatewayAuth(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_gateway_auth", config, { enabled: true });
       expect(result.passed).toBe(true);
     });
 
@@ -80,7 +70,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         gateway: { port: 3000, auth: { password: "secure-password" } },
       });
-      const result = evaluateRequireGatewayAuth(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_gateway_auth", config, { enabled: true });
       expect(result.passed).toBe(true);
     });
 
@@ -88,7 +78,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         gateway: { port: 3000, auth: {} },
       });
-      const result = evaluateRequireGatewayAuth(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_gateway_auth", config, { enabled: true });
       expect(result.passed).toBe(false);
       expect(result.violation).toBeDefined();
       expect(result.violation!.severity).toBe("ERROR");
@@ -99,7 +89,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         gateway: { port: 3000 },
       });
-      const result = evaluateRequireGatewayAuth(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_gateway_auth", config, { enabled: true });
       expect(result.passed).toBe(false);
     });
 
@@ -107,7 +97,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         gateway: { port: 3000 },
       });
-      const result = evaluateRequireGatewayAuth(config, { enabled: false });
+      const result = evaluateOpenClawRule("require_gateway_auth", config, { enabled: false });
       expect(result.passed).toBe(true);
     });
   });
@@ -115,7 +105,7 @@ describe("OpenClaw Policy Rules", () => {
   describe("require_dm_policy", () => {
     it("passes with 'pairing' dm policy", () => {
       const config = createBaseConfig();
-      const result = evaluateRequireDmPolicy(config, { forbiddenValues: ["open"] });
+      const result = evaluateOpenClawRule("require_dm_policy", config, { forbiddenValues: ["open"] });
       expect(result.passed).toBe(true);
     });
 
@@ -123,7 +113,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         channels: [{ name: "slack", dmPolicy: "open", groupPolicy: "allowlist" }],
       });
-      const result = evaluateRequireDmPolicy(config, { forbiddenValues: ["open"] });
+      const result = evaluateOpenClawRule("require_dm_policy", config, { forbiddenValues: ["open"] });
       expect(result.passed).toBe(false);
       expect(result.violation).toBeDefined();
       expect(result.violation!.field).toBe("channels.dmPolicy");
@@ -134,7 +124,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         channels: [{ name: "slack", dmPolicy: "disabled", groupPolicy: "allowlist" }],
       });
-      const result = evaluateRequireDmPolicy(config, {
+      const result = evaluateOpenClawRule("require_dm_policy", config, {
         forbiddenValues: ["open"],
         allowedValues: ["pairing", "allowlist"],
       });
@@ -143,7 +133,7 @@ describe("OpenClaw Policy Rules", () => {
 
     it("passes with empty channels", () => {
       const config = createBaseConfig({ channels: [] });
-      const result = evaluateRequireDmPolicy(config, { forbiddenValues: ["open"] });
+      const result = evaluateOpenClawRule("require_dm_policy", config, { forbiddenValues: ["open"] });
       expect(result.passed).toBe(true);
     });
   });
@@ -151,7 +141,7 @@ describe("OpenClaw Policy Rules", () => {
   describe("require_config_permissions", () => {
     it("passes with correct permissions (600/700)", () => {
       const config = createBaseConfig();
-      const result = evaluateRequireConfigPermissions(config, {
+      const result = evaluateOpenClawRule("require_config_permissions", config, {
         configFileMode: "600",
         stateDirMode: "700",
       });
@@ -162,7 +152,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         filePermissions: { configFileMode: "644", stateDirMode: "700" },
       });
-      const result = evaluateRequireConfigPermissions(config, {
+      const result = evaluateOpenClawRule("require_config_permissions", config, {
         configFileMode: "600",
         stateDirMode: "700",
       });
@@ -174,7 +164,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         filePermissions: { configFileMode: "600", stateDirMode: "755" },
       });
-      const result = evaluateRequireConfigPermissions(config, {
+      const result = evaluateOpenClawRule("require_config_permissions", config, {
         configFileMode: "600",
         stateDirMode: "700",
       });
@@ -186,7 +176,7 @@ describe("OpenClaw Policy Rules", () => {
   describe("forbid_elevated_tools", () => {
     it("passes when elevated tools are disabled", () => {
       const config = createBaseConfig();
-      const result = evaluateForbidElevatedTools(config, { enabled: true });
+      const result = evaluateOpenClawRule("forbid_elevated_tools", config, { enabled: true });
       expect(result.passed).toBe(true);
     });
 
@@ -197,7 +187,7 @@ describe("OpenClaw Policy Rules", () => {
           elevated: { enabled: true, allowFrom: ["admin-user"] },
         },
       });
-      const result = evaluateForbidElevatedTools(config, { enabled: true });
+      const result = evaluateOpenClawRule("forbid_elevated_tools", config, { enabled: true });
       expect(result.passed).toBe(true);
     });
 
@@ -208,7 +198,7 @@ describe("OpenClaw Policy Rules", () => {
           elevated: { enabled: true },
         },
       });
-      const result = evaluateForbidElevatedTools(config, { enabled: true });
+      const result = evaluateOpenClawRule("forbid_elevated_tools", config, { enabled: true });
       expect(result.passed).toBe(false);
       expect(result.violation!.severity).toBe("WARNING");
       expect(result.violation!.field).toBe("tools.elevated.allowFrom");
@@ -221,7 +211,7 @@ describe("OpenClaw Policy Rules", () => {
           elevated: { enabled: true, allowFrom: [] },
         },
       });
-      const result = evaluateForbidElevatedTools(config, { enabled: true });
+      const result = evaluateOpenClawRule("forbid_elevated_tools", config, { enabled: true });
       expect(result.passed).toBe(false);
     });
   });
@@ -229,7 +219,7 @@ describe("OpenClaw Policy Rules", () => {
   describe("require_sandbox", () => {
     it("passes with docker sandbox mode", () => {
       const config = createBaseConfig();
-      const result = evaluateRequireSandbox(config, {
+      const result = evaluateOpenClawRule("require_sandbox", config, {
         enabled: true,
         allowedModes: ["docker", "container"],
       });
@@ -246,7 +236,7 @@ describe("OpenClaw Policy Rules", () => {
           },
         },
       });
-      const result = evaluateRequireSandbox(config, {
+      const result = evaluateOpenClawRule("require_sandbox", config, {
         enabled: true,
         allowedModes: ["docker", "container"],
       });
@@ -264,7 +254,7 @@ describe("OpenClaw Policy Rules", () => {
           },
         },
       });
-      const result = evaluateRequireSandbox(config, {
+      const result = evaluateOpenClawRule("require_sandbox", config, {
         enabled: true,
         allowedModes: ["docker", "container"],
       });
@@ -275,7 +265,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         agents: { defaults: { sandbox: { mode: "off" }, workspace: "/tmp", model: {} } },
       });
-      const result = evaluateRequireSandbox(config, { enabled: false });
+      const result = evaluateOpenClawRule("require_sandbox", config, { enabled: false });
       expect(result.passed).toBe(true);
     });
   });
@@ -283,7 +273,7 @@ describe("OpenClaw Policy Rules", () => {
   describe("limit_tool_profile", () => {
     it("passes with 'standard' profile", () => {
       const config = createBaseConfig();
-      const result = evaluateLimitToolProfile(config, { forbiddenProfiles: ["full"] });
+      const result = evaluateOpenClawRule("limit_tool_profile", config, { forbiddenProfiles: ["full"] });
       expect(result.passed).toBe(true);
     });
 
@@ -291,7 +281,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         tools: { profile: "full" },
       });
-      const result = evaluateLimitToolProfile(config, { forbiddenProfiles: ["full"] });
+      const result = evaluateOpenClawRule("limit_tool_profile", config, { forbiddenProfiles: ["full"] });
       expect(result.passed).toBe(false);
       expect(result.violation!.severity).toBe("WARNING");
       expect(result.violation!.field).toBe("tools.profile");
@@ -302,7 +292,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         tools: {},
       });
-      const result = evaluateLimitToolProfile(config, { forbiddenProfiles: ["full"] });
+      const result = evaluateOpenClawRule("limit_tool_profile", config, { forbiddenProfiles: ["full"] });
       expect(result.passed).toBe(true);
     });
   });
@@ -310,7 +300,7 @@ describe("OpenClaw Policy Rules", () => {
   describe("require_model_guardrails", () => {
     it("passes with proper model configuration", () => {
       const config = createBaseConfig();
-      const result = evaluateRequireModelGuardrails(config, {
+      const result = evaluateOpenClawRule("require_model_guardrails", config, {
         enabled: true,
         requireMaxTokens: true,
         requireTemperatureLimit: true,
@@ -329,7 +319,7 @@ describe("OpenClaw Policy Rules", () => {
           },
         },
       });
-      const result = evaluateRequireModelGuardrails(config, {
+      const result = evaluateOpenClawRule("require_model_guardrails", config, {
         enabled: true,
         requireMaxTokens: true,
       });
@@ -347,7 +337,7 @@ describe("OpenClaw Policy Rules", () => {
           },
         },
       });
-      const result = evaluateRequireModelGuardrails(config, {
+      const result = evaluateOpenClawRule("require_model_guardrails", config, {
         enabled: true,
         requireMaxTokens: true,
         requireTemperatureLimit: true,
@@ -361,7 +351,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         agents: { defaults: { sandbox: { mode: "off" }, workspace: "/tmp" } },
       });
-      const result = evaluateRequireModelGuardrails(config, { enabled: false });
+      const result = evaluateOpenClawRule("require_model_guardrails", config, { enabled: false });
       expect(result.passed).toBe(true);
     });
   });
@@ -374,7 +364,7 @@ describe("OpenClaw Policy Rules", () => {
           { instanceId: "other-1", workspace: "/var/openclaw/workspaces/other-1" },
         ],
       });
-      const result = evaluateRequireWorkspaceIsolation(config, { enabled: true }, context);
+      const result = evaluateOpenClawRule("require_workspace_isolation", config, { enabled: true }, context);
       expect(result.passed).toBe(true);
     });
 
@@ -387,7 +377,7 @@ describe("OpenClaw Policy Rules", () => {
           },
         },
       });
-      const result = evaluateRequireWorkspaceIsolation(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_workspace_isolation", config, { enabled: true });
       expect(result.passed).toBe(false);
       expect(result.violation!.field).toBe("agents.defaults.workspace");
     });
@@ -399,7 +389,7 @@ describe("OpenClaw Policy Rules", () => {
           { instanceId: "other-1", workspace: "/var/openclaw/workspaces/instance-1" },
         ],
       });
-      const result = evaluateRequireWorkspaceIsolation(config, { enabled: true }, context);
+      const result = evaluateOpenClawRule("require_workspace_isolation", config, { enabled: true }, context);
       expect(result.passed).toBe(false);
       expect(result.violation!.message).toContain("other-1");
     });
@@ -413,7 +403,7 @@ describe("OpenClaw Policy Rules", () => {
           { instanceId: "other-1", gatewayPort: 3030 },
         ],
       });
-      const result = evaluateRequirePortSpacing(config, { minimumGap: 20 }, context);
+      const result = evaluateOpenClawRule("require_port_spacing", config, { minimumGap: 20 }, context);
       expect(result.passed).toBe(true);
     });
 
@@ -424,7 +414,7 @@ describe("OpenClaw Policy Rules", () => {
           { instanceId: "other-1", gatewayPort: 3010 },
         ],
       });
-      const result = evaluateRequirePortSpacing(config, { minimumGap: 20 }, context);
+      const result = evaluateOpenClawRule("require_port_spacing", config, { minimumGap: 20 }, context);
       expect(result.passed).toBe(false);
       expect(result.violation!.severity).toBe("ERROR");
       expect(result.violation!.message).toContain("3010");
@@ -438,14 +428,14 @@ describe("OpenClaw Policy Rules", () => {
           { instanceId: "other-1", gatewayPort: 3020 },
         ],
       });
-      const result = evaluateRequirePortSpacing(config, { minimumGap: 20 }, context);
+      const result = evaluateOpenClawRule("require_port_spacing", config, { minimumGap: 20 }, context);
       expect(result.passed).toBe(true);
     });
 
     it("passes when no other instances exist", () => {
       const config = createBaseConfig();
       const context = createProdContext({ otherInstances: [] });
-      const result = evaluateRequirePortSpacing(config, { minimumGap: 20 }, context);
+      const result = evaluateOpenClawRule("require_port_spacing", config, { minimumGap: 20 }, context);
       expect(result.passed).toBe(true);
     });
 
@@ -454,7 +444,7 @@ describe("OpenClaw Policy Rules", () => {
       const context = createProdContext({
         otherInstances: [{ instanceId: "other-1", gatewayPort: 3010 }],
       });
-      const result = evaluateRequirePortSpacing(config, { minimumGap: 20 }, context);
+      const result = evaluateOpenClawRule("require_port_spacing", config, { minimumGap: 20 }, context);
       expect(result.passed).toBe(true);
     });
   });
@@ -462,7 +452,7 @@ describe("OpenClaw Policy Rules", () => {
   describe("forbid_open_group_policy", () => {
     it("passes with 'allowlist' group policy", () => {
       const config = createBaseConfig();
-      const result = evaluateForbidOpenGroupPolicy(config, { forbiddenValues: ["open"] });
+      const result = evaluateOpenClawRule("forbid_open_group_policy", config, { forbiddenValues: ["open"] });
       expect(result.passed).toBe(true);
     });
 
@@ -470,7 +460,7 @@ describe("OpenClaw Policy Rules", () => {
       const config = createBaseConfig({
         channels: [{ name: "slack", dmPolicy: "pairing", groupPolicy: "open" }],
       });
-      const result = evaluateForbidOpenGroupPolicy(config, { forbiddenValues: ["open"] });
+      const result = evaluateOpenClawRule("forbid_open_group_policy", config, { forbiddenValues: ["open"] });
       expect(result.passed).toBe(false);
       expect(result.violation!.field).toBe("channels.groupPolicy");
       expect(result.violation!.currentValue).toBe("open");
@@ -478,7 +468,7 @@ describe("OpenClaw Policy Rules", () => {
 
     it("passes with no channels", () => {
       const config = createBaseConfig({ channels: [] });
-      const result = evaluateForbidOpenGroupPolicy(config, { forbiddenValues: ["open"] });
+      const result = evaluateOpenClawRule("forbid_open_group_policy", config, { forbiddenValues: ["open"] });
       expect(result.passed).toBe(true);
     });
   });
@@ -654,7 +644,7 @@ describe("Fix suggestion generation", () => {
     const config = createBaseConfig({
       channels: [{ name: "slack", dmPolicy: "open" }],
     });
-    const result = evaluateRequireDmPolicy(config, { forbiddenValues: ["open"] });
+    const result = evaluateOpenClawRule("require_dm_policy", config, { forbiddenValues: ["open"] });
     expect(result.passed).toBe(false);
     expect(result.violation!.suggestedValue).toBe("pairing");
   });
@@ -669,7 +659,7 @@ describe("Fix suggestion generation", () => {
         },
       },
     });
-    const result = evaluateRequireSandbox(config, {
+    const result = evaluateOpenClawRule("require_sandbox", config, {
       enabled: true,
       allowedModes: ["docker", "container"],
     });
@@ -681,7 +671,7 @@ describe("Fix suggestion generation", () => {
     const config = createBaseConfig({
       tools: { profile: "full" },
     });
-    const result = evaluateLimitToolProfile(config, { forbiddenProfiles: ["full"] });
+    const result = evaluateOpenClawRule("limit_tool_profile", config, { forbiddenProfiles: ["full"] });
     expect(result.passed).toBe(false);
     expect(result.violation!.suggestedValue).toBe("standard");
   });
@@ -690,7 +680,7 @@ describe("Fix suggestion generation", () => {
     const config = createBaseConfig({
       channels: [{ name: "slack", dmPolicy: "pairing", groupPolicy: "open" }],
     });
-    const result = evaluateForbidOpenGroupPolicy(config, { forbiddenValues: ["open"] });
+    const result = evaluateOpenClawRule("forbid_open_group_policy", config, { forbiddenValues: ["open"] });
     expect(result.passed).toBe(false);
     expect(result.violation!.suggestedValue).toBe("allowlist");
   });
@@ -699,7 +689,7 @@ describe("Fix suggestion generation", () => {
     const config = createBaseConfig({
       filePermissions: { configFileMode: "644", stateDirMode: "700" },
     });
-    const result = evaluateRequireConfigPermissions(config, {
+    const result = evaluateOpenClawRule("require_config_permissions", config, {
       configFileMode: "600",
       stateDirMode: "700",
     });

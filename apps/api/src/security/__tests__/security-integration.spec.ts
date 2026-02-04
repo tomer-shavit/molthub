@@ -47,16 +47,13 @@ import {
 } from "../../../../../packages/core/src/openclaw-channels";
 
 import {
-  evaluateRequireGatewayHostBinding,
-  evaluateRequireChannelAllowlist,
-  evaluateForbidDangerousTools,
-  evaluateRequireSkillVerification,
+  evaluateOpenClawRule,
 } from "../../../../../packages/core/src/openclaw-policies";
 import type { OpenClawConfig } from "../../../../../packages/core/src/openclaw-policies";
 
 import {
-  getDefaultDenyList,
   DANGEROUS_TOOL_PATTERNS,
+  getDefaultDenyList,
 } from "../../../../../packages/core/src/tool-security";
 
 // --- API-local modules ---
@@ -385,27 +382,27 @@ describe("Suite 6 — Input Sanitization (Injection Detection)", () => {
 // =============================================================================
 
 describe("Suite 7 — Policy Evaluation", () => {
-  describe("evaluateRequireGatewayHostBinding", () => {
+  describe("require_gateway_host_binding", () => {
     it("fails when host is '0.0.0.0'", () => {
       const config: OpenClawConfig = { gateway: { host: "0.0.0.0" } };
-      const result = evaluateRequireGatewayHostBinding(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_gateway_host_binding", config, { enabled: true });
       expect(result.passed).toBe(false);
       expect(result.violation?.ruleId).toBe("require_gateway_host_binding");
     });
 
     it("passes when host is '127.0.0.1'", () => {
       const config: OpenClawConfig = { gateway: { host: "127.0.0.1" } };
-      const result = evaluateRequireGatewayHostBinding(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_gateway_host_binding", config, { enabled: true });
       expect(result.passed).toBe(true);
     });
   });
 
-  describe("evaluateRequireChannelAllowlist", () => {
+  describe("require_channel_allowlist", () => {
     it("fails when dmPolicy is 'open'", () => {
       const config: OpenClawConfig = {
         channels: [{ name: "test-ch", dmPolicy: "open" }],
       };
-      const result = evaluateRequireChannelAllowlist(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_channel_allowlist", config, { enabled: true });
       expect(result.passed).toBe(false);
       expect(result.violation?.field).toBe("channels.dmPolicy");
     });
@@ -414,7 +411,7 @@ describe("Suite 7 — Policy Evaluation", () => {
       const config: OpenClawConfig = {
         channels: [{ name: "test-ch", dmPolicy: "allowlist" }],
       };
-      const result = evaluateRequireChannelAllowlist(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_channel_allowlist", config, { enabled: true });
       expect(result.passed).toBe(true);
     });
 
@@ -422,18 +419,18 @@ describe("Suite 7 — Policy Evaluation", () => {
       const config: OpenClawConfig = {
         channels: [{ name: "test-ch", groupPolicy: "open" }],
       };
-      const result = evaluateRequireChannelAllowlist(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_channel_allowlist", config, { enabled: true });
       expect(result.passed).toBe(false);
       expect(result.violation?.field).toBe("channels.groupPolicy");
     });
   });
 
-  describe("evaluateForbidDangerousTools", () => {
+  describe("forbid_dangerous_tools", () => {
     it("fails when allow list contains 'op' (1Password CLI)", () => {
       const config: OpenClawConfig = {
         tools: { allow: ["op"] } as any,
       };
-      const result = evaluateForbidDangerousTools(config, { enabled: true });
+      const result = evaluateOpenClawRule("forbid_dangerous_tools", config, { enabled: true });
       expect(result.passed).toBe(false);
       expect(result.violation?.message).toContain("op");
     });
@@ -442,7 +439,7 @@ describe("Suite 7 — Policy Evaluation", () => {
       const config: OpenClawConfig = {
         tools: { allow: ["bw"] } as any,
       };
-      const result = evaluateForbidDangerousTools(config, { enabled: true });
+      const result = evaluateOpenClawRule("forbid_dangerous_tools", config, { enabled: true });
       expect(result.passed).toBe(false);
     });
 
@@ -450,18 +447,18 @@ describe("Suite 7 — Policy Evaluation", () => {
       const config: OpenClawConfig = {
         tools: { allow: ["search", "github"] } as any,
       };
-      const result = evaluateForbidDangerousTools(config, { enabled: true });
+      const result = evaluateOpenClawRule("forbid_dangerous_tools", config, { enabled: true });
       expect(result.passed).toBe(true);
     });
 
     it("passes when no allow list is defined", () => {
       const config: OpenClawConfig = { tools: {} };
-      const result = evaluateForbidDangerousTools(config, { enabled: true });
+      const result = evaluateOpenClawRule("forbid_dangerous_tools", config, { enabled: true });
       expect(result.passed).toBe(true);
     });
   });
 
-  describe("evaluateRequireSkillVerification", () => {
+  describe("require_skill_verification", () => {
     it("fails for non-bundled skill without integrity hash", () => {
       const config: OpenClawConfig = {
         skills: {
@@ -471,7 +468,7 @@ describe("Suite 7 — Policy Evaluation", () => {
           },
         },
       } as any;
-      const result = evaluateRequireSkillVerification(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_skill_verification", config, { enabled: true });
       expect(result.passed).toBe(false);
       expect(result.violation?.message).toContain("my-plugin");
     });
@@ -485,7 +482,7 @@ describe("Suite 7 — Policy Evaluation", () => {
           },
         },
       } as any;
-      const result = evaluateRequireSkillVerification(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_skill_verification", config, { enabled: true });
       expect(result.passed).toBe(true);
     });
 
@@ -501,13 +498,13 @@ describe("Suite 7 — Policy Evaluation", () => {
           },
         },
       } as any;
-      const result = evaluateRequireSkillVerification(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_skill_verification", config, { enabled: true });
       expect(result.passed).toBe(true);
     });
 
     it("passes when no skill entries are defined", () => {
       const config: OpenClawConfig = {};
-      const result = evaluateRequireSkillVerification(config, { enabled: true });
+      const result = evaluateOpenClawRule("require_skill_verification", config, { enabled: true });
       expect(result.passed).toBe(true);
     });
   });

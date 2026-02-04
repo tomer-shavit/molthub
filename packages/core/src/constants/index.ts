@@ -5,5 +5,4 @@
  */
 
 export * from "./defaults";
-export * from "./tool-patterns";
 export * from "./policy-types";

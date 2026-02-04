@@ -12,33 +12,14 @@ export type {
   OpenClawPolicyEvaluationResult,
 } from "./types";
 
-// Rule evaluators
+// Rule dispatcher and registry
 export {
-  // Gateway rules
-  evaluateRequireGatewayAuth,
-  evaluateRequireGatewayHostBinding,
-  // Channel rules
-  evaluateRequireDmPolicy,
-  evaluateForbidOpenGroupPolicy,
-  evaluateRequireChannelAllowlist,
-  // Tool rules
-  evaluateForbidDangerousTools,
-  evaluateForbidElevatedTools,
-  evaluateLimitToolProfile,
-  // Sandbox rules
-  evaluateRequireSandbox,
-  evaluateRequireSandboxSecurityOptions,
-  // Isolation rules
-  evaluateRequireWorkspaceIsolation,
-  evaluateRequirePortSpacing,
-  evaluateRequireConfigPermissions,
-  // Production rules
-  evaluateRequireModelGuardrails,
-  evaluateRequireTokenRotation,
-  evaluateRequireSkillVerification,
-  // Dispatcher
   evaluateOpenClawRule,
+  defaultRegistry,
+  PolicyRuleRegistry,
+  BasePolicyRuleEvaluator,
 } from "./rules";
+export type { IPolicyRuleEvaluator } from "./rules";
 
 // Policy packs
 export {

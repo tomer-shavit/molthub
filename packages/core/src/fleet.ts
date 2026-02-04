@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { InstanceManifestSchema, Environment } from "./manifest";
 
+// Import BotStatus and BotHealth from the shared status module
+import { BotStatus, BotHealth } from "./bot-instance/status";
+
+// Re-export segregated interfaces and schemas for consumers
+export * from "./bot-instance";
+
 // Fleet: Grouping concept for environments
 export const FleetStatus = z.enum(["ACTIVE", "PAUSED", "DRAINING", "ERROR"]);
 export type FleetStatus = z.infer<typeof FleetStatus>;
@@ -43,21 +49,7 @@ export const FleetSchema = z.object({
 export type Fleet = z.infer<typeof FleetSchema>;
 
 // BotInstance: Enhanced instance with fleet association and overlays
-export const BotStatus = z.enum([
-  "CREATING",
-  "PENDING",
-  "RUNNING",
-  "DEGRADED",
-  "STOPPED",
-  "PAUSED",
-  "DELETING",
-  "ERROR",
-  "RECONCILING"
-]);
-export type BotStatus = z.infer<typeof BotStatus>;
-
-export const BotHealth = z.enum(["HEALTHY", "UNHEALTHY", "UNKNOWN", "DEGRADED"]);
-export type BotHealth = z.infer<typeof BotHealth>;
+// Note: BotStatus and BotHealth are re-exported from ./bot-instance
 
 export const BotInstanceSchema = z.object({
   id: z.string(),
@@ -104,9 +96,13 @@ export const BotInstanceSchema = z.object({
   errorCount: z.number().int().min(0).default(0),
   
   // AWS resources (populated by reconciler)
+  /** @deprecated Use deploymentTargetId and cloud-agnostic fields instead */
   ecsClusterArn: z.string().optional(),
+  /** @deprecated Use deploymentTargetId and cloud-agnostic fields instead */
   ecsServiceArn: z.string().optional(),
+  /** @deprecated Use deploymentTargetId and cloud-agnostic fields instead */
   taskDefinitionArn: z.string().optional(),
+  /** @deprecated Use deploymentTargetId and cloud-agnostic fields instead */
   cloudwatchLogGroup: z.string().optional(),
   
   // Health metrics
