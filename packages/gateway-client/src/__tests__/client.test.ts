@@ -54,7 +54,7 @@ const connectSuccessResponse = {
 // Challenge message sent by gateway first
 const connectChallenge = {
   type: "event",
-  name: "connect.challenge",
+  event: "connect.challenge",
   payload: { nonce: "test-nonce" },
 };
 

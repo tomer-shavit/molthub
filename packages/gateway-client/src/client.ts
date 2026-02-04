@@ -415,12 +415,12 @@ export class GatewayClient extends EventEmitter implements IGatewayClient {
         return;
       }
 
-      // OpenClaw event: { type: "event", name: "...", payload: {...} }
+      // OpenClaw event: { type: "event", event: "...", payload: {...} }
       // Legacy event: { type: "agentOutput" | "presence" | ... }
-      if (data.type === "event" && typeof data.name === "string") {
+      if (data.type === "event" && typeof data.event === "string") {
         // Normalize OpenClaw event format to legacy format
         const normalized = {
-          type: data.name as string,
+          type: data.event as string,
           ...(data.payload as Record<string, unknown> ?? {}),
         };
         this.handleEvent(normalized as unknown as GatewayEvent);
