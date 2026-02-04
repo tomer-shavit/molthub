@@ -1,28 +1,23 @@
+/**
+ * ECS EC2 Deployment Target
+ *
+ * Manages an OpenClaw gateway instance running on AWS ECS with EC2 launch type
+ * via CloudFormation.
+ *
+ * SECURITY: All deployments use VPC + ALB architecture.
+ * Containers are NEVER exposed directly to the internet.
+ * External access (for webhooks from Telegram, WhatsApp, etc.) goes through ALB.
+ *
+ * Uses services from @clawster/adapters-aws for all cloud operations.
+ * EC2 launch type enables Docker socket mounting for sandbox isolation.
+ */
+
 import {
-  CloudFormationClient,
-  CreateStackCommand,
-  UpdateStackCommand,
-  DeleteStackCommand,
-  DescribeStacksCommand,
-  DescribeStackEventsCommand,
-} from "@aws-sdk/client-cloudformation";
-import {
-  ECSClient,
-  DescribeServicesCommand,
-  UpdateServiceCommand,
-} from "@aws-sdk/client-ecs";
-import {
-  SecretsManagerClient,
-  CreateSecretCommand,
-  UpdateSecretCommand,
-  DeleteSecretCommand,
-} from "@aws-sdk/client-secrets-manager";
-import {
-  CloudWatchLogsClient,
-  DescribeLogStreamsCommand,
-  GetLogEventsCommand,
-  DeleteLogGroupCommand,
-} from "@aws-sdk/client-cloudwatch-logs";
+  CloudFormationService,
+  SecretsManagerService,
+  CloudWatchLogsService,
+} from "@clawster/adapters-aws";
+
 import {
   DeploymentTarget,
   DeploymentTargetType,
@@ -36,13 +31,206 @@ import {
 } from "../../interface/deployment-target";
 import type { ResourceSpec, ResourceUpdateResult } from "../../interface/resource-spec";
 import type { EcsEc2Config } from "./ecs-ec2-config";
+import type {
+  ICloudFormationService,
+  IECSService,
+  ISecretsManagerService,
+  ICloudWatchLogsService,
+  EcsEc2Services,
+  EcsEc2TargetOptions,
+  EcsServiceDescription,
+  StackEventInfo,
+} from "./ecs-ec2-services.interface";
 import { generateProductionTemplate } from "./templates/production";
 
+// Re-export for external use
+export type { EcsEc2TargetOptions, EcsEc2Services };
 
 const DEFAULT_CPU = 1024;
 const DEFAULT_MEMORY = 2048;
-const STACK_POLL_INTERVAL_MS = 10_000;
-const STACK_TIMEOUT_MS = 600_000; // 10 minutes
+
+/**
+ * Internal ECS service wrapper that adapts the raw ECS SDK operations.
+ * This provides the IECSService interface on top of direct SDK calls
+ * for backward compatibility when no services are injected.
+ */
+class InternalECSService implements IECSService {
+  private readonly client: import("@aws-sdk/client-ecs").ECSClient;
+
+  constructor(region: string, credentials: { accessKeyId: string; secretAccessKey: string }) {
+    // Dynamic import to avoid requiring the SDK at module load time
+    const { ECSClient } = require("@aws-sdk/client-ecs");
+    this.client = new ECSClient({ region, credentials });
+  }
+
+  async updateService(
+    cluster: string,
+    service: string,
+    options: { desiredCount?: number; forceNewDeployment?: boolean }
+  ): Promise<void> {
+    const { UpdateServiceCommand } = require("@aws-sdk/client-ecs");
+    await this.client.send(
+      new UpdateServiceCommand({
+        cluster,
+        service,
+        desiredCount: options.desiredCount,
+        forceNewDeployment: options.forceNewDeployment,
+      })
+    );
+  }
+
+  async describeService(
+    cluster: string,
+    service: string
+  ): Promise<EcsServiceDescription | undefined> {
+    const { DescribeServicesCommand } = require("@aws-sdk/client-ecs");
+    const result = await this.client.send(
+      new DescribeServicesCommand({
+        cluster,
+        services: [service],
+      })
+    ) as { services?: Array<{
+      status?: string;
+      runningCount?: number;
+      desiredCount?: number;
+      deployments?: Array<{ status?: string; runningCount?: number; desiredCount?: number }>;
+      events?: Array<{ createdAt?: Date; message?: string }>;
+    }> };
+
+    const svc = result.services?.[0];
+    if (!svc) {
+      return undefined;
+    }
+
+    return {
+      status: svc.status ?? "",
+      runningCount: svc.runningCount ?? 0,
+      desiredCount: svc.desiredCount ?? 0,
+      deployments: (svc.deployments ?? []).map((d: { status?: string; runningCount?: number; desiredCount?: number }) => ({
+        status: d.status ?? "",
+        runningCount: d.runningCount ?? 0,
+        desiredCount: d.desiredCount ?? 0,
+      })),
+      events: (svc.events ?? []).map((e: { createdAt?: Date; message?: string }) => ({
+        createdAt: e.createdAt,
+        message: e.message,
+      })),
+    };
+  }
+}
+
+/**
+ * Wrapper that adapts CloudFormationService to ICloudFormationService interface.
+ */
+class CloudFormationServiceAdapter implements ICloudFormationService {
+  constructor(private readonly service: CloudFormationService) {}
+
+  async createStack(
+    stackName: string,
+    templateBody: string,
+    options?: {
+      parameters?: Record<string, string>;
+      tags?: Record<string, string>;
+      capabilities?: ("CAPABILITY_IAM" | "CAPABILITY_NAMED_IAM" | "CAPABILITY_AUTO_EXPAND")[];
+    }
+  ): Promise<string> {
+    return this.service.createStack(stackName, templateBody, options);
+  }
+
+  async updateStack(
+    stackName: string,
+    templateBody: string,
+    options?: {
+      parameters?: Record<string, string>;
+      tags?: Record<string, string>;
+      capabilities?: ("CAPABILITY_IAM" | "CAPABILITY_NAMED_IAM" | "CAPABILITY_AUTO_EXPAND")[];
+    }
+  ): Promise<string> {
+    return this.service.updateStack(stackName, templateBody, options);
+  }
+
+  async deleteStack(stackName: string): Promise<void> {
+    return this.service.deleteStack(stackName);
+  }
+
+  async describeStack(stackName: string) {
+    return this.service.describeStack(stackName);
+  }
+
+  async waitForStackStatus(
+    stackName: string,
+    targetStatus: import("@clawster/adapters-aws").StackStatus,
+    options?: {
+      pollIntervalMs?: number;
+      timeoutMs?: number;
+      onEvent?: (event: StackEventInfo) => void;
+    }
+  ) {
+    return this.service.waitForStackStatus(stackName, targetStatus, options);
+  }
+
+  async getStackOutputs(stackName: string): Promise<Record<string, string>> {
+    return this.service.getStackOutputs(stackName);
+  }
+
+  async stackExists(stackName: string): Promise<boolean> {
+    return this.service.stackExists(stackName);
+  }
+}
+
+/**
+ * Wrapper that adapts SecretsManagerService to ISecretsManagerService interface.
+ */
+class SecretsManagerServiceAdapter implements ISecretsManagerService {
+  constructor(private readonly service: SecretsManagerService) {}
+
+  async createSecret(
+    name: string,
+    value: string,
+    tags?: Record<string, string>
+  ): Promise<string> {
+    return this.service.createSecret(name, value, tags);
+  }
+
+  async updateSecret(name: string, value: string): Promise<void> {
+    return this.service.updateSecret(name, value);
+  }
+
+  async deleteSecret(name: string, forceDelete?: boolean): Promise<void> {
+    return this.service.deleteSecret(name, forceDelete);
+  }
+
+  async secretExists(name: string): Promise<boolean> {
+    return this.service.secretExists(name);
+  }
+}
+
+/**
+ * Wrapper that adapts CloudWatchLogsService to ICloudWatchLogsService interface.
+ */
+class CloudWatchLogsServiceAdapter implements ICloudWatchLogsService {
+  constructor(private readonly service: CloudWatchLogsService) {}
+
+  async getLogStreams(logGroupName: string): Promise<string[]> {
+    return this.service.getLogStreams(logGroupName);
+  }
+
+  async getLogs(
+    logGroupName: string,
+    options?: {
+      startTime?: Date;
+      endTime?: Date;
+      limit?: number;
+      nextToken?: string;
+    }
+  ) {
+    return this.service.getLogs(logGroupName, options);
+  }
+
+  async deleteLogGroup(logGroupName: string): Promise<void> {
+    return this.service.deleteLogGroup(logGroupName);
+  }
+}
 
 /**
  * EcsEc2Target manages an OpenClaw gateway instance running
@@ -52,8 +240,8 @@ const STACK_TIMEOUT_MS = 600_000; // 10 minutes
  * Containers are NEVER exposed directly to the internet.
  * External access (for webhooks from Telegram, WhatsApp, etc.) goes through ALB.
  *
- * Uses AWS SDK v3 for all cloud operations. EC2 launch type enables
- * Docker socket mounting for sandbox isolation.
+ * Uses @clawster/adapters-aws services for all cloud operations.
+ * EC2 launch type enables Docker socket mounting for sandbox isolation.
  */
 export class EcsEc2Target implements DeploymentTarget {
   readonly type = DeploymentTargetType.ECS_EC2;
@@ -62,10 +250,11 @@ export class EcsEc2Target implements DeploymentTarget {
   private readonly cpu: number;
   private readonly memory: number;
 
-  private readonly cfnClient: CloudFormationClient;
-  private readonly ecsClient: ECSClient;
-  private readonly smClient: SecretsManagerClient;
-  private readonly cwlClient: CloudWatchLogsClient;
+  // Injected services (using interfaces for dependency inversion)
+  private readonly cloudFormationService: ICloudFormationService;
+  private readonly ecsService: IECSService;
+  private readonly secretsManagerService: ISecretsManagerService;
+  private readonly cloudWatchLogsService: ICloudWatchLogsService;
 
   /** Log callback for streaming progress to the UI */
   private onLog?: (line: string, stream: "stdout" | "stderr") => void;
@@ -78,7 +267,24 @@ export class EcsEc2Target implements DeploymentTarget {
   private logGroup = "";
   private gatewayPort = 18789;
 
-  constructor(config: EcsEc2Config) {
+  /**
+   * Create an EcsEc2Target with just a config (backward compatible).
+   * @param config - ECS EC2 configuration
+   */
+  constructor(config: EcsEc2Config);
+  /**
+   * Create an EcsEc2Target with options including optional services for DI.
+   * @param options - Options including config and optional services
+   */
+  constructor(options: EcsEc2TargetOptions);
+  constructor(configOrOptions: EcsEc2Config | EcsEc2TargetOptions) {
+    // Determine if we received options or just config (backward compatibility)
+    const isOptions = (arg: EcsEc2Config | EcsEc2TargetOptions): arg is EcsEc2TargetOptions =>
+      "config" in arg && typeof (arg as EcsEc2TargetOptions).config === "object";
+
+    const config = isOptions(configOrOptions) ? configOrOptions.config : configOrOptions;
+    const providedServices = isOptions(configOrOptions) ? configOrOptions.services : undefined;
+
     this.config = config;
     this.cpu = config.cpu ?? DEFAULT_CPU;
     this.memory = config.memory ?? DEFAULT_MEMORY;
@@ -94,16 +300,33 @@ export class EcsEc2Target implements DeploymentTarget {
       this.logGroup = `/ecs/clawster-${p}`;
     }
 
-    const credentials = {
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey,
-    };
-    const region = config.region;
+    // Use provided services (for testing) or create via adapters-aws (production)
+    if (providedServices) {
+      // Dependency injection path - use provided services
+      this.cloudFormationService = providedServices.cloudFormation;
+      this.ecsService = providedServices.ecs;
+      this.secretsManagerService = providedServices.secretsManager;
+      this.cloudWatchLogsService = providedServices.cloudWatchLogs;
+    } else {
+      // Factory path - create services from @clawster/adapters-aws
+      const credentials = {
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+      };
+      const region = config.region;
 
-    this.cfnClient = new CloudFormationClient({ region, credentials });
-    this.ecsClient = new ECSClient({ region, credentials });
-    this.smClient = new SecretsManagerClient({ region, credentials });
-    this.cwlClient = new CloudWatchLogsClient({ region, credentials });
+      // Create adapters-aws services and wrap them
+      this.cloudFormationService = new CloudFormationServiceAdapter(
+        new CloudFormationService(region, credentials)
+      );
+      this.ecsService = new InternalECSService(region, credentials);
+      this.secretsManagerService = new SecretsManagerServiceAdapter(
+        new SecretsManagerService(region)
+      );
+      this.cloudWatchLogsService = new CloudWatchLogsServiceAdapter(
+        new CloudWatchLogsService(region)
+      );
+    }
   }
 
   // ------------------------------------------------------------------
@@ -164,17 +387,15 @@ export class EcsEc2Target implements DeploymentTarget {
       });
 
       // 4. Deploy CloudFormation stack (create or update if it already exists)
-      const stackExists = await this.stackExists();
+      const stackExists = await this.cloudFormationService.stackExists(this.stackName);
 
       if (stackExists) {
         this.log(`Stack ${this.stackName} exists, updating...`);
         try {
-          await this.cfnClient.send(
-            new UpdateStackCommand({
-              StackName: this.stackName,
-              TemplateBody: JSON.stringify(template),
-              Capabilities: ["CAPABILITY_NAMED_IAM"],
-            }),
+          await this.cloudFormationService.updateStack(
+            this.stackName,
+            JSON.stringify(template),
+            { capabilities: ["CAPABILITY_NAMED_IAM"] }
           );
           await this.waitForStack("UPDATE_COMPLETE");
         } catch (error: unknown) {
@@ -190,13 +411,13 @@ export class EcsEc2Target implements DeploymentTarget {
         }
       } else {
         this.log(`Creating new CloudFormation stack: ${this.stackName}`);
-        await this.cfnClient.send(
-          new CreateStackCommand({
-            StackName: this.stackName,
-            TemplateBody: JSON.stringify(template),
-            Capabilities: ["CAPABILITY_NAMED_IAM"],
-            Tags: [{ Key: "clawster:bot", Value: profileName }],
-          }),
+        await this.cloudFormationService.createStack(
+          this.stackName,
+          JSON.stringify(template),
+          {
+            capabilities: ["CAPABILITY_NAMED_IAM"],
+            tags: { "clawster:bot": profileName },
+          }
         );
         await this.waitForStack("CREATE_COMPLETE");
       }
@@ -302,13 +523,9 @@ export class EcsEc2Target implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async start(): Promise<void> {
-    await this.ecsClient.send(
-      new UpdateServiceCommand({
-        cluster: this.clusterName,
-        service: this.serviceName,
-        desiredCount: 1,
-      }),
-    );
+    await this.ecsService.updateService(this.clusterName, this.serviceName, {
+      desiredCount: 1,
+    });
   }
 
   // ------------------------------------------------------------------
@@ -316,13 +533,9 @@ export class EcsEc2Target implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async stop(): Promise<void> {
-    await this.ecsClient.send(
-      new UpdateServiceCommand({
-        cluster: this.clusterName,
-        service: this.serviceName,
-        desiredCount: 0,
-      }),
-    );
+    await this.ecsService.updateService(this.clusterName, this.serviceName, {
+      desiredCount: 0,
+    });
   }
 
   // ------------------------------------------------------------------
@@ -330,13 +543,9 @@ export class EcsEc2Target implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   async restart(): Promise<void> {
-    await this.ecsClient.send(
-      new UpdateServiceCommand({
-        cluster: this.clusterName,
-        service: this.serviceName,
-        forceNewDeployment: true,
-      }),
-    );
+    await this.ecsService.updateService(this.clusterName, this.serviceName, {
+      forceNewDeployment: true,
+    });
   }
 
   // ------------------------------------------------------------------
@@ -345,21 +554,18 @@ export class EcsEc2Target implements DeploymentTarget {
 
   async getStatus(): Promise<TargetStatus> {
     try {
-      const result = await this.ecsClient.send(
-        new DescribeServicesCommand({
-          cluster: this.clusterName,
-          services: [this.serviceName],
-        }),
+      const service = await this.ecsService.describeService(
+        this.clusterName,
+        this.serviceName
       );
 
-      const service = result.services?.[0];
       if (!service) {
         return { state: "not-installed" };
       }
 
-      const runningCount = service.runningCount ?? 0;
-      const desiredCount = service.desiredCount ?? 0;
-      const serviceStatus = service.status ?? "";
+      const runningCount = service.runningCount;
+      const desiredCount = service.desiredCount;
+      const serviceStatus = service.status;
 
       let state: TargetStatus["state"];
       if (runningCount > 0) {
@@ -391,32 +597,18 @@ export class EcsEc2Target implements DeploymentTarget {
 
   async getLogs(options?: DeploymentLogOptions): Promise<string[]> {
     try {
-      const streamsResult = await this.cwlClient.send(
-        new DescribeLogStreamsCommand({
-          logGroupName: this.logGroup,
-          orderBy: "LastEventTime",
-          descending: true,
-          limit: 1,
-        }),
-      );
-
-      const latestStream = streamsResult.logStreams?.[0];
-      if (!latestStream?.logStreamName) {
+      const streams = await this.cloudWatchLogsService.getLogStreams(this.logGroup);
+      const latestStream = streams[0];
+      if (!latestStream) {
         return [];
       }
 
-      const eventsResult = await this.cwlClient.send(
-        new GetLogEventsCommand({
-          logGroupName: this.logGroup,
-          logStreamName: latestStream.logStreamName,
-          limit: options?.lines,
-          startTime: options?.since?.getTime(),
-        }),
-      );
+      const result = await this.cloudWatchLogsService.getLogs(this.logGroup, {
+        limit: options?.lines,
+        startTime: options?.since,
+      });
 
-      let lines = (eventsResult.events ?? [])
-        .map((e) => e.message)
-        .filter((m): m is string => Boolean(m));
+      let lines = result.events.map((e) => e.message).filter((m): m is string => Boolean(m));
 
       if (options?.filter) {
         try {
@@ -441,7 +633,7 @@ export class EcsEc2Target implements DeploymentTarget {
 
   async getEndpoint(): Promise<GatewayEndpoint> {
     // Always return the ALB DNS name (secure architecture)
-    const outputs = await this.getStackOutputs();
+    const outputs = await this.cloudFormationService.getStackOutputs(this.stackName);
     const albDns = outputs["AlbDnsName"];
     if (!albDns) {
       throw new Error("ALB DNS name not found in stack outputs");
@@ -463,9 +655,7 @@ export class EcsEc2Target implements DeploymentTarget {
     // 1. Delete CloudFormation stack (handles all CF-managed resources)
     try {
       this.log("Deleting CloudFormation stack...");
-      await this.cfnClient.send(
-        new DeleteStackCommand({ StackName: this.stackName }),
-      );
+      await this.cloudFormationService.deleteStack(this.stackName);
       await this.waitForStack("DELETE_COMPLETE");
       this.log("CloudFormation stack deleted");
     } catch {
@@ -475,12 +665,7 @@ export class EcsEc2Target implements DeploymentTarget {
     // 2. Delete the Secrets Manager secret
     try {
       this.log("Deleting Secrets Manager secret...");
-      await this.smClient.send(
-        new DeleteSecretCommand({
-          SecretId: this.secretName,
-          ForceDeleteWithoutRecovery: true,
-        }),
-      );
+      await this.secretsManagerService.deleteSecret(this.secretName, true);
       this.log("Secret deleted");
     } catch {
       this.log("Secret not found or already deleted");
@@ -489,9 +674,7 @@ export class EcsEc2Target implements DeploymentTarget {
     // 3. Delete the CloudWatch log group
     try {
       this.log("Deleting CloudWatch log group...");
-      await this.cwlClient.send(
-        new DeleteLogGroupCommand({ logGroupName: this.logGroup }),
-      );
+      await this.cloudWatchLogsService.deleteLogGroup(this.logGroup);
       this.log("Log group deleted");
     } catch {
       this.log("Log group not found or already deleted");
@@ -505,161 +688,63 @@ export class EcsEc2Target implements DeploymentTarget {
   // ------------------------------------------------------------------
 
   private async ensureSecret(name: string, value: string): Promise<void> {
-    try {
-      await this.smClient.send(
-        new CreateSecretCommand({
-          Name: name,
-          SecretString: value,
-        }),
-      );
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        error.name === "ResourceExistsException"
-      ) {
-        await this.smClient.send(
-          new UpdateSecretCommand({
-            SecretId: name,
-            SecretString: value,
-          }),
-        );
-      } else {
-        throw error;
-      }
+    const exists = await this.secretsManagerService.secretExists(name);
+    if (exists) {
+      await this.secretsManagerService.updateSecret(name, value);
+    } else {
+      await this.secretsManagerService.createSecret(name, value);
     }
-  }
-
-  private async stackExists(): Promise<boolean> {
-    try {
-      const result = await this.cfnClient.send(
-        new DescribeStacksCommand({ StackName: this.stackName }),
-      );
-      const stack = result.Stacks?.[0];
-      // A stack in DELETE_COMPLETE or ROLLBACK_COMPLETE is effectively gone
-      if (!stack) return false;
-      const status = stack.StackStatus;
-      return status !== "DELETE_COMPLETE" && status !== "ROLLBACK_COMPLETE";
-    } catch {
-      return false;
-    }
-  }
-
-  private async waitForStack(
-    targetStatus: "CREATE_COMPLETE" | "UPDATE_COMPLETE" | "DELETE_COMPLETE",
-  ): Promise<void> {
-    const start = Date.now();
-    const seenEventIds = new Set<string>();
-    let lastLoggedStatus = "";
-
-    while (Date.now() - start < STACK_TIMEOUT_MS) {
-      try {
-        // Poll stack events for detailed progress
-        await this.pollStackEvents(seenEventIds);
-
-        // Check overall stack status
-        const result = await this.cfnClient.send(
-          new DescribeStacksCommand({ StackName: this.stackName }),
-        );
-
-        const stack = result.Stacks?.[0];
-        if (!stack) {
-          if (targetStatus === "DELETE_COMPLETE") {
-            this.log("Stack deleted successfully");
-            return;
-          }
-          throw new Error(`Stack "${this.stackName}" not found`);
-        }
-
-        const status = stack.StackStatus ?? "UNKNOWN";
-
-        // Log status changes
-        if (status !== lastLoggedStatus) {
-          this.log(`Stack status: ${status}`);
-          lastLoggedStatus = status;
-        }
-
-        if (status === targetStatus) {
-          this.log(`Stack reached target status: ${targetStatus}`);
-          return;
-        }
-
-        if (
-          status.endsWith("_FAILED") ||
-          status === "ROLLBACK_COMPLETE" ||
-          status === "DELETE_FAILED"
-        ) {
-          const reason = stack.StackStatusReason || "Unknown error";
-          this.log(`Stack failed: ${status} - ${reason}`, "stderr");
-          throw new Error(
-            `Stack "${this.stackName}" reached ${status}: ${reason}`,
-          );
-        }
-      } catch (error: unknown) {
-        if (
-          targetStatus === "DELETE_COMPLETE" &&
-          error instanceof Error &&
-          error.message.includes("does not exist")
-        ) {
-          this.log("Stack deleted successfully");
-          return;
-        }
-        if (
-          error instanceof Error &&
-          (error.message.includes("_FAILED") ||
-            error.message.includes("ROLLBACK"))
-        ) {
-          throw error;
-        }
-      }
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, STACK_POLL_INTERVAL_MS),
-      );
-    }
-
-    this.log(`Stack operation timed out after ${STACK_TIMEOUT_MS / 1000}s`, "stderr");
-    throw new Error(
-      `Stack "${this.stackName}" timed out waiting for ${targetStatus}`,
-    );
   }
 
   /**
-   * Poll CloudFormation stack events and emit logs for new events.
-   * Events are deduplicated using seenEventIds set.
+   * Wait for a CloudFormation stack to reach a target status.
+   * Logs stack events as they occur.
    */
-  private async pollStackEvents(seenEventIds: Set<string>): Promise<void> {
-    try {
-      const result = await this.cfnClient.send(
-        new DescribeStackEventsCommand({ StackName: this.stackName }),
-      );
+  private async waitForStack(
+    targetStatus: "CREATE_COMPLETE" | "UPDATE_COMPLETE" | "DELETE_COMPLETE"
+  ): Promise<void> {
+    const seenEventIds = new Set<string>();
 
-      // Events come in reverse chronological order, so reverse for oldest-first
-      const events = (result.StackEvents ?? []).reverse();
+    const onEvent = (event: StackEventInfo) => {
+      if (seenEventIds.has(event.eventId)) return;
+      seenEventIds.add(event.eventId);
 
-      for (const event of events) {
-        const eventId = event.EventId;
-        if (!eventId || seenEventIds.has(eventId)) continue;
-        seenEventIds.add(eventId);
+      const resourceId = event.resourceId || "Unknown";
+      const resourceStatus = event.resourceStatus || "UNKNOWN";
+      const reason = event.statusReason;
 
-        const resourceId = event.LogicalResourceId ?? "Unknown";
-        const resourceStatus = event.ResourceStatus ?? "UNKNOWN";
-        const reason = event.ResourceStatusReason;
+      // Determine stream based on status
+      const stream: "stdout" | "stderr" = resourceStatus.includes("FAILED")
+        ? "stderr"
+        : "stdout";
 
-        // Determine stream based on status
-        const stream: "stdout" | "stderr" = resourceStatus.includes("FAILED")
-          ? "stderr"
-          : "stdout";
-
-        // Format log message
-        let message = `[${resourceId}] ${resourceStatus}`;
-        if (reason) {
-          message += ` - ${reason}`;
-        }
-
-        this.log(message, stream);
+      // Format log message
+      let message = `[${resourceId}] ${resourceStatus}`;
+      if (reason) {
+        message += ` - ${reason}`;
       }
-    } catch {
-      // Stack may not exist yet or events unavailable - ignore
+
+      this.log(message, stream);
+    };
+
+    try {
+      await this.cloudFormationService.waitForStackStatus(
+        this.stackName,
+        targetStatus,
+        { onEvent }
+      );
+      this.log(`Stack reached target status: ${targetStatus}`);
+    } catch (error: unknown) {
+      // Handle DELETE_COMPLETE when stack doesn't exist
+      if (
+        targetStatus === "DELETE_COMPLETE" &&
+        error instanceof Error &&
+        error.message.includes("does not exist")
+      ) {
+        this.log("Stack deleted successfully");
+        return;
+      }
+      throw error;
     }
   }
 
@@ -674,14 +759,11 @@ export class EcsEc2Target implements DeploymentTarget {
 
     while (Date.now() - startTime < timeoutMs) {
       try {
-        const response = await this.ecsClient.send(
-          new DescribeServicesCommand({
-            cluster: this.clusterName,
-            services: [this.serviceName],
-          }),
+        const service = await this.ecsService.describeService(
+          this.clusterName,
+          this.serviceName
         );
 
-        const service = response.services?.[0];
         if (!service) {
           this.log("Waiting for ECS service to be created...");
           await new Promise((resolve) => setTimeout(resolve, 10000));
@@ -696,10 +778,11 @@ export class EcsEc2Target implements DeploymentTarget {
 
         for (const event of newEvents) {
           if (event.message) {
-            const stream: "stdout" | "stderr" = event.message.toLowerCase().includes("error") ||
+            const stream: "stdout" | "stderr" =
+              event.message.toLowerCase().includes("error") ||
               event.message.toLowerCase().includes("failed")
-              ? "stderr"
-              : "stdout";
+                ? "stderr"
+                : "stdout";
             this.log(`[ECS] ${event.message}`, stream);
           }
           if (event.createdAt) {
@@ -743,25 +826,6 @@ export class EcsEc2Target implements DeploymentTarget {
     this.log(`[ECS] Service did not stabilize within ${timeoutMs / 1000}s`, "stderr");
   }
 
-  private async getStackOutputs(): Promise<Record<string, string>> {
-    const result = await this.cfnClient.send(
-      new DescribeStacksCommand({ StackName: this.stackName }),
-    );
-
-    const stack = result.Stacks?.[0];
-    if (!stack) {
-      throw new Error(`Stack "${this.stackName}" not found`);
-    }
-
-    const outputs: Record<string, string> = {};
-    for (const output of stack.Outputs ?? []) {
-      if (output.OutputKey && output.OutputValue) {
-        outputs[output.OutputKey] = output.OutputValue;
-      }
-    }
-    return outputs;
-  }
-
   // ------------------------------------------------------------------
   // updateResources
   // ------------------------------------------------------------------
@@ -788,12 +852,10 @@ export class EcsEc2Target implements DeploymentTarget {
 
       try {
         this.log("Updating CloudFormation stack...");
-        await this.cfnClient.send(
-          new UpdateStackCommand({
-            StackName: this.stackName,
-            TemplateBody: JSON.stringify(template),
-            Capabilities: ["CAPABILITY_NAMED_IAM"],
-          }),
+        await this.cloudFormationService.updateStack(
+          this.stackName,
+          JSON.stringify(template),
+          { capabilities: ["CAPABILITY_NAMED_IAM"] }
         );
         await this.waitForStack("UPDATE_COMPLETE");
       } catch (error: unknown) {
