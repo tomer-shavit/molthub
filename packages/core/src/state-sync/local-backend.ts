@@ -4,17 +4,21 @@
  * Stores state archives on the local disk with SHA-256 checksums
  * stored in a companion `.sha256` file and timestamps in `.meta.json`.
  */
-import { createHash } from "node:crypto";
 import {
   mkdir,
   readFile,
   writeFile,
   access,
-  readdir,
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { constants as fsConstants } from "node:fs";
 import { encryptBuffer, decryptBuffer } from "./encryption";
+import {
+  sha256,
+  readDirRecursive,
+  packDirectory,
+  unpackDirectory,
+} from "./directory-utils";
 import type {
   StateSyncBackend,
   SyncOptions,
@@ -28,96 +32,6 @@ interface BackupMeta {
   checksum: string;
   bytes: number;
   encrypted: boolean;
-}
-
-/**
- * Compute SHA-256 hex digest of a buffer.
- */
-export function sha256(data: Buffer): string {
-  return createHash("sha256").update(data).digest("hex");
-}
-
-/**
- * Recursively read all files under `dir` into a Map<relativePath, Buffer>.
- */
-async function readDirRecursive(
-  dir: string,
-  base?: string,
-): Promise<Map<string, Buffer>> {
-  const result = new Map<string, Buffer>();
-  const root = base ?? dir;
-
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return result;
-  }
-
-  for (const entry of entries) {
-    const fullPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      const sub = await readDirRecursive(fullPath, root);
-      for (const [k, v] of sub) {
-        result.set(k, v);
-      }
-    } else if (entry.isFile()) {
-      const relativePath = fullPath.slice(root.length + 1);
-      result.set(relativePath, await readFile(fullPath));
-    }
-  }
-  return result;
-}
-
-/**
- * Pack a directory's files into a single buffer.
- * Format: JSON header line (file list with offsets) + raw file contents.
- */
-function packDirectory(files: Map<string, Buffer>): Buffer {
-  const manifest: Array<{ path: string; offset: number; size: number }> = [];
-  let offset = 0;
-  const buffers: Buffer[] = [];
-
-  for (const [path, data] of files) {
-    manifest.push({ path, offset, size: data.length });
-    buffers.push(data);
-    offset += data.length;
-  }
-
-  const headerJson = JSON.stringify(manifest);
-  const headerBuf = Buffer.from(headerJson, "utf-8");
-  const headerLenBuf = Buffer.alloc(4);
-  headerLenBuf.writeUInt32BE(headerBuf.length, 0);
-
-  return Buffer.concat([headerLenBuf, headerBuf, ...buffers]);
-}
-
-/**
- * Unpack a buffer created by {@link packDirectory} into files on disk.
- */
-async function unpackDirectory(
-  packed: Buffer,
-  targetDir: string,
-): Promise<void> {
-  const headerLen = packed.readUInt32BE(0);
-  const headerJson = packed.subarray(4, 4 + headerLen).toString("utf-8");
-  const manifest: Array<{ path: string; offset: number; size: number }> =
-    JSON.parse(headerJson);
-
-  const dataStart = 4 + headerLen;
-
-  for (const entry of manifest) {
-    const filePath = join(targetDir, entry.path);
-    const dir = filePath.substring(0, filePath.lastIndexOf("/"));
-    if (dir) {
-      await mkdir(dir, { recursive: true });
-    }
-    const fileData = packed.subarray(
-      dataStart + entry.offset,
-      dataStart + entry.offset + entry.size,
-    );
-    await writeFile(filePath, fileData);
-  }
 }
 
 export class LocalStateSyncBackend implements StateSyncBackend {

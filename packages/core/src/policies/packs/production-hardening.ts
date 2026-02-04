@@ -1,0 +1,116 @@
+/**
+ * OpenClaw Production Hardening Policy Pack
+ *
+ * Production-specific security hardening for OpenClaw instances.
+ */
+
+import type { PolicyPack } from "../../policy-pack";
+
+export const OPENCLAW_PRODUCTION_HARDENING: PolicyPack = {
+  id: "builtin-openclaw-production-hardening",
+  name: "OpenClaw Production Hardening",
+  description: "Production-specific security hardening for OpenClaw instances",
+  isBuiltin: true,
+  autoApply: true,
+  targetEnvironments: ["prod"],
+  rules: [
+    {
+      id: "openclaw-require-sandbox",
+      name: "Require Docker Sandbox",
+      description: "Docker sandbox must be enabled in production",
+      type: "require_sandbox",
+      severity: "ERROR",
+      targetResourceTypes: ["instance"],
+      targetEnvironments: ["prod"],
+      enabled: true,
+      allowOverride: false,
+      config: {
+        type: "require_sandbox",
+        enabled: true,
+        allowedModes: ["non-main", "all"],
+      },
+    },
+    {
+      id: "openclaw-limit-tool-profile",
+      name: "Limit Tool Profile",
+      description: "'full' tool profile is not allowed in production",
+      type: "limit_tool_profile",
+      severity: "WARNING",
+      targetResourceTypes: ["instance"],
+      targetEnvironments: ["prod"],
+      enabled: true,
+      allowOverride: true,
+      config: {
+        type: "limit_tool_profile",
+        forbiddenProfiles: ["full"],
+      },
+    },
+    {
+      id: "openclaw-require-model-guardrails",
+      name: "Require Model Guardrails",
+      description: "Model configuration must meet production standards",
+      type: "require_model_guardrails",
+      severity: "WARNING",
+      targetResourceTypes: ["instance"],
+      targetEnvironments: ["prod"],
+      enabled: true,
+      allowOverride: true,
+      config: {
+        type: "require_model_guardrails",
+        enabled: true,
+        requireMaxTokens: true,
+        requireTemperatureLimit: true,
+        maxTemperature: 1.0,
+      },
+    },
+    {
+      id: "openclaw-forbid-open-group-policy",
+      name: "Forbid Open Group Policy",
+      description: "Group policy must not be 'open' in production",
+      type: "forbid_open_group_policy",
+      severity: "ERROR",
+      targetResourceTypes: ["instance"],
+      targetEnvironments: ["prod"],
+      enabled: true,
+      allowOverride: false,
+      config: {
+        type: "forbid_open_group_policy",
+        forbiddenValues: ["open"],
+      },
+    },
+    {
+      id: "openclaw-require-skill-verification",
+      name: "Require Skill Verification",
+      description: "Non-bundled skills must have integrity hashes in production",
+      type: "require_skill_verification",
+      severity: "ERROR",
+      targetResourceTypes: ["instance"],
+      targetEnvironments: ["prod"],
+      enabled: true,
+      allowOverride: false,
+      config: {
+        type: "require_skill_verification",
+        enabled: true,
+      },
+    },
+    {
+      id: "openclaw-require-token-rotation",
+      name: "Require Token Rotation Policy",
+      description: "Token rotation must be configured in production",
+      type: "require_token_rotation",
+      severity: "WARNING",
+      targetResourceTypes: ["instance"],
+      targetEnvironments: ["prod"],
+      enabled: true,
+      allowOverride: true,
+      config: { type: "require_token_rotation", enabled: true, maxAgeDays: 90 },
+    },
+  ],
+  isEnforced: true,
+  priority: 200,
+  version: "1.0.0",
+  isActive: true,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  createdBy: "system",
+};

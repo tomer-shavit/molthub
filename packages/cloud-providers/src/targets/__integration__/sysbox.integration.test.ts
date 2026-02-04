@@ -285,7 +285,7 @@ describeIf(DOCKER_AVAILABLE)(
 
 describe("Sysbox Security Config Integration", () => {
   it("should report sandbox support correctly based on Sysbox", async () => {
-    const { targetSupportsSandboxAsync } = await import("../../security/security-config");
+    const { targetSupportsSandboxAsync } = await import("../../security/security-defaults");
     const { DeploymentTargetType } = await import("../../interface/deployment-target");
 
     // Check Docker target sandbox support
@@ -304,7 +304,7 @@ describe("Sysbox Security Config Integration", () => {
   });
 
   it("should provide async security defaults with runtime info", async () => {
-    const { getSecurityDefaultsAsync } = await import("../../security/security-config");
+    const { getSecurityDefaultsAsync } = await import("../../security/security-applier");
     const { DeploymentTargetType } = await import("../../interface/deployment-target");
 
     const defaults = await getSecurityDefaultsAsync(DeploymentTargetType.DOCKER);
@@ -318,7 +318,7 @@ describe("Sysbox Security Config Integration", () => {
   });
 
   it("should provide async security summary", async () => {
-    const { getSecuritySummaryAsync } = await import("../../security/security-config");
+    const { getSecuritySummaryAsync } = await import("../../security/security-summary");
     const { DeploymentTargetType } = await import("../../interface/deployment-target");
 
     const summary = await getSecuritySummaryAsync(DeploymentTargetType.DOCKER);

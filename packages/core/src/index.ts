@@ -13,6 +13,7 @@ export * from "./openclaw-profile";
 export * from "./state-sync";
 export * from "./agent-evolution";
 export * from "./ai-gateway";
+export * from "./constants";
 
 export const CLAWSTER_VERSION = "0.1.0";
 export const API_VERSION = "clawster/v1";

@@ -256,6 +256,15 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  packages/adapters-common:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.30
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
   packages/cli:
     dependencies:
       '@clawster/cloud-providers':

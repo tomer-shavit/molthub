@@ -321,13 +321,24 @@ describe("Channel schemas", () => {
   });
 
   it("validates dmPolicy and groupPolicy enums", () => {
+    // Valid: dmPolicy "open" and groupPolicy "open" (no allowFrom needed)
     const result = WhatsAppChannelSchema.safeParse({
       type: "whatsapp",
       dmPolicy: "open",
-      groupPolicy: "allowlist",
+      groupPolicy: "open",
     });
     expect(result.success).toBe(true);
 
+    // Valid: groupPolicy "allowlist" with groupAllowFrom populated
+    const withAllowlist = WhatsAppChannelSchema.safeParse({
+      type: "whatsapp",
+      dmPolicy: "pairing",
+      groupPolicy: "allowlist",
+      groupAllowFrom: ["group1"],
+    });
+    expect(withAllowlist.success).toBe(true);
+
+    // Invalid: unknown dmPolicy value
     const bad = WhatsAppChannelSchema.safeParse({
       type: "whatsapp",
       dmPolicy: "public",
@@ -583,9 +594,10 @@ describe("Env config", () => {
 describe("Sandbox config", () => {
   it("applies sandbox defaults", () => {
     const result = SandboxConfigSchema.parse({});
-    expect(result.mode).toBe("off");
+    // Schema defaults: mode="all", scope="session", workspaceAccess="ro"
+    expect(result.mode).toBe("all");
     expect(result.scope).toBe("session");
-    expect(result.workspaceAccess).toBe("rw");
+    expect(result.workspaceAccess).toBe("ro");
   });
 
   it("validates Docker sandbox options", () => {

@@ -3,6 +3,8 @@
  */
 export * from "./interface";
 export * from "./encryption";
+export * from "./directory-utils";
+export * from "./base-backend";
 export * from "./local-backend";
 export * from "./s3-backend";
 export * from "./r2-backend";

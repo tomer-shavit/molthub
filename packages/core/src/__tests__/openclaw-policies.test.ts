@@ -598,14 +598,14 @@ describe("Built-in OpenClaw Policy Packs", () => {
   });
 
   it("Security Baseline has correct rules", () => {
-    expect(OPENCLAW_SECURITY_BASELINE.rules).toHaveLength(4);
+    expect(OPENCLAW_SECURITY_BASELINE.rules).toHaveLength(8);
     expect(OPENCLAW_SECURITY_BASELINE.autoApply).toBe(true);
     expect(OPENCLAW_SECURITY_BASELINE.isEnforced).toBe(true);
   });
 
   it("Production Hardening targets prod environment", () => {
     expect(OPENCLAW_PRODUCTION_HARDENING.targetEnvironments).toEqual(["prod"]);
-    expect(OPENCLAW_PRODUCTION_HARDENING.rules).toHaveLength(4);
+    expect(OPENCLAW_PRODUCTION_HARDENING.rules).toHaveLength(6);
   });
 
   it("Channel Safety has correct rules", () => {
