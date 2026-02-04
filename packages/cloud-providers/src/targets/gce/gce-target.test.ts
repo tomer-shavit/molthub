@@ -209,36 +209,96 @@ describe("GceTarget", () => {
 
   describe("install", () => {
     it("should return success result on successful install", async () => {
+      // Create target first - this instantiates all the SDK clients
       const target = new GceTarget(baseConfig);
 
-      // Mock all the necessary methods
-      const targetAny = target as unknown as {
-        ensureSecret: jest.Mock;
-        ensureVpcNetwork: jest.Mock;
-        ensureSubnet: jest.Mock;
-        ensureFirewall: jest.Mock;
-        ensureExternalIp: jest.Mock;
-        ensureDataDisk: jest.Mock;
-        createVmInstance: jest.Mock;
-        ensureInstanceGroup: jest.Mock;
-        ensureBackendService: jest.Mock;
-        ensureUrlMap: jest.Mock;
-        ensureHttpProxy: jest.Mock;
-        ensureForwardingRule: jest.Mock;
-      };
+      // Now get references to the mock SDK clients
+      const {
+        NetworksClient,
+        SubnetworksClient,
+        FirewallsClient,
+        GlobalAddressesClient,
+        DisksClient,
+        InstancesClient,
+        InstanceGroupsClient,
+        BackendServicesClient,
+        UrlMapsClient,
+        TargetHttpProxiesClient,
+        GlobalForwardingRulesClient,
+      } = jest.requireMock("@google-cloud/compute");
+      const { SecretManagerServiceClient } = jest.requireMock("@google-cloud/secret-manager");
 
-      targetAny.ensureSecret = jest.fn().mockResolvedValue(undefined);
-      targetAny.ensureVpcNetwork = jest.fn().mockResolvedValue(undefined);
-      targetAny.ensureSubnet = jest.fn().mockResolvedValue(undefined);
-      targetAny.ensureFirewall = jest.fn().mockResolvedValue(undefined);
-      targetAny.ensureExternalIp = jest.fn().mockResolvedValue(undefined);
-      targetAny.ensureDataDisk = jest.fn().mockResolvedValue(undefined);
-      targetAny.createVmInstance = jest.fn().mockResolvedValue(undefined);
-      targetAny.ensureInstanceGroup = jest.fn().mockResolvedValue(undefined);
-      targetAny.ensureBackendService = jest.fn().mockResolvedValue(undefined);
-      targetAny.ensureUrlMap = jest.fn().mockResolvedValue(undefined);
-      targetAny.ensureHttpProxy = jest.fn().mockResolvedValue(undefined);
-      targetAny.ensureForwardingRule = jest.fn().mockResolvedValue(undefined);
+      // Find the mock instances created for this target (last created instances)
+      const secretClient = SecretManagerServiceClient.mock.results.at(-1)?.value;
+      const networksClient = NetworksClient.mock.results.at(-1)?.value;
+      const subnetworksClient = SubnetworksClient.mock.results.at(-1)?.value;
+      const firewallsClient = FirewallsClient.mock.results.at(-1)?.value;
+      const addressesClient = GlobalAddressesClient.mock.results.at(-1)?.value;
+      const disksClient = DisksClient.mock.results.at(-1)?.value;
+      const instancesClient = InstancesClient.mock.results.at(-1)?.value;
+      const instanceGroupsClient = InstanceGroupsClient.mock.results.at(-1)?.value;
+      const backendServicesClient = BackendServicesClient.mock.results.at(-1)?.value;
+      const urlMapsClient = UrlMapsClient.mock.results.at(-1)?.value;
+      const httpProxiesClient = TargetHttpProxiesClient.mock.results.at(-1)?.value;
+      const forwardingRulesClient = GlobalForwardingRulesClient.mock.results.at(-1)?.value;
+
+      // Mock secret manager
+      secretClient.getSecret.mockRejectedValue(new Error("NOT_FOUND"));
+      secretClient.createSecret.mockResolvedValue([{}]);
+      secretClient.addSecretVersion.mockResolvedValue([{}]);
+
+      // Mock network resources - first call NOT_FOUND, second call after insert succeeds
+      networksClient.get
+        .mockRejectedValueOnce(new Error("NOT_FOUND"))
+        .mockResolvedValue([{ selfLink: "http://..." }]);
+      networksClient.insert.mockResolvedValue([{ name: "op-1" }]);
+
+      subnetworksClient.get
+        .mockRejectedValueOnce(new Error("NOT_FOUND"))
+        .mockResolvedValue([{ selfLink: "http://..." }]);
+      subnetworksClient.insert.mockResolvedValue([{ name: "op-1" }]);
+
+      firewallsClient.get.mockRejectedValue(new Error("NOT_FOUND"));
+      firewallsClient.insert.mockResolvedValue([{ name: "op-1" }]);
+
+      addressesClient.get
+        .mockRejectedValueOnce(new Error("NOT_FOUND"))
+        .mockResolvedValue([{ address: "1.2.3.4" }]);
+      addressesClient.insert.mockResolvedValue([{ name: "op-1" }]);
+
+      // Mock compute resources - first call NOT_FOUND (for checking), no need for second call
+      disksClient.get.mockRejectedValue(new Error("NOT_FOUND"));
+      disksClient.insert.mockResolvedValue([{ name: "op-1" }]);
+
+      instancesClient.insert.mockResolvedValue([{ name: "op-1" }]);
+      instancesClient.get.mockResolvedValue([{ selfLink: "http://..." }]);
+
+      instanceGroupsClient.get
+        .mockRejectedValueOnce(new Error("NOT_FOUND"))
+        .mockResolvedValue([{ selfLink: "http://..." }]);
+      instanceGroupsClient.insert.mockResolvedValue([{ name: "op-1" }]);
+      instanceGroupsClient.addInstances.mockResolvedValue([{ name: "op-1" }]);
+
+      // Mock load balancer resources
+      backendServicesClient.get
+        .mockRejectedValueOnce(new Error("NOT_FOUND"))
+        .mockResolvedValue([{ selfLink: "http://..." }]);
+      backendServicesClient.insert.mockResolvedValue([{ name: "op-1" }]);
+
+      urlMapsClient.get
+        .mockRejectedValueOnce(new Error("NOT_FOUND"))
+        .mockResolvedValue([{ selfLink: "http://..." }]);
+      urlMapsClient.insert.mockResolvedValue([{ name: "op-1" }]);
+
+      httpProxiesClient.get
+        .mockRejectedValueOnce(new Error("NOT_FOUND"))
+        .mockResolvedValue([{ selfLink: "http://..." }]);
+      httpProxiesClient.insert.mockResolvedValue([{ name: "op-1" }]);
+
+      forwardingRulesClient.get
+        .mockRejectedValueOnce(new Error("NOT_FOUND"))
+        .mockResolvedValue([{ selfLink: "http://..." }]);
+      forwardingRulesClient.insert.mockResolvedValue([{ name: "op-1" }]);
 
       const result = await target.install({
         profileName: "test-bot",
@@ -254,11 +314,12 @@ describe("GceTarget", () => {
     it("should return failure result on error", async () => {
       const target = new GceTarget(baseConfig);
 
-      const targetAny = target as unknown as {
-        ensureSecret: jest.Mock;
-      };
+      const { SecretManagerServiceClient } = jest.requireMock("@google-cloud/secret-manager");
+      const secretClient = SecretManagerServiceClient.mock.results.at(-1)?.value;
 
-      targetAny.ensureSecret = jest.fn().mockRejectedValue(new Error("Secret creation failed"));
+      // Mock secret manager to fail
+      secretClient.getSecret.mockRejectedValue(new Error("NOT_FOUND"));
+      secretClient.createSecret.mockRejectedValue(new Error("Secret creation failed"));
 
       const result = await target.install({
         profileName: "test-bot",
@@ -274,17 +335,27 @@ describe("GceTarget", () => {
     it("should transform config correctly", async () => {
       const target = new GceTarget(baseConfig);
 
-      const targetAny = target as unknown as {
-        ensureSecret: jest.Mock;
-        updateVmMetadata: jest.Mock;
-      };
+      const { SecretManagerServiceClient } = jest.requireMock("@google-cloud/secret-manager");
+      const { InstancesClient } = jest.requireMock("@google-cloud/compute");
 
+      const secretClient = SecretManagerServiceClient.mock.results.at(-1)?.value;
+      const instancesClient = InstancesClient.mock.results.at(-1)?.value;
+
+      // Capture config passed to secret manager
       let capturedConfig: string | undefined;
-      targetAny.ensureSecret = jest.fn().mockImplementation((_name, config) => {
-        capturedConfig = config;
-        return Promise.resolve();
-      });
-      targetAny.updateVmMetadata = jest.fn().mockResolvedValue(undefined);
+      secretClient.getSecret.mockResolvedValue([{}]);
+      secretClient.addSecretVersion.mockImplementation(
+        ({ payload }: { payload: { data: Buffer } }) => {
+          capturedConfig = payload.data.toString("utf8");
+          return Promise.resolve([{}]);
+        }
+      );
+
+      // Mock VM metadata update
+      instancesClient.get.mockResolvedValue([
+        { metadata: { items: [], fingerprint: "abc" } },
+      ]);
+      instancesClient.setMetadata.mockResolvedValue([{ name: "op-1" }]);
 
       await target.configure({
         profileName: "test-bot",
@@ -292,7 +363,7 @@ describe("GceTarget", () => {
         config: {
           gateway: {
             port: 12345, // Should be deleted
-            host: "localhost", // Should be deleted
+            host: "localhost", // Should be replaced with bind: "lan"
             auth: { token: "secret" },
           },
           sandbox: { mode: "off" }, // Should move to agents.defaults.sandbox
@@ -309,9 +380,7 @@ describe("GceTarget", () => {
         },
       });
 
-      expect(targetAny.ensureSecret).toHaveBeenCalled();
       expect(capturedConfig).toBeDefined();
-
       const parsed = JSON.parse(capturedConfig!);
 
       // gateway.bind should be "lan", port/host should be deleted
@@ -336,13 +405,21 @@ describe("GceTarget", () => {
     it("should return requiresRestart: true on success", async () => {
       const target = new GceTarget(baseConfig);
 
-      const targetAny = target as unknown as {
-        ensureSecret: jest.Mock;
-        updateVmMetadata: jest.Mock;
-      };
+      const { SecretManagerServiceClient } = jest.requireMock("@google-cloud/secret-manager");
+      const { InstancesClient } = jest.requireMock("@google-cloud/compute");
 
-      targetAny.ensureSecret = jest.fn().mockResolvedValue(undefined);
-      targetAny.updateVmMetadata = jest.fn().mockResolvedValue(undefined);
+      const secretClient = SecretManagerServiceClient.mock.results.at(-1)?.value;
+      const instancesClient = InstancesClient.mock.results.at(-1)?.value;
+
+      // Mock secret manager
+      secretClient.getSecret.mockResolvedValue([{}]);
+      secretClient.addSecretVersion.mockResolvedValue([{}]);
+
+      // Mock VM metadata update
+      instancesClient.get.mockResolvedValue([
+        { metadata: { items: [], fingerprint: "abc" } },
+      ]);
+      instancesClient.setMetadata.mockResolvedValue([{ name: "op-1" }]);
 
       const result = await target.configure({
         profileName: "test-bot",
@@ -620,57 +697,57 @@ describe("GceTarget", () => {
       } = jest.requireMock("@google-cloud/compute");
       const { SecretManagerServiceClient } = jest.requireMock("@google-cloud/secret-manager");
 
-      GlobalForwardingRulesClient.mock.results[0]?.value?.delete?.mockImplementation(() => {
+      GlobalForwardingRulesClient.mock.results.at(-1)?.value?.delete?.mockImplementation(() => {
         deleteOrder.push("forwarding-rule");
         return [{ name: "op-1" }];
       });
 
-      TargetHttpProxiesClient.mock.results[0]?.value?.delete?.mockImplementation(() => {
+      TargetHttpProxiesClient.mock.results.at(-1)?.value?.delete?.mockImplementation(() => {
         deleteOrder.push("http-proxy");
         return [{ name: "op-1" }];
       });
 
-      UrlMapsClient.mock.results[0]?.value?.delete?.mockImplementation(() => {
+      UrlMapsClient.mock.results.at(-1)?.value?.delete?.mockImplementation(() => {
         deleteOrder.push("url-map");
         return [{ name: "op-1" }];
       });
 
-      BackendServicesClient.mock.results[0]?.value?.delete?.mockImplementation(() => {
+      BackendServicesClient.mock.results.at(-1)?.value?.delete?.mockImplementation(() => {
         deleteOrder.push("backend-service");
         return [{ name: "op-1" }];
       });
 
-      SecurityPoliciesClient.mock.results[0]?.value?.delete?.mockImplementation(() => {
+      SecurityPoliciesClient.mock.results.at(-1)?.value?.delete?.mockImplementation(() => {
         deleteOrder.push("security-policy");
         return [{ name: "op-1" }];
       });
 
-      InstanceGroupsClient.mock.results[0]?.value?.delete?.mockImplementation(() => {
+      InstanceGroupsClient.mock.results.at(-1)?.value?.delete?.mockImplementation(() => {
         deleteOrder.push("instance-group");
         return [{ name: "op-1" }];
       });
 
-      InstancesClient.mock.results[0]?.value?.delete?.mockImplementation(() => {
+      InstancesClient.mock.results.at(-1)?.value?.delete?.mockImplementation(() => {
         deleteOrder.push("vm-instance");
         return [{ name: "op-1" }];
       });
 
-      DisksClient.mock.results[0]?.value?.delete?.mockImplementation(() => {
+      DisksClient.mock.results.at(-1)?.value?.delete?.mockImplementation(() => {
         deleteOrder.push("data-disk");
         return [{ name: "op-1" }];
       });
 
-      GlobalAddressesClient.mock.results[0]?.value?.delete?.mockImplementation(() => {
+      GlobalAddressesClient.mock.results.at(-1)?.value?.delete?.mockImplementation(() => {
         deleteOrder.push("external-ip");
         return [{ name: "op-1" }];
       });
 
-      FirewallsClient.mock.results[0]?.value?.delete?.mockImplementation(() => {
+      FirewallsClient.mock.results.at(-1)?.value?.delete?.mockImplementation(() => {
         deleteOrder.push("firewall");
         return [{ name: "op-1" }];
       });
 
-      SecretManagerServiceClient.mock.results[0]?.value?.deleteSecret?.mockImplementation(() => {
+      SecretManagerServiceClient.mock.results.at(-1)?.value?.deleteSecret?.mockImplementation(() => {
         deleteOrder.push("secret");
         return Promise.resolve();
       });
@@ -686,24 +763,41 @@ describe("GceTarget", () => {
       expect(deleteOrder.indexOf("data-disk")).toBeLessThan(deleteOrder.indexOf("secret"));
     });
 
-    it("should continue deletion even if some resources fail", async () => {
+    it("should continue deletion even if some resources are not found", async () => {
       const target = new GceTarget(baseConfig);
 
-      const { GlobalForwardingRulesClient, TargetHttpProxiesClient } = jest.requireMock("@google-cloud/compute");
+      const {
+        GlobalForwardingRulesClient,
+        TargetHttpProxiesClient,
+        UrlMapsClient,
+        BackendServicesClient,
+        SecurityPoliciesClient,
+        InstanceGroupsClient,
+        InstancesClient,
+        DisksClient,
+        GlobalAddressesClient,
+        FirewallsClient,
+      } = jest.requireMock("@google-cloud/compute");
       const { SecretManagerServiceClient } = jest.requireMock("@google-cloud/secret-manager");
 
-      // First delete fails
-      GlobalForwardingRulesClient.mock.results[0]?.value?.delete?.mockRejectedValue(
-        new Error("Resource not found")
+      // First delete fails with NOT_FOUND (already deleted - should be ignored)
+      GlobalForwardingRulesClient.mock.results.at(-1)?.value?.delete?.mockRejectedValue(
+        new Error("NOT_FOUND: Resource was not found")
       );
 
-      // Second delete works
-      TargetHttpProxiesClient.mock.results[0]?.value?.delete?.mockResolvedValue([{ name: "op-1" }]);
+      // All other deletes succeed
+      TargetHttpProxiesClient.mock.results.at(-1)?.value?.delete?.mockResolvedValue([{ name: "op-1" }]);
+      UrlMapsClient.mock.results.at(-1)?.value?.delete?.mockResolvedValue([{ name: "op-1" }]);
+      BackendServicesClient.mock.results.at(-1)?.value?.delete?.mockResolvedValue([{ name: "op-1" }]);
+      SecurityPoliciesClient.mock.results.at(-1)?.value?.delete?.mockResolvedValue([{ name: "op-1" }]);
+      InstanceGroupsClient.mock.results.at(-1)?.value?.delete?.mockResolvedValue([{ name: "op-1" }]);
+      InstancesClient.mock.results.at(-1)?.value?.delete?.mockResolvedValue([{ name: "op-1" }]);
+      DisksClient.mock.results.at(-1)?.value?.delete?.mockResolvedValue([{ name: "op-1" }]);
+      GlobalAddressesClient.mock.results.at(-1)?.value?.delete?.mockResolvedValue([{ name: "op-1" }]);
+      FirewallsClient.mock.results.at(-1)?.value?.delete?.mockResolvedValue([{ name: "op-1" }]);
+      SecretManagerServiceClient.mock.results.at(-1)?.value?.deleteSecret?.mockResolvedValue(undefined);
 
-      // Secret delete also works
-      SecretManagerServiceClient.mock.results[0]?.value?.deleteSecret?.mockResolvedValue(undefined);
-
-      // Should not throw
+      // Should not throw when resources are NOT_FOUND
       await expect(target.destroy()).resolves.not.toThrow();
     });
   });

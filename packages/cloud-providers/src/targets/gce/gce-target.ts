@@ -1,3 +1,22 @@
+/**
+ * GCE Target
+ *
+ * GceTarget manages an OpenClaw gateway instance running on
+ * Google Compute Engine VM.
+ *
+ * ARCHITECTURE: VM-based deployment with full Docker support.
+ * Unlike Cloud Run, Compute Engine provides:
+ * - Persistent Disk for WhatsApp sessions (survives restarts)
+ * - Full Docker daemon access for sandbox mode (Docker-in-Docker)
+ * - No cold starts - VM is always running
+ * - State survives VM restarts
+ *
+ * Security:
+ *   Internet -> External LB -> Instance Group NEG -> GCE VM (firewall-protected)
+ *                                                       |
+ *                                                 Persistent Disk
+ */
+
 import {
   InstancesClient,
   DisksClient,
@@ -18,8 +37,9 @@ import {
 } from "@google-cloud/compute";
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { Logging } from "@google-cloud/logging";
+
+import { BaseDeploymentTarget } from "../../base/base-deployment-target";
 import {
-  DeploymentTarget,
   DeploymentTargetType,
   InstallOptions,
   InstallResult,
@@ -31,31 +51,24 @@ import {
 } from "../../interface/deployment-target";
 import type { ResourceSpec, ResourceUpdateResult } from "../../interface/resource-spec";
 import { GCE_TIER_SPECS } from "../../interface/resource-spec";
+
+import {
+  GceOperationManager,
+  GceNetworkManager,
+  GceComputeManager,
+  GceLoadBalancerManager,
+} from "./managers";
 import type { GceConfig } from "./gce-config";
+import type { VmInstanceConfig, LoadBalancerNames, FirewallRule } from "./types";
 
 const DEFAULT_MACHINE_TYPE = "e2-small";
 const DEFAULT_BOOT_DISK_SIZE_GB = 20;
 const DEFAULT_DATA_DISK_SIZE_GB = 10;
-const OPERATION_POLL_INTERVAL_MS = 5_000;
-const OPERATION_TIMEOUT_MS = 600_000; // 10 minutes
 
 /**
- * GceTarget manages an OpenClaw gateway instance running on
- * Google Compute Engine VM.
- *
- * ARCHITECTURE: VM-based deployment with full Docker support.
- * Unlike Cloud Run, Compute Engine provides:
- * - Persistent Disk for WhatsApp sessions (survives restarts)
- * - Full Docker daemon access for sandbox mode (Docker-in-Docker)
- * - No cold starts - VM is always running
- * - State survives VM restarts
- *
- * Security:
- *   Internet -> External LB -> Instance Group NEG -> GCE VM (firewall-protected)
- *                                                       |
- *                                                 Persistent Disk
+ * GCE deployment target for OpenClaw gateway.
  */
-export class GceTarget implements DeploymentTarget {
+export class GceTarget extends BaseDeploymentTarget {
   readonly type = DeploymentTargetType.GCE;
 
   private readonly config: GceConfig;
@@ -63,23 +76,13 @@ export class GceTarget implements DeploymentTarget {
   private readonly bootDiskSizeGb: number;
   private readonly dataDiskSizeGb: number;
 
-  // GCP clients
-  private readonly instancesClient: InstancesClient;
-  private readonly disksClient: DisksClient;
-  private readonly networksClient: NetworksClient;
-  private readonly subnetworksClient: SubnetworksClient;
-  private readonly firewallsClient: FirewallsClient;
-  private readonly addressesClient: GlobalAddressesClient;
-  private readonly backendServicesClient: BackendServicesClient;
-  private readonly urlMapsClient: UrlMapsClient;
-  private readonly httpProxiesClient: TargetHttpProxiesClient;
-  private readonly httpsProxiesClient: TargetHttpsProxiesClient;
-  private readonly forwardingRulesClient: GlobalForwardingRulesClient;
-  private readonly instanceGroupsClient: InstanceGroupsClient;
-  private readonly securityPoliciesClient: SecurityPoliciesClient;
-  private readonly globalOperationsClient: GlobalOperationsClient;
-  private readonly zoneOperationsClient: ZoneOperationsClient;
-  private readonly regionOperationsClient: RegionOperationsClient;
+  // Managers
+  private readonly operationManager: GceOperationManager;
+  private readonly networkManager: GceNetworkManager;
+  private readonly computeManager: GceComputeManager;
+  private readonly loadBalancerManager: GceLoadBalancerManager;
+
+  // GCP clients (only for secret manager and logging which aren't in managers)
   private readonly secretClient: SecretManagerServiceClient;
   private readonly logging: Logging;
 
@@ -103,10 +106,8 @@ export class GceTarget implements DeploymentTarget {
   /** Cached external IP for getEndpoint */
   private cachedExternalIp = "";
 
-  /** Log callback for streaming progress to the UI */
-  private onLog?: (line: string, stream: "stdout" | "stderr") => void;
-
   constructor(config: GceConfig) {
+    super();
     this.config = config;
     this.machineType = config.machineType ?? DEFAULT_MACHINE_TYPE;
     this.bootDiskSizeGb = config.bootDiskSizeGb ?? DEFAULT_BOOT_DISK_SIZE_GB;
@@ -118,27 +119,79 @@ export class GceTarget implements DeploymentTarget {
       : {};
 
     // Initialize GCP clients
-    this.instancesClient = new InstancesClient(clientOptions);
-    this.disksClient = new DisksClient(clientOptions);
-    this.networksClient = new NetworksClient(clientOptions);
-    this.subnetworksClient = new SubnetworksClient(clientOptions);
-    this.firewallsClient = new FirewallsClient(clientOptions);
-    this.addressesClient = new GlobalAddressesClient(clientOptions);
-    this.backendServicesClient = new BackendServicesClient(clientOptions);
-    this.urlMapsClient = new UrlMapsClient(clientOptions);
-    this.httpProxiesClient = new TargetHttpProxiesClient(clientOptions);
-    this.httpsProxiesClient = new TargetHttpsProxiesClient(clientOptions);
-    this.forwardingRulesClient = new GlobalForwardingRulesClient(clientOptions);
-    this.instanceGroupsClient = new InstanceGroupsClient(clientOptions);
-    this.securityPoliciesClient = new SecurityPoliciesClient(clientOptions);
-    this.globalOperationsClient = new GlobalOperationsClient(clientOptions);
-    this.zoneOperationsClient = new ZoneOperationsClient(clientOptions);
-    this.regionOperationsClient = new RegionOperationsClient(clientOptions);
+    const instancesClient = new InstancesClient(clientOptions);
+    const disksClient = new DisksClient(clientOptions);
+    const networksClient = new NetworksClient(clientOptions);
+    const subnetworksClient = new SubnetworksClient(clientOptions);
+    const firewallsClient = new FirewallsClient(clientOptions);
+    const addressesClient = new GlobalAddressesClient(clientOptions);
+    const backendServicesClient = new BackendServicesClient(clientOptions);
+    const urlMapsClient = new UrlMapsClient(clientOptions);
+    const httpProxiesClient = new TargetHttpProxiesClient(clientOptions);
+    const httpsProxiesClient = new TargetHttpsProxiesClient(clientOptions);
+    const forwardingRulesClient = new GlobalForwardingRulesClient(clientOptions);
+    const instanceGroupsClient = new InstanceGroupsClient(clientOptions);
+    const securityPoliciesClient = new SecurityPoliciesClient(clientOptions);
+    const globalOperationsClient = new GlobalOperationsClient(clientOptions);
+    const zoneOperationsClient = new ZoneOperationsClient(clientOptions);
+    const regionOperationsClient = new RegionOperationsClient(clientOptions);
     this.secretClient = new SecretManagerServiceClient(clientOptions);
     this.logging = new Logging({
       projectId: config.projectId,
       ...clientOptions,
     });
+
+    // Create log callback that uses base class log method
+    const logCallback = (msg: string, stream: "stdout" | "stderr") => this.log(msg, stream);
+
+    // Initialize operation manager
+    this.operationManager = new GceOperationManager(
+      globalOperationsClient,
+      zoneOperationsClient,
+      regionOperationsClient,
+      config.projectId,
+      config.zone,
+      this.region,
+      logCallback
+    );
+
+    // Initialize network manager
+    this.networkManager = new GceNetworkManager(
+      networksClient,
+      subnetworksClient,
+      firewallsClient,
+      addressesClient,
+      this.operationManager,
+      config.projectId,
+      this.region,
+      logCallback
+    );
+
+    // Initialize compute manager
+    this.computeManager = new GceComputeManager(
+      instancesClient,
+      disksClient,
+      instanceGroupsClient,
+      this.operationManager,
+      config.projectId,
+      config.zone,
+      this.region,
+      logCallback
+    );
+
+    // Initialize load balancer manager
+    this.loadBalancerManager = new GceLoadBalancerManager(
+      backendServicesClient,
+      urlMapsClient,
+      httpProxiesClient,
+      httpsProxiesClient,
+      forwardingRulesClient,
+      securityPoliciesClient,
+      this.operationManager,
+      config.projectId,
+      config.zone,
+      logCallback
+    );
 
     // Derive resource names from profileName if available (for re-instantiation)
     if (config.profileName) {
@@ -147,24 +200,32 @@ export class GceTarget implements DeploymentTarget {
   }
 
   // ------------------------------------------------------------------
-  // Log streaming
-  // ------------------------------------------------------------------
-
-  setLogCallback(cb: (line: string, stream: "stdout" | "stderr") => void): void {
-    this.onLog = cb;
-  }
-
-  /**
-   * Emit a log line to the streaming callback (if registered).
-   * Used to provide real-time feedback during long-running operations.
-   */
-  private log(message: string, stream: "stdout" | "stderr" = "stdout"): void {
-    this.onLog?.(message, stream);
-  }
-
-  // ------------------------------------------------------------------
   // Resource name helpers
   // ------------------------------------------------------------------
+
+  /**
+   * GCE-specific name sanitization.
+   * GCE resource names must:
+   * - Be lowercase
+   * - Start with a letter
+   * - Contain only letters, numbers, and hyphens
+   * - Max 63 characters
+   */
+  protected override sanitizeName(name: string, maxLength = 63): string {
+    let sanitized = name
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/^[^a-z]/, "a") // Must start with a letter
+      .replace(/-+/g, "-")
+      .replace(/-$/, "")
+      .slice(0, maxLength);
+
+    if (!sanitized) {
+      throw new Error(`Invalid name: "${name}" produces empty sanitized value`);
+    }
+
+    return sanitized;
+  }
 
   private deriveResourceNames(profileName: string): void {
     const sanitized = this.sanitizeName(profileName);
@@ -182,21 +243,6 @@ export class GceTarget implements DeploymentTarget {
     this.httpsProxyName = `clawster-https-proxy-${sanitized}`;
     this.forwardingRuleName = `clawster-fwd-${sanitized}`;
     this.securityPolicyName = `clawster-security-${sanitized}`;
-  }
-
-  /**
-   * Sanitize name for GCP resources.
-   * Must be lowercase, start with a letter, contain only letters, numbers, hyphens.
-   * Max 63 characters.
-   */
-  private sanitizeName(name: string): string {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, "-")
-      .replace(/^[^a-z]/, "a")
-      .replace(/-+/g, "-")
-      .replace(/-$/, "")
-      .slice(0, 63);
   }
 
   /** Extract region from zone (e.g., "us-central1-a" -> "us-central1") */
@@ -225,27 +271,41 @@ export class GceTarget implements DeploymentTarget {
 
       // 2. Create VPC Network (if it doesn't exist)
       this.log(`[2/13] Ensuring VPC network: ${this.vpcNetworkName}`);
-      await this.ensureVpcNetwork();
+      await this.networkManager.ensureVpcNetwork(this.vpcNetworkName, {
+        description: `Clawster VPC for ${this.instanceName}`,
+      });
       this.log(`VPC network ready`);
 
       // 3. Create Subnet
       this.log(`[3/13] Ensuring subnet: ${this.subnetName}`);
-      await this.ensureSubnet();
+      await this.networkManager.ensureSubnet(this.vpcNetworkName, this.subnetName, "10.0.0.0/24");
       this.log(`Subnet ready`);
 
       // 4. Create Firewall rules
       this.log(`[4/13] Ensuring firewall rules: ${this.firewallName}`);
-      await this.ensureFirewall();
+      const firewallRules: FirewallRule[] = [
+        {
+          protocol: "tcp",
+          ports: [String(this.gatewayPort)],
+          sourceRanges: [
+            "130.211.0.0/22", // GCP health check
+            "35.191.0.0/16", // GCP health check
+          ],
+          targetTags: [`clawster-${this.sanitizeName(this.instanceName)}`],
+          description: `Allow traffic to Clawster instance ${this.instanceName}`,
+        },
+      ];
+      await this.networkManager.ensureFirewall(this.firewallName, this.vpcNetworkName, firewallRules);
       this.log(`Firewall rules ready`);
 
       // 5. Reserve external IP address
       this.log(`[5/13] Reserving external IP: ${this.externalIpName}`);
-      await this.ensureExternalIp();
+      this.cachedExternalIp = await this.networkManager.ensureExternalIp(this.externalIpName);
       this.log(`External IP reserved: ${this.cachedExternalIp || "(pending)"}`);
 
       // 6. Create Persistent Disk for data
       this.log(`[6/13] Creating persistent data disk: ${this.dataDiskName} (${this.dataDiskSizeGb}GB)`);
-      await this.ensureDataDisk();
+      await this.computeManager.ensureDataDisk(this.dataDiskName, this.dataDiskSizeGb);
       this.log(`Persistent disk ready`);
 
       // 7. Create VM instance with Container-Optimized OS
@@ -255,13 +315,21 @@ export class GceTarget implements DeploymentTarget {
 
       // 8. Create unmanaged instance group for load balancer
       this.log(`[8/13] Creating instance group: ${this.instanceGroupName}`);
-      await this.ensureInstanceGroup();
+      await this.computeManager.ensureInstanceGroup(
+        this.instanceGroupName,
+        this.instanceName,
+        { name: "http", port: this.gatewayPort },
+        this.vpcNetworkName
+      );
       this.log(`Instance group ready`);
 
       // 9. Create Cloud Armor security policy (if allowedCidr configured)
       if (this.config.allowedCidr && this.config.allowedCidr.length > 0) {
         this.log(`[9/13] Creating Cloud Armor security policy: ${this.securityPolicyName}`);
-        await this.ensureSecurityPolicy();
+        await this.loadBalancerManager.ensureSecurityPolicy(
+          this.securityPolicyName,
+          this.config.allowedCidr
+        );
         this.log(`Security policy ready`);
       } else {
         this.log(`[9/13] Skipping Cloud Armor (no allowedCidr configured)`);
@@ -269,23 +337,44 @@ export class GceTarget implements DeploymentTarget {
 
       // 10. Create Backend Service with instance group
       this.log(`[10/13] Creating backend service: ${this.backendServiceName}`);
-      await this.ensureBackendService();
+      const instanceGroupUrl = `https://www.googleapis.com/compute/v1/projects/${this.config.projectId}/zones/${this.config.zone}/instanceGroups/${this.instanceGroupName}`;
+      await this.loadBalancerManager.ensureBackendService(
+        this.backendServiceName,
+        instanceGroupUrl,
+        this.config.allowedCidr?.length ? this.securityPolicyName : undefined
+      );
       this.log(`Backend service ready`);
 
       // 11. Create URL Map
       this.log(`[11/13] Creating URL map: ${this.urlMapName}`);
-      await this.ensureUrlMap();
+      const backendServiceUrl = `https://www.googleapis.com/compute/v1/projects/${this.config.projectId}/global/backendServices/${this.backendServiceName}`;
+      await this.loadBalancerManager.ensureUrlMap(this.urlMapName, backendServiceUrl);
       this.log(`URL map ready`);
 
       // 12. Create HTTP(S) Proxy
       const proxyType = this.config.sslCertificateId ? "HTTPS" : "HTTP";
       this.log(`[12/13] Creating ${proxyType} proxy`);
-      await this.ensureHttpProxy();
+      const urlMapUrl = `https://www.googleapis.com/compute/v1/projects/${this.config.projectId}/global/urlMaps/${this.urlMapName}`;
+      let proxyUrl: string;
+      if (this.config.sslCertificateId) {
+        proxyUrl = await this.loadBalancerManager.ensureHttpsProxy(
+          this.httpsProxyName,
+          urlMapUrl,
+          this.config.sslCertificateId
+        );
+      } else {
+        proxyUrl = await this.loadBalancerManager.ensureHttpProxy(this.httpProxyName, urlMapUrl);
+      }
       this.log(`${proxyType} proxy ready`);
 
       // 13. Create Forwarding Rule
       this.log(`[13/13] Creating forwarding rule: ${this.forwardingRuleName}`);
-      await this.ensureForwardingRule();
+      await this.loadBalancerManager.ensureForwardingRule(
+        this.forwardingRuleName,
+        proxyUrl,
+        this.externalIpName,
+        this.config.sslCertificateId ? 443 : 80
+      );
       this.log(`Forwarding rule ready`);
 
       this.log(`GCE VM installation complete!`);
@@ -321,46 +410,19 @@ export class GceTarget implements DeploymentTarget {
       this.deriveResourceNames(profileName);
     }
 
-    // Apply the same config transformations as other deployment targets
-    const raw = { ...config.config } as Record<string, unknown>;
+    // Use base class transformConfig for standard transformations
+    const transformed = this.transformConfig(config.config as Record<string, unknown>);
 
-    // gateway.bind = "lan" - container MUST bind to 0.0.0.0
-    if (raw.gateway && typeof raw.gateway === "object") {
-      const gw = { ...(raw.gateway as Record<string, unknown>) };
+    // Apply GCE-specific transformation: gateway.bind = "lan"
+    if (transformed.gateway && typeof transformed.gateway === "object") {
+      const gw = { ...(transformed.gateway as Record<string, unknown>) };
       gw.bind = "lan";
       delete gw.host;
       delete gw.port;
-      raw.gateway = gw;
+      transformed.gateway = gw;
     }
 
-    // skills.allowUnverified is not a valid OpenClaw key
-    if (raw.skills && typeof raw.skills === "object") {
-      const skills = { ...(raw.skills as Record<string, unknown>) };
-      delete skills.allowUnverified;
-      raw.skills = skills;
-    }
-
-    // sandbox at root level -> agents.defaults.sandbox
-    if ("sandbox" in raw) {
-      const agents = (raw.agents as Record<string, unknown>) || {};
-      const defaults = (agents.defaults as Record<string, unknown>) || {};
-      defaults.sandbox = raw.sandbox;
-      agents.defaults = defaults;
-      raw.agents = agents;
-      delete raw.sandbox;
-    }
-
-    // channels.*.enabled is not valid - presence means active
-    if (raw.channels && typeof raw.channels === "object") {
-      for (const [key, value] of Object.entries(raw.channels as Record<string, unknown>)) {
-        if (value && typeof value === "object" && "enabled" in (value as Record<string, unknown>)) {
-          const { enabled: _enabled, ...rest } = value as Record<string, unknown>;
-          (raw.channels as Record<string, unknown>)[key] = rest;
-        }
-      }
-    }
-
-    const configData = JSON.stringify(raw, null, 2);
+    const configData = JSON.stringify(transformed, null, 2);
 
     try {
       // Store config in Secret Manager (backup)
@@ -370,7 +432,9 @@ export class GceTarget implements DeploymentTarget {
 
       // Update VM instance metadata with new config
       this.log(`Updating VM metadata for instance: ${this.instanceName}`);
-      await this.updateVmMetadata(configData);
+      await this.computeManager.updateVmMetadata(this.instanceName, {
+        "openclaw-config": configData,
+      });
       this.log(`VM metadata updated`);
 
       this.log(`Configuration complete`);
@@ -397,13 +461,7 @@ export class GceTarget implements DeploymentTarget {
 
   async start(): Promise<void> {
     this.log(`Starting VM instance: ${this.instanceName}`);
-    const [operation] = await this.instancesClient.start({
-      project: this.config.projectId,
-      zone: this.config.zone,
-      instance: this.instanceName,
-    });
-
-    await this.waitForZoneOperation(operation, "start");
+    await this.computeManager.startInstance(this.instanceName);
     this.log(`VM instance started`);
   }
 
@@ -413,13 +471,7 @@ export class GceTarget implements DeploymentTarget {
 
   async stop(): Promise<void> {
     this.log(`Stopping VM instance: ${this.instanceName}`);
-    const [operation] = await this.instancesClient.stop({
-      project: this.config.projectId,
-      zone: this.config.zone,
-      instance: this.instanceName,
-    });
-
-    await this.waitForZoneOperation(operation, "stop");
+    await this.computeManager.stopInstance(this.instanceName);
     this.log(`VM instance stopped`);
   }
 
@@ -429,13 +481,7 @@ export class GceTarget implements DeploymentTarget {
 
   async restart(): Promise<void> {
     this.log(`Restarting VM instance: ${this.instanceName}`);
-    const [operation] = await this.instancesClient.reset({
-      project: this.config.projectId,
-      zone: this.config.zone,
-      instance: this.instanceName,
-    });
-
-    await this.waitForZoneOperation(operation, "restart");
+    await this.computeManager.resetInstance(this.instanceName);
     this.log(`VM instance restarted`);
   }
 
@@ -445,16 +491,12 @@ export class GceTarget implements DeploymentTarget {
 
   async getStatus(): Promise<TargetStatus> {
     try {
-      const [instance] = await this.instancesClient.get({
-        project: this.config.projectId,
-        zone: this.config.zone,
-        instance: this.instanceName,
-      });
+      const vmStatus = await this.computeManager.getInstanceStatus(this.instanceName);
 
       let state: TargetStatus["state"];
       let error: string | undefined;
 
-      switch (instance.status) {
+      switch (vmStatus) {
         case "RUNNING":
           state = "running";
           break;
@@ -469,9 +511,10 @@ export class GceTarget implements DeploymentTarget {
         case "REPAIRING":
           state = "running"; // Transitional states
           break;
+        case "UNKNOWN":
         default:
           state = "error";
-          error = `Unknown VM status: ${instance.status}`;
+          error = `Unknown VM status: ${vmStatus}`;
       }
 
       return {
@@ -543,11 +586,7 @@ export class GceTarget implements DeploymentTarget {
   async getEndpoint(): Promise<GatewayEndpoint> {
     // CRITICAL: Return the External Load Balancer IP, NEVER the VM's ephemeral IP
     if (!this.cachedExternalIp) {
-      const [address] = await this.addressesClient.get({
-        project: this.config.projectId,
-        address: this.externalIpName,
-      });
-      this.cachedExternalIp = address.address ?? "";
+      this.cachedExternalIp = await this.networkManager.getExternalIp(this.externalIpName);
     }
 
     if (!this.cachedExternalIp) {
@@ -567,151 +606,48 @@ export class GceTarget implements DeploymentTarget {
 
   async destroy(): Promise<void> {
     this.log(`Destroying GCE resources for: ${this.instanceName}`);
-    // Delete in reverse order of creation
 
-    // 1. Delete Forwarding Rule
-    this.log(`[1/11] Deleting forwarding rule: ${this.forwardingRuleName}`);
-    try {
-      const [operation] = await this.forwardingRulesClient.delete({
-        project: this.config.projectId,
-        forwardingRule: this.forwardingRuleName,
-      });
-      await this.waitForGlobalOperation(operation, "delete forwarding rule");
-      this.log(`Forwarding rule deleted`);
-    } catch {
-      this.log(`Forwarding rule not found (skipped)`);
-    }
+    // Delete load balancer components in reverse order
+    const lbNames: LoadBalancerNames = {
+      backendService: this.backendServiceName,
+      urlMap: this.urlMapName,
+      httpProxy: this.httpProxyName,
+      httpsProxy: this.httpsProxyName,
+      forwardingRule: this.forwardingRuleName,
+      securityPolicy: this.securityPolicyName,
+      instanceGroup: this.instanceGroupName,
+      externalIp: this.externalIpName,
+    };
 
-    // 2. Delete HTTP(S) Proxy
-    const proxyType = this.config.sslCertificateId ? "HTTPS" : "HTTP";
-    this.log(`[2/11] Deleting ${proxyType} proxy`);
-    try {
-      if (this.config.sslCertificateId) {
-        const [operation] = await this.httpsProxiesClient.delete({
-          project: this.config.projectId,
-          targetHttpsProxy: this.httpsProxyName,
-        });
-        await this.waitForGlobalOperation(operation, "delete HTTPS proxy");
-      } else {
-        const [operation] = await this.httpProxiesClient.delete({
-          project: this.config.projectId,
-          targetHttpProxy: this.httpProxyName,
-        });
-        await this.waitForGlobalOperation(operation, "delete HTTP proxy");
-      }
-      this.log(`${proxyType} proxy deleted`);
-    } catch {
-      this.log(`${proxyType} proxy not found (skipped)`);
-    }
+    this.log(`[1/11] Deleting load balancer components`);
+    await this.loadBalancerManager.destroyLoadBalancer(lbNames, !!this.config.sslCertificateId);
 
-    // 3. Delete URL Map
-    this.log(`[3/11] Deleting URL map: ${this.urlMapName}`);
-    try {
-      const [operation] = await this.urlMapsClient.delete({
-        project: this.config.projectId,
-        urlMap: this.urlMapName,
-      });
-      await this.waitForGlobalOperation(operation, "delete URL map");
-      this.log(`URL map deleted`);
-    } catch {
-      this.log(`URL map not found (skipped)`);
-    }
-
-    // 4. Delete Backend Service
-    this.log(`[4/11] Deleting backend service: ${this.backendServiceName}`);
-    try {
-      const [operation] = await this.backendServicesClient.delete({
-        project: this.config.projectId,
-        backendService: this.backendServiceName,
-      });
-      await this.waitForGlobalOperation(operation, "delete backend service");
-      this.log(`Backend service deleted`);
-    } catch {
-      this.log(`Backend service not found (skipped)`);
-    }
-
-    // 5. Delete Security Policy
-    this.log(`[5/11] Deleting security policy: ${this.securityPolicyName}`);
-    try {
-      const [operation] = await this.securityPoliciesClient.delete({
-        project: this.config.projectId,
-        securityPolicy: this.securityPolicyName,
-      });
-      await this.waitForGlobalOperation(operation, "delete security policy");
-      this.log(`Security policy deleted`);
-    } catch {
-      this.log(`Security policy not found (skipped)`);
-    }
-
-    // 6. Delete Instance Group
+    // Delete instance group
     this.log(`[6/11] Deleting instance group: ${this.instanceGroupName}`);
-    try {
-      const [operation] = await this.instanceGroupsClient.delete({
-        project: this.config.projectId,
-        zone: this.config.zone,
-        instanceGroup: this.instanceGroupName,
-      });
-      await this.waitForZoneOperation(operation, "delete instance group");
-      this.log(`Instance group deleted`);
-    } catch {
-      this.log(`Instance group not found (skipped)`);
-    }
+    await this.computeManager.deleteInstanceGroup(this.instanceGroupName);
+    this.log(`Instance group deleted`);
 
-    // 7. Delete VM Instance
+    // Delete VM Instance
     this.log(`[7/11] Deleting VM instance: ${this.instanceName}`);
-    try {
-      const [operation] = await this.instancesClient.delete({
-        project: this.config.projectId,
-        zone: this.config.zone,
-        instance: this.instanceName,
-      });
-      await this.waitForZoneOperation(operation, "delete VM");
-      this.log(`VM instance deleted`);
-    } catch {
-      this.log(`VM instance not found (skipped)`);
-    }
+    await this.computeManager.deleteInstance(this.instanceName);
+    this.log(`VM instance deleted`);
 
-    // 8. Delete Data Disk
+    // Delete Data Disk
     this.log(`[8/11] Deleting data disk: ${this.dataDiskName}`);
-    try {
-      const [operation] = await this.disksClient.delete({
-        project: this.config.projectId,
-        zone: this.config.zone,
-        disk: this.dataDiskName,
-      });
-      await this.waitForZoneOperation(operation, "delete disk");
-      this.log(`Data disk deleted`);
-    } catch {
-      this.log(`Data disk not found (skipped)`);
-    }
+    await this.computeManager.deleteDisk(this.dataDiskName);
+    this.log(`Data disk deleted`);
 
-    // 9. Delete External IP
+    // Delete External IP
     this.log(`[9/11] Deleting external IP: ${this.externalIpName}`);
-    try {
-      const [operation] = await this.addressesClient.delete({
-        project: this.config.projectId,
-        address: this.externalIpName,
-      });
-      await this.waitForGlobalOperation(operation, "delete external IP");
-      this.log(`External IP deleted`);
-    } catch {
-      this.log(`External IP not found (skipped)`);
-    }
+    await this.networkManager.releaseExternalIp(this.externalIpName);
+    this.log(`External IP deleted`);
 
-    // 10. Delete Firewall
+    // Delete Firewall
     this.log(`[10/11] Deleting firewall: ${this.firewallName}`);
-    try {
-      const [operation] = await this.firewallsClient.delete({
-        project: this.config.projectId,
-        firewall: this.firewallName,
-      });
-      await this.waitForGlobalOperation(operation, "delete firewall");
-      this.log(`Firewall deleted`);
-    } catch {
-      this.log(`Firewall not found (skipped)`);
-    }
+    await this.networkManager.deleteFirewall(this.firewallName);
+    this.log(`Firewall deleted`);
 
-    // 11. Delete Secret
+    // Delete Secret
     this.log(`[11/11] Deleting secret: ${this.secretName}`);
     try {
       const secretPath = `projects/${this.config.projectId}/secrets/${this.secretName}`;
@@ -722,6 +658,107 @@ export class GceTarget implements DeploymentTarget {
     }
 
     this.log(`GCE resources destroyed (VPC/Subnet preserved for shared use)`);
+  }
+
+  // ------------------------------------------------------------------
+  // updateResources
+  // ------------------------------------------------------------------
+
+  async updateResources(spec: ResourceSpec): Promise<ResourceUpdateResult> {
+    this.log(`Starting resource update for VM: ${this.instanceName}`);
+
+    try {
+      // Validate disk size - cloud providers don't support shrinking disks
+      if (spec.dataDiskSizeGb && spec.dataDiskSizeGb < this.dataDiskSizeGb) {
+        this.log(`Disk shrink not supported: ${this.dataDiskSizeGb}GB -> ${spec.dataDiskSizeGb}GB`, "stderr");
+        return {
+          success: false,
+          message: `Disk cannot be shrunk. Current size: ${this.dataDiskSizeGb}GB, requested: ${spec.dataDiskSizeGb}GB. Cloud providers only support expanding disks.`,
+          requiresRestart: false,
+        };
+      }
+
+      // Determine target machine type from spec
+      const targetMachineType = this.specToMachineType(spec);
+      this.log(`Target machine type: ${targetMachineType}`);
+
+      // 1. Stop VM
+      this.log(`[1/4] Stopping VM instance: ${this.instanceName}`);
+      await this.computeManager.stopInstance(this.instanceName);
+      this.log(`VM stopped`);
+
+      // 2. Change machine type
+      this.log(`[2/4] Changing machine type to: ${targetMachineType}`);
+      await this.computeManager.resizeInstance(this.instanceName, targetMachineType);
+      this.log(`Machine type changed`);
+
+      // 3. Resize data disk if requested and larger than current
+      if (spec.dataDiskSizeGb && spec.dataDiskSizeGb > this.dataDiskSizeGb) {
+        this.log(`[3/4] Resizing data disk: ${this.dataDiskSizeGb}GB -> ${spec.dataDiskSizeGb}GB`);
+        await this.computeManager.resizeDisk(this.dataDiskName, spec.dataDiskSizeGb);
+        this.log(`Disk resized to ${spec.dataDiskSizeGb}GB`);
+      } else {
+        this.log(`[3/4] Disk resize skipped (no change needed)`);
+      }
+
+      // 4. Start VM
+      this.log(`[4/4] Starting VM instance`);
+      await this.computeManager.startInstance(this.instanceName);
+      this.log(`VM started`);
+
+      this.log(`Resource update complete!`);
+
+      return {
+        success: true,
+        message: `GCE VM resources updated to ${targetMachineType}${spec.dataDiskSizeGb ? `, ${spec.dataDiskSizeGb}GB disk` : ""}`,
+        requiresRestart: true,
+        estimatedDowntime: 60,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.log(`Resource update failed: ${errorMsg}`, "stderr");
+
+      // Try to start VM again if we stopped it
+      this.log(`Attempting to recover by starting VM...`);
+      try {
+        await this.computeManager.startInstance(this.instanceName);
+        this.log(`VM recovery started`);
+      } catch {
+        this.log(`VM recovery failed - manual intervention may be required`, "stderr");
+      }
+
+      return {
+        success: false,
+        message: `Failed to update resources: ${errorMsg}`,
+        requiresRestart: false,
+      };
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // getResources
+  // ------------------------------------------------------------------
+
+  async getResources(): Promise<ResourceSpec> {
+    // Get current instance to read machine type
+    const instance = await this.computeManager.getInstance(this.instanceName);
+    if (!instance) {
+      throw new Error(`Instance ${this.instanceName} not found`);
+    }
+
+    const machineTypeUrl = (instance as { machineType?: string }).machineType ?? "";
+    const machineType = machineTypeUrl.split("/").pop() ?? this.machineType;
+
+    // Get disk size
+    const disk = await this.computeManager.getDisk(this.dataDiskName);
+    const diskSizeGb = disk?.sizeGb
+      ? typeof disk.sizeGb === "string"
+        ? parseInt(disk.sizeGb, 10)
+        : Number(disk.sizeGb)
+      : this.dataDiskSizeGb;
+
+    // Convert machine type to ResourceSpec
+    return this.machineTypeToSpec(machineType, diskSizeGb);
   }
 
   // ------------------------------------------------------------------
@@ -773,172 +810,7 @@ export class GceTarget implements DeploymentTarget {
   }
 
   // ------------------------------------------------------------------
-  // Private helpers - VPC Infrastructure
-  // ------------------------------------------------------------------
-
-  private async ensureVpcNetwork(): Promise<void> {
-    try {
-      await this.networksClient.get({
-        project: this.config.projectId,
-        network: this.vpcNetworkName,
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-      ) {
-        const [operation] = await this.networksClient.insert({
-          project: this.config.projectId,
-          networkResource: {
-            name: this.vpcNetworkName,
-            autoCreateSubnetworks: false, // Custom subnets
-            description: `Clawster VPC for ${this.instanceName}`,
-          },
-        });
-        await this.waitForGlobalOperation(operation, "create VPC network");
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  private async ensureSubnet(): Promise<void> {
-    try {
-      await this.subnetworksClient.get({
-        project: this.config.projectId,
-        region: this.region,
-        subnetwork: this.subnetName,
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-      ) {
-        const [operation] = await this.subnetworksClient.insert({
-          project: this.config.projectId,
-          region: this.region,
-          subnetworkResource: {
-            name: this.subnetName,
-            network: `projects/${this.config.projectId}/global/networks/${this.vpcNetworkName}`,
-            ipCidrRange: "10.0.0.0/24",
-            region: this.region,
-            description: `Clawster subnet for ${this.instanceName}`,
-          },
-        });
-        await this.waitForRegionOperation(operation, "create subnet");
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  private async ensureFirewall(): Promise<void> {
-    try {
-      await this.firewallsClient.get({
-        project: this.config.projectId,
-        firewall: this.firewallName,
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-      ) {
-        const [operation] = await this.firewallsClient.insert({
-          project: this.config.projectId,
-          firewallResource: {
-            name: this.firewallName,
-            network: `projects/${this.config.projectId}/global/networks/${this.vpcNetworkName}`,
-            description: `Allow traffic to Clawster instance ${this.instanceName}`,
-            allowed: [
-              {
-                IPProtocol: "tcp",
-                ports: [String(this.gatewayPort)],
-              },
-            ],
-            // Allow traffic from GCP health check ranges and the LB
-            sourceRanges: [
-              "130.211.0.0/22", // GCP health check
-              "35.191.0.0/16", // GCP health check
-            ],
-            targetTags: [`clawster-${this.sanitizeName(this.instanceName)}`],
-          },
-        });
-        await this.waitForGlobalOperation(operation, "create firewall rules");
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  private async ensureExternalIp(): Promise<void> {
-    try {
-      const [address] = await this.addressesClient.get({
-        project: this.config.projectId,
-        address: this.externalIpName,
-      });
-      this.cachedExternalIp = address.address ?? "";
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-      ) {
-        const [operation] = await this.addressesClient.insert({
-          project: this.config.projectId,
-          addressResource: {
-            name: this.externalIpName,
-            description: `External IP for Clawster instance ${this.instanceName}`,
-            networkTier: "PREMIUM",
-          },
-        });
-        await this.waitForGlobalOperation(operation, "reserve external IP");
-
-        // Get the newly created IP
-        const [address] = await this.addressesClient.get({
-          project: this.config.projectId,
-          address: this.externalIpName,
-        });
-        this.cachedExternalIp = address.address ?? "";
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // Private helpers - Persistent Disk
-  // ------------------------------------------------------------------
-
-  private async ensureDataDisk(): Promise<void> {
-    try {
-      await this.disksClient.get({
-        project: this.config.projectId,
-        zone: this.config.zone,
-        disk: this.dataDiskName,
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-      ) {
-        const [operation] = await this.disksClient.insert({
-          project: this.config.projectId,
-          zone: this.config.zone,
-          diskResource: {
-            name: this.dataDiskName,
-            sizeGb: String(this.dataDiskSizeGb),
-            type: `zones/${this.config.zone}/diskTypes/pd-standard`,
-            description: `Persistent data disk for Clawster instance ${this.instanceName}`,
-          },
-        });
-        await this.waitForZoneOperation(operation, "create data disk");
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // Private helpers - VM Instance
+  // Private helpers - VM Instance creation
   // ------------------------------------------------------------------
 
   private async createVmInstance(options: InstallOptions): Promise<void> {
@@ -950,7 +822,49 @@ export class GceTarget implements DeploymentTarget {
     // 2. Installs Sysbox runtime for secure Docker-in-Docker (sandbox mode)
     // 3. Pulls the config from metadata
     // 4. Runs OpenClaw in Docker with Sysbox runtime (for sandbox)
-    const startupScript = `#!/bin/bash
+    const startupScript = this.buildStartupScript(imageUri);
+
+    // Build metadata items
+    const metadataItems: Array<{ key: string; value: string }> = [
+      { key: "startup-script", value: startupScript },
+      { key: "gateway-port", value: String(this.gatewayPort) },
+      { key: "openclaw-config", value: "{}" },
+    ];
+
+    if (options.gatewayAuthToken) {
+      metadataItems.push({ key: "gateway-token", value: options.gatewayAuthToken });
+    }
+
+    // Add container env vars to metadata
+    for (const [key, value] of Object.entries(options.containerEnv ?? {})) {
+      metadataItems.push({ key: `env-${key}`, value });
+    }
+
+    const vmConfig: VmInstanceConfig = {
+      name: this.instanceName,
+      machineType: this.machineType,
+      bootDisk: {
+        sourceImage: "projects/cos-cloud/global/images/family/cos-stable",
+        sizeGb: this.bootDiskSizeGb,
+        diskType: "pd-standard",
+      },
+      dataDiskName: this.dataDiskName,
+      networkName: this.vpcNetworkName,
+      subnetName: this.subnetName,
+      networkTags: [networkTag],
+      metadata: metadataItems,
+      labels: {
+        "clawster-managed": "true",
+        "clawster-profile": this.sanitizeName(options.profileName),
+      },
+      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+    };
+
+    await this.computeManager.createVmInstance(vmConfig);
+  }
+
+  private buildStartupScript(imageUri: string): string {
+    return `#!/bin/bash
 set -e
 
 # Format and mount data disk if not already mounted
@@ -1029,653 +943,6 @@ docker run -d \\
   ${imageUri} \\
   sh -c "npx -y openclaw@latest gateway --port $GATEWAY_PORT --verbose"
 `;
-
-    // Build metadata items
-    const metadataItems: Array<{ key: string; value: string }> = [
-      { key: "startup-script", value: startupScript },
-      { key: "gateway-port", value: String(this.gatewayPort) },
-      { key: "openclaw-config", value: "{}" },
-    ];
-
-    if (options.gatewayAuthToken) {
-      metadataItems.push({ key: "gateway-token", value: options.gatewayAuthToken });
-    }
-
-    // Add container env vars to metadata
-    for (const [key, value] of Object.entries(options.containerEnv ?? {})) {
-      metadataItems.push({ key: `env-${key}`, value });
-    }
-
-    const [operation] = await this.instancesClient.insert({
-      project: this.config.projectId,
-      zone: this.config.zone,
-      instanceResource: {
-        name: this.instanceName,
-        machineType: `zones/${this.config.zone}/machineTypes/${this.machineType}`,
-        description: `Clawster OpenClaw instance for ${options.profileName}`,
-        tags: {
-          items: [networkTag],
-        },
-        disks: [
-          {
-            boot: true,
-            autoDelete: true,
-            initializeParams: {
-              // Container-Optimized OS - has Docker pre-installed
-              sourceImage: "projects/cos-cloud/global/images/family/cos-stable",
-              diskSizeGb: String(this.bootDiskSizeGb),
-              diskType: `zones/${this.config.zone}/diskTypes/pd-standard`,
-            },
-          },
-          {
-            // Attach the data disk
-            boot: false,
-            autoDelete: false,
-            source: `zones/${this.config.zone}/disks/${this.dataDiskName}`,
-            deviceName: this.dataDiskName,
-          },
-        ],
-        networkInterfaces: [
-          {
-            network: `projects/${this.config.projectId}/global/networks/${this.vpcNetworkName}`,
-            subnetwork: `projects/${this.config.projectId}/regions/${this.region}/subnetworks/${this.subnetName}`,
-            // No external IP - traffic goes through LB
-            accessConfigs: [],
-          },
-        ],
-        metadata: {
-          items: metadataItems,
-        },
-        labels: {
-          "clawster-managed": "true",
-          "clawster-profile": this.sanitizeName(options.profileName),
-        },
-        serviceAccounts: [
-          {
-            scopes: [
-              "https://www.googleapis.com/auth/cloud-platform",
-            ],
-          },
-        ],
-      },
-    });
-
-    await this.waitForZoneOperation(operation, "create VM instance");
-  }
-
-  private async updateVmMetadata(configData: string): Promise<void> {
-    // Get current instance
-    const [instance] = await this.instancesClient.get({
-      project: this.config.projectId,
-      zone: this.config.zone,
-      instance: this.instanceName,
-    });
-
-    // Update metadata
-    const currentItems = instance.metadata?.items ?? [];
-    const newItems = currentItems.filter((item) => item.key !== "openclaw-config");
-    newItems.push({ key: "openclaw-config", value: configData });
-
-    const [operation] = await this.instancesClient.setMetadata({
-      project: this.config.projectId,
-      zone: this.config.zone,
-      instance: this.instanceName,
-      metadataResource: {
-        fingerprint: instance.metadata?.fingerprint,
-        items: newItems,
-      },
-    });
-
-    await this.waitForZoneOperation(operation, "update VM metadata");
-  }
-
-  // ------------------------------------------------------------------
-  // Private helpers - Instance Group
-  // ------------------------------------------------------------------
-
-  private async ensureInstanceGroup(): Promise<void> {
-    try {
-      await this.instanceGroupsClient.get({
-        project: this.config.projectId,
-        zone: this.config.zone,
-        instanceGroup: this.instanceGroupName,
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-      ) {
-        // Create unmanaged instance group
-        const [operation] = await this.instanceGroupsClient.insert({
-          project: this.config.projectId,
-          zone: this.config.zone,
-          instanceGroupResource: {
-            name: this.instanceGroupName,
-            description: `Instance group for Clawster ${this.instanceName}`,
-            network: `projects/${this.config.projectId}/global/networks/${this.vpcNetworkName}`,
-            namedPorts: [
-              {
-                name: "http",
-                port: this.gatewayPort,
-              },
-            ],
-          },
-        });
-        await this.waitForZoneOperation(operation, "create instance group");
-
-        // Add instance to group
-        const [addOperation] = await this.instanceGroupsClient.addInstances({
-          project: this.config.projectId,
-          zone: this.config.zone,
-          instanceGroup: this.instanceGroupName,
-          instanceGroupsAddInstancesRequestResource: {
-            instances: [
-              {
-                instance: `zones/${this.config.zone}/instances/${this.instanceName}`,
-              },
-            ],
-          },
-        });
-        await this.waitForZoneOperation(addOperation, "add instance to group");
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // Private helpers - Load Balancer Infrastructure
-  // ------------------------------------------------------------------
-
-  private async ensureSecurityPolicy(): Promise<void> {
-    const allowedCidr = this.config.allowedCidr ?? ["0.0.0.0/0"];
-
-    try {
-      await this.securityPoliciesClient.get({
-        project: this.config.projectId,
-        securityPolicy: this.securityPolicyName,
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-      ) {
-        // Build rules for allowed CIDRs
-        const rules = allowedCidr.map((cidr, index) => ({
-          priority: 1000 + index,
-          match: {
-            versionedExpr: "SRC_IPS_V1" as const,
-            config: {
-              srcIpRanges: [cidr],
-            },
-          },
-          action: "allow",
-          description: `Allow traffic from ${cidr}`,
-        }));
-
-        // Add default deny rule
-        rules.push({
-          priority: 2147483647, // Lowest priority (highest number)
-          match: {
-            versionedExpr: "SRC_IPS_V1" as const,
-            config: {
-              srcIpRanges: ["*"],
-            },
-          },
-          action: "deny(403)",
-          description: "Deny all other traffic",
-        });
-
-        const [operation] = await this.securityPoliciesClient.insert({
-          project: this.config.projectId,
-          securityPolicyResource: {
-            name: this.securityPolicyName,
-            description: `Cloud Armor policy for Clawster instance ${this.instanceName}`,
-            rules,
-          },
-        });
-        await this.waitForGlobalOperation(operation, "create security policy");
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  private async ensureBackendService(): Promise<void> {
-    const instanceGroupSelfLink = `https://www.googleapis.com/compute/v1/projects/${this.config.projectId}/zones/${this.config.zone}/instanceGroups/${this.instanceGroupName}`;
-
-    try {
-      await this.backendServicesClient.get({
-        project: this.config.projectId,
-        backendService: this.backendServiceName,
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-      ) {
-        const backendService: Record<string, unknown> = {
-          name: this.backendServiceName,
-          description: `Backend service for Clawster ${this.instanceName}`,
-          backends: [
-            {
-              group: instanceGroupSelfLink,
-              balancingMode: "UTILIZATION",
-              maxUtilization: 0.8,
-            },
-          ],
-          protocol: "HTTP",
-          portName: "http",
-          healthChecks: [], // We'll use a simple TCP health check created inline
-          loadBalancingScheme: "EXTERNAL_MANAGED",
-        };
-
-        // Attach security policy if it exists
-        if (this.config.allowedCidr && this.config.allowedCidr.length > 0) {
-          backendService.securityPolicy = `https://www.googleapis.com/compute/v1/projects/${this.config.projectId}/global/securityPolicies/${this.securityPolicyName}`;
-        }
-
-        const [operation] = await this.backendServicesClient.insert({
-          project: this.config.projectId,
-          backendServiceResource: backendService,
-        });
-        await this.waitForGlobalOperation(operation, "create backend service");
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  private async ensureUrlMap(): Promise<void> {
-    const backendServiceSelfLink = `https://www.googleapis.com/compute/v1/projects/${this.config.projectId}/global/backendServices/${this.backendServiceName}`;
-
-    try {
-      await this.urlMapsClient.get({
-        project: this.config.projectId,
-        urlMap: this.urlMapName,
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-      ) {
-        const [operation] = await this.urlMapsClient.insert({
-          project: this.config.projectId,
-          urlMapResource: {
-            name: this.urlMapName,
-            description: `URL map for Clawster ${this.instanceName}`,
-            defaultService: backendServiceSelfLink,
-          },
-        });
-        await this.waitForGlobalOperation(operation, "create URL map");
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  private async ensureHttpProxy(): Promise<void> {
-    const urlMapSelfLink = `https://www.googleapis.com/compute/v1/projects/${this.config.projectId}/global/urlMaps/${this.urlMapName}`;
-
-    if (this.config.sslCertificateId) {
-      // HTTPS Proxy
-      try {
-        await this.httpsProxiesClient.get({
-          project: this.config.projectId,
-          targetHttpsProxy: this.httpsProxyName,
-        });
-      } catch (error: unknown) {
-        if (
-          error instanceof Error &&
-          (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-        ) {
-          const [operation] = await this.httpsProxiesClient.insert({
-            project: this.config.projectId,
-            targetHttpsProxyResource: {
-              name: this.httpsProxyName,
-              description: `HTTPS proxy for Clawster ${this.instanceName}`,
-              urlMap: urlMapSelfLink,
-              sslCertificates: [this.config.sslCertificateId],
-            },
-          });
-          await this.waitForGlobalOperation(operation, "create HTTPS proxy");
-        } else {
-          throw error;
-        }
-      }
-    } else {
-      // HTTP Proxy
-      try {
-        await this.httpProxiesClient.get({
-          project: this.config.projectId,
-          targetHttpProxy: this.httpProxyName,
-        });
-      } catch (error: unknown) {
-        if (
-          error instanceof Error &&
-          (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-        ) {
-          const [operation] = await this.httpProxiesClient.insert({
-            project: this.config.projectId,
-            targetHttpProxyResource: {
-              name: this.httpProxyName,
-              description: `HTTP proxy for Clawster ${this.instanceName}`,
-              urlMap: urlMapSelfLink,
-            },
-          });
-          await this.waitForGlobalOperation(operation, "create HTTP proxy");
-        } else {
-          throw error;
-        }
-      }
-    }
-  }
-
-  private async ensureForwardingRule(): Promise<void> {
-    try {
-      await this.forwardingRulesClient.get({
-        project: this.config.projectId,
-        forwardingRule: this.forwardingRuleName,
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("NOT_FOUND") || error.message.includes("404"))
-      ) {
-        const proxyName = this.config.sslCertificateId
-          ? this.httpsProxyName
-          : this.httpProxyName;
-        const proxyType = this.config.sslCertificateId ? "targetHttpsProxies" : "targetHttpProxies";
-        const proxySelfLink = `https://www.googleapis.com/compute/v1/projects/${this.config.projectId}/global/${proxyType}/${proxyName}`;
-        const ipSelfLink = `https://www.googleapis.com/compute/v1/projects/${this.config.projectId}/global/addresses/${this.externalIpName}`;
-
-        const [operation] = await this.forwardingRulesClient.insert({
-          project: this.config.projectId,
-          forwardingRuleResource: {
-            name: this.forwardingRuleName,
-            description: `Forwarding rule for Clawster ${this.instanceName}`,
-            IPAddress: ipSelfLink,
-            IPProtocol: "TCP",
-            portRange: this.config.sslCertificateId ? "443" : "80",
-            target: proxySelfLink,
-            loadBalancingScheme: "EXTERNAL_MANAGED",
-            networkTier: "PREMIUM",
-          },
-        });
-        await this.waitForGlobalOperation(operation, "create forwarding rule");
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // Private helpers - Operation waiting
-  // ------------------------------------------------------------------
-
-  private async waitForGlobalOperation(operation: unknown, description?: string): Promise<void> {
-    const op = operation as { name?: string };
-    if (!op?.name) return;
-
-    const operationName = op.name.split("/").pop() ?? op.name;
-    const label = description ?? operationName;
-    let lastStatus = "";
-
-    const start = Date.now();
-    while (Date.now() - start < OPERATION_TIMEOUT_MS) {
-      const [result] = await this.globalOperationsClient.get({
-        project: this.config.projectId,
-        operation: operationName,
-      });
-
-      const status = String(result.status ?? "UNKNOWN");
-      const progress = result.progress ?? 0;
-
-      // Log status changes
-      if (status !== lastStatus) {
-        const elapsed = Math.round((Date.now() - start) / 1000);
-        this.log(`  [${label}] ${status}${progress > 0 ? ` (${progress}%)` : ""} - ${elapsed}s elapsed`);
-        lastStatus = status;
-      }
-
-      if (result.status === "DONE") {
-        if (result.error?.errors?.length) {
-          const errorMsg = result.error.errors[0]?.message ?? "Operation failed";
-          this.log(`  [${label}] FAILED: ${errorMsg}`, "stderr");
-          throw new Error(errorMsg);
-        }
-        return;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, OPERATION_POLL_INTERVAL_MS));
-    }
-    this.log(`  [${label}] TIMEOUT after ${OPERATION_TIMEOUT_MS / 1000}s`, "stderr");
-    throw new Error(`Operation timed out: ${operationName}`);
-  }
-
-  private async waitForZoneOperation(operation: unknown, description?: string): Promise<void> {
-    const op = operation as { name?: string };
-    if (!op?.name) return;
-
-    const operationName = op.name.split("/").pop() ?? op.name;
-    const label = description ?? operationName;
-    let lastStatus = "";
-
-    const start = Date.now();
-    while (Date.now() - start < OPERATION_TIMEOUT_MS) {
-      const [result] = await this.zoneOperationsClient.get({
-        project: this.config.projectId,
-        zone: this.config.zone,
-        operation: operationName,
-      });
-
-      const status = String(result.status ?? "UNKNOWN");
-      const progress = result.progress ?? 0;
-
-      // Log status changes
-      if (status !== lastStatus) {
-        const elapsed = Math.round((Date.now() - start) / 1000);
-        this.log(`  [${label}] ${status}${progress > 0 ? ` (${progress}%)` : ""} - ${elapsed}s elapsed`);
-        lastStatus = status;
-      }
-
-      if (result.status === "DONE") {
-        if (result.error?.errors?.length) {
-          const errorMsg = result.error.errors[0]?.message ?? "Operation failed";
-          this.log(`  [${label}] FAILED: ${errorMsg}`, "stderr");
-          throw new Error(errorMsg);
-        }
-        return;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, OPERATION_POLL_INTERVAL_MS));
-    }
-    this.log(`  [${label}] TIMEOUT after ${OPERATION_TIMEOUT_MS / 1000}s`, "stderr");
-    throw new Error(`Operation timed out: ${operationName}`);
-  }
-
-  private async waitForRegionOperation(operation: unknown, description?: string): Promise<void> {
-    const op = operation as { name?: string };
-    if (!op?.name) return;
-
-    const operationName = op.name.split("/").pop() ?? op.name;
-    const label = description ?? operationName;
-    let lastStatus = "";
-
-    const start = Date.now();
-    while (Date.now() - start < OPERATION_TIMEOUT_MS) {
-      const [result] = await this.regionOperationsClient.get({
-        project: this.config.projectId,
-        region: this.region,
-        operation: operationName,
-      });
-
-      const status = String(result.status ?? "UNKNOWN");
-      const progress = result.progress ?? 0;
-
-      // Log status changes
-      if (status !== lastStatus) {
-        const elapsed = Math.round((Date.now() - start) / 1000);
-        this.log(`  [${label}] ${status}${progress > 0 ? ` (${progress}%)` : ""} - ${elapsed}s elapsed`);
-        lastStatus = status;
-      }
-
-      if (result.status === "DONE") {
-        if (result.error?.errors?.length) {
-          const errorMsg = result.error.errors[0]?.message ?? "Operation failed";
-          this.log(`  [${label}] FAILED: ${errorMsg}`, "stderr");
-          throw new Error(errorMsg);
-        }
-        return;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, OPERATION_POLL_INTERVAL_MS));
-    }
-    this.log(`  [${label}] TIMEOUT after ${OPERATION_TIMEOUT_MS / 1000}s`, "stderr");
-    throw new Error(`Operation timed out: ${operationName}`);
-  }
-
-  // ------------------------------------------------------------------
-  // updateResources
-  // ------------------------------------------------------------------
-
-  async updateResources(spec: ResourceSpec): Promise<ResourceUpdateResult> {
-    this.log(`Starting resource update for VM: ${this.instanceName}`);
-
-    try {
-      // GCE resource updates require:
-      // 1. Stop the VM
-      // 2. Change machine type
-      // 3. Optionally resize data disk (only if larger)
-      // 4. Start the VM
-
-      // Validate disk size - cloud providers don't support shrinking disks
-      if (spec.dataDiskSizeGb && spec.dataDiskSizeGb < this.dataDiskSizeGb) {
-        this.log(`Disk shrink not supported: ${this.dataDiskSizeGb}GB -> ${spec.dataDiskSizeGb}GB`, "stderr");
-        return {
-          success: false,
-          message: `Disk cannot be shrunk. Current size: ${this.dataDiskSizeGb}GB, requested: ${spec.dataDiskSizeGb}GB. Cloud providers only support expanding disks.`,
-          requiresRestart: false,
-        };
-      }
-
-      // Determine target machine type from spec
-      const targetMachineType = this.specToMachineType(spec);
-      this.log(`Target machine type: ${targetMachineType}`);
-
-      // 1. Stop VM
-      this.log(`[1/4] Stopping VM instance: ${this.instanceName}`);
-      const [stopOp] = await this.instancesClient.stop({
-        project: this.config.projectId,
-        zone: this.config.zone,
-        instance: this.instanceName,
-      });
-      await this.waitForZoneOperation(stopOp, "stop VM");
-      this.log(`VM stopped`);
-
-      // 2. Change machine type
-      this.log(`[2/4] Changing machine type to: ${targetMachineType}`);
-      const [setMachineOp] = await this.instancesClient.setMachineType({
-        project: this.config.projectId,
-        zone: this.config.zone,
-        instance: this.instanceName,
-        instancesSetMachineTypeRequestResource: {
-          machineType: `zones/${this.config.zone}/machineTypes/${targetMachineType}`,
-        },
-      });
-      await this.waitForZoneOperation(setMachineOp, "change machine type");
-      this.log(`Machine type changed`);
-
-      // 3. Resize data disk if requested and larger than current
-      if (spec.dataDiskSizeGb && spec.dataDiskSizeGb > this.dataDiskSizeGb) {
-        this.log(`[3/4] Resizing data disk: ${this.dataDiskSizeGb}GB -> ${spec.dataDiskSizeGb}GB`);
-        const [resizeDiskOp] = await this.disksClient.resize({
-          project: this.config.projectId,
-          zone: this.config.zone,
-          disk: this.dataDiskName,
-          disksResizeRequestResource: {
-            sizeGb: String(spec.dataDiskSizeGb),
-          },
-        });
-        await this.waitForZoneOperation(resizeDiskOp, "resize disk");
-        this.log(`Disk resized to ${spec.dataDiskSizeGb}GB`);
-      } else {
-        this.log(`[3/4] Disk resize skipped (no change needed)`);
-      }
-
-      // 4. Start VM
-      this.log(`[4/4] Starting VM instance`);
-      const [startOp] = await this.instancesClient.start({
-        project: this.config.projectId,
-        zone: this.config.zone,
-        instance: this.instanceName,
-      });
-      await this.waitForZoneOperation(startOp, "start VM");
-      this.log(`VM started`);
-
-      this.log(`Resource update complete!`);
-
-      return {
-        success: true,
-        message: `GCE VM resources updated to ${targetMachineType}${spec.dataDiskSizeGb ? `, ${spec.dataDiskSizeGb}GB disk` : ""}`,
-        requiresRestart: true,
-        estimatedDowntime: 60,
-      };
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      this.log(`Resource update failed: ${errorMsg}`, "stderr");
-
-      // Try to start VM again if we stopped it
-      this.log(`Attempting to recover by starting VM...`);
-      try {
-        await this.instancesClient.start({
-          project: this.config.projectId,
-          zone: this.config.zone,
-          instance: this.instanceName,
-        });
-        this.log(`VM recovery started`);
-      } catch {
-        this.log(`VM recovery failed - manual intervention may be required`, "stderr");
-      }
-
-      return {
-        success: false,
-        message: `Failed to update resources: ${errorMsg}`,
-        requiresRestart: false,
-      };
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // getResources
-  // ------------------------------------------------------------------
-
-  async getResources(): Promise<ResourceSpec> {
-    // Get current instance to read machine type
-    const [instance] = await this.instancesClient.get({
-      project: this.config.projectId,
-      zone: this.config.zone,
-      instance: this.instanceName,
-    });
-
-    const machineTypeUrl = instance.machineType ?? "";
-    const machineType = machineTypeUrl.split("/").pop() ?? this.machineType;
-
-    // Get disk size
-    const [disk] = await this.disksClient.get({
-      project: this.config.projectId,
-      zone: this.config.zone,
-      disk: this.dataDiskName,
-    });
-
-    const diskSizeGb = disk.sizeGb
-      ? typeof disk.sizeGb === "string"
-        ? parseInt(disk.sizeGb, 10)
-        : Number(disk.sizeGb)
-      : this.dataDiskSizeGb;
-
-    // Convert machine type to ResourceSpec
-    return this.machineTypeToSpec(machineType, diskSizeGb);
   }
 
   // ------------------------------------------------------------------

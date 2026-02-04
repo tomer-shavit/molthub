@@ -152,6 +152,58 @@ export abstract class BaseDeploymentTarget implements DeploymentTarget {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  /**
+   * Execute an operation with retry logic.
+   *
+   * @param operation - Async function to execute
+   * @param options - Retry options
+   * @returns Result of the operation
+   * @throws Last error if all retries fail
+   */
+  protected async withRetry<T>(
+    operation: () => Promise<T>,
+    options: {
+      maxAttempts?: number;
+      delayMs?: number;
+      backoffMultiplier?: number;
+      description?: string;
+      shouldRetry?: (error: Error) => boolean;
+    } = {}
+  ): Promise<T> {
+    const {
+      maxAttempts = 3,
+      delayMs = 1000,
+      backoffMultiplier = 2,
+      description = "operation",
+      shouldRetry = () => true,
+    } = options;
+
+    let lastError: Error;
+    let currentDelay = delayMs;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        if (attempt === maxAttempts || !shouldRetry(lastError)) {
+          throw lastError;
+        }
+
+        this.log(
+          `${description} failed (attempt ${attempt}/${maxAttempts}): ${lastError.message}. Retrying in ${currentDelay}ms...`,
+          "stderr"
+        );
+
+        await this.sleep(currentDelay);
+        currentDelay *= backoffMultiplier;
+      }
+    }
+
+    throw lastError!;
+  }
+
   // -- Abstract methods that subclasses must implement --
 
   abstract install(options: InstallOptions): Promise<InstallResult>;
