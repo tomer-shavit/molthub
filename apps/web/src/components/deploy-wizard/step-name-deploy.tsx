@@ -7,14 +7,13 @@ import { Select } from "@/components/ui/select";
 import { Rocket, Monitor, MessageCircle, Send, Gamepad2, Hash, Brain, Layers } from "lucide-react";
 import { ChannelConfig } from "@/components/onboarding/channel-setup-step";
 import { EnvironmentBadge } from "@/components/ui/environment-badge";
-import { Platform } from "./step-platform";
 import { ModelConfig, PROVIDERS } from "./step-model";
 import { type Fleet } from "@/lib/api";
 
 interface StepNameDeployProps {
   botName: string;
   onBotNameChange: (name: string) => void;
-  platform: Platform;
+  platform: string;
   channels: ChannelConfig[];
   modelConfig: ModelConfig | null;
   deploying: boolean;
@@ -32,11 +31,11 @@ const channelIcons: Record<string, React.ReactNode> = {
   slack: <Hash className="w-4 h-4" />,
 };
 
-const platformLabels: Record<Platform, string> = {
+const platformLabels: Record<string, string> = {
   docker: "Local / Docker",
-  aws: "AWS",
-  azure: "Azure",
-  gcp: "Google Cloud",
+  "ecs-ec2": "AWS ECS EC2",
+  "azure-vm": "Azure VM",
+  "gce-vm": "Google Compute Engine",
 };
 
 const BOT_NAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
@@ -97,7 +96,7 @@ export function StepNameDeploy({
             <span className="text-muted-foreground">Platform</span>
             <span className="font-medium flex items-center gap-1.5">
               <Monitor className="w-4 h-4" />
-              {platformLabels[platform]}
+              {platformLabels[platform] || platform}
             </span>
           </div>
           <div className="flex justify-between items-center text-sm">

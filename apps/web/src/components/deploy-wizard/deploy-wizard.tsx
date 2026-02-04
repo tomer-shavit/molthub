@@ -3,9 +3,10 @@
 import { useState, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { ChannelConfig } from "@/components/onboarding/channel-setup-step";
-import { api, type Fleet } from "@/lib/api";
-import { StepPlatform, Platform } from "./step-platform";
-import { AwsConfig } from "./aws-config-panel";
+import { api, type Fleet, type AdapterMetadata } from "@/lib/api";
+import { useAdapterMetadata } from "@/hooks/use-adapter-metadata";
+import { StepPlatform } from "./step-platform";
+import { WizardSkeleton, WizardError } from "./wizard-states";
 import { StepModel, ModelConfig } from "./step-model";
 import { StepNameDeploy } from "./step-name-deploy";
 import { StepDeploying } from "./step-deploying";
@@ -30,17 +31,16 @@ const DEFAULT_CHANNEL_CONFIGS: ChannelConfig[] = [];
 export function DeployWizard({ isFirstTime }: DeployWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
 
+  // Fetch adapter metadata
+  const { adapters, loading: adaptersLoading, error: adaptersError, refetch: refetchAdapters } = useAdapterMetadata();
+
   // Form state
-  const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<Record<string, string>>({});
+  const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [botName, setBotName] = useState("");
   const [channelConfigs] = useState<ChannelConfig[]>(DEFAULT_CHANNEL_CONFIGS);
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
-  const [awsConfig, setAwsConfig] = useState<AwsConfig>({
-    accessKeyId: "",
-    secretAccessKey: "",
-    region: "us-east-1",
-    tier: "simple",
-  });
   const [deploying, setDeploying] = useState(false);
   const [deployedInstanceId, setDeployedInstanceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,21 +58,36 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
     });
   }, []);
 
+  const handleCredentialsChange = useCallback((newCredentials: Record<string, string>) => {
+    setCredentials(newCredentials);
+  }, []);
+
+  const handleTierSelect = useCallback((tier: string | null) => {
+    setSelectedTier(tier);
+  }, []);
+
   const canProceed = useCallback((): boolean => {
     switch (currentStep) {
       case 0: {
         if (!selectedPlatform) return false;
-        if (selectedPlatform === "aws") {
-          // Either saved credential or manual entry
-          if (awsConfig.savedCredentialId) return true;
-          return !!awsConfig.accessKeyId && !!awsConfig.secretAccessKey && !!awsConfig.region;
-        }
-        return true;
+
+        // Find the selected adapter
+        const selectedAdapter = adapters.find((a) => a.type === selectedPlatform);
+        if (!selectedAdapter) return false;
+
+        // Check all required credentials have values
+        const requiredCredentials = selectedAdapter.credentials.filter((c) => c.required);
+        const allRequiredFilled = requiredCredentials.every((c) => {
+          const value = credentials[c.key];
+          return value !== undefined && value !== "";
+        });
+
+        return allRequiredFilled;
       }
       case 1: return true; // model is optional
       default: return false;
     }
-  }, [currentStep, selectedPlatform, awsConfig]);
+  }, [currentStep, selectedPlatform, adapters, credentials]);
 
   const handleNext = () => {
     if (currentStep < 3) {
@@ -97,22 +112,8 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
     setDeploying(true);
     setError(null);
     try {
-      // Save credentials for future use if requested
-      if (selectedPlatform === "aws" && awsConfig.saveForFuture?.save && awsConfig.saveForFuture.name) {
-        try {
-          await api.saveCredential({
-            name: awsConfig.saveForFuture.name,
-            type: "aws-account",
-            credentials: {
-              accessKeyId: awsConfig.accessKeyId,
-              secretAccessKey: awsConfig.secretAccessKey,
-              region: awsConfig.region,
-            },
-          });
-        } catch {
-          // Save failure should not block deployment
-        }
-      }
+      // Save credentials for future use if requested (for future enhancement)
+      // Currently not implemented - placeholder for credential saving logic
 
       if (modelConfig?.saveForFuture?.save && modelConfig.saveForFuture.name && modelConfig.apiKey) {
         try {
@@ -129,12 +130,20 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
         }
       }
 
+      // Build deploymentTarget from selectedPlatform and credentials
+      const deploymentTarget: { type: string; [key: string]: unknown } = {
+        type: selectedPlatform,
+        ...credentials,
+      };
+
+      // Include tier if selected
+      if (selectedTier) {
+        deploymentTarget.tier = selectedTier;
+      }
+
       const result = await api.deployOnboarding({
         botName: botName.trim(),
-        deploymentTarget: selectedPlatform === "aws"
-          ? { type: "ecs-ec2", ...awsConfig }
-          : { type: selectedPlatform },
-        ...(awsConfig.savedCredentialId ? { awsCredentialId: awsConfig.savedCredentialId } : {}),
+        deploymentTarget,
         ...(modelConfig?.savedCredentialId ? { modelCredentialId: modelConfig.savedCredentialId } : {}),
         channels: channelConfigs.filter((ch) => ch.config.enabled !== false).length > 0
           ? channelConfigs
@@ -158,6 +167,16 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
       setDeploying(false);
     }
   };
+
+  // Show loading skeleton while adapters are loading
+  if (adaptersLoading) {
+    return <WizardSkeleton />;
+  }
+
+  // Show error state if adapters failed to load
+  if (adaptersError) {
+    return <WizardError message={adaptersError} onRetry={refetchAdapters} />;
+  }
 
   return (
     <div>
@@ -237,10 +256,13 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
       <div className="mb-8">
         {currentStep === 0 && (
           <StepPlatform
+            adapters={adapters}
             selectedPlatform={selectedPlatform}
             onPlatformSelect={setSelectedPlatform}
-            awsConfig={awsConfig}
-            onAwsConfigChange={setAwsConfig}
+            credentials={credentials}
+            onCredentialsChange={handleCredentialsChange}
+            selectedTier={selectedTier}
+            onTierSelect={handleTierSelect}
           />
         )}
 

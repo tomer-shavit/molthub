@@ -36,6 +36,7 @@ import { NotificationChannelsModule } from "./notification-channels/notification
 import { BotRoutingModule } from "./bot-routing/bot-routing.module";
 import { BotTeamsModule } from "./bot-teams/bot-teams.module";
 import { A2aModule } from "./a2a/a2a.module";
+import { AdaptersModule } from "./adapters/adapters.module";
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { A2aModule } from "./a2a/a2a.module";
     BotRoutingModule,
     BotTeamsModule,
     A2aModule,
+    AdaptersModule,
   ],
   providers: [
     {
