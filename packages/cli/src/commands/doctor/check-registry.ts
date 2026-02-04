@@ -26,9 +26,32 @@ export interface CheckFilter {
 export class CheckRegistry {
   private checks: Map<string, IDoctorCheck> = new Map();
 
-  constructor() {
-    // Register default checks
-    this.registerDefaults();
+  /**
+   * Create a registry.
+   * @param registerDefaults - If true, registers built-in checks. Set to false for testing.
+   */
+  constructor(registerDefaults: boolean = true) {
+    if (registerDefaults) {
+      this.registerDefaultChecks();
+    }
+  }
+
+  /**
+   * Create a registry with custom checks only (for testing).
+   */
+  static createEmpty(): CheckRegistry {
+    return new CheckRegistry(false);
+  }
+
+  /**
+   * Create a registry with specific checks (for testing).
+   */
+  static withChecks(checks: IDoctorCheck[]): CheckRegistry {
+    const registry = new CheckRegistry(false);
+    for (const check of checks) {
+      registry.register(check);
+    }
+    return registry;
   }
 
   /**
@@ -116,7 +139,7 @@ export class CheckRegistry {
     });
   }
 
-  private registerDefaults(): void {
+  private registerDefaultChecks(): void {
     // System checks (non-security)
     this.register(new NodeVersionCheck());
     this.register(new DockerCheck());

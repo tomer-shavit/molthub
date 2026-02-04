@@ -8,7 +8,12 @@ import type { IOutputService } from "../../interfaces/output.interface";
 import type { IFileSystemService } from "../../interfaces/filesystem.interface";
 import type { IShellService } from "../../interfaces/shell.interface";
 import type { IPromptsService } from "../../interfaces/prompts.interface";
-import type { SetupOptions, SetupContext, SetupState } from "./steps/step.interface";
+import type {
+  ISetupStep,
+  SetupOptions,
+  SetupContext,
+  SetupState,
+} from "./steps/step.interface";
 import { StepRunner } from "./step-runner";
 import { FindProjectStep } from "./steps/find-project.step";
 import { PrerequisitesStep } from "./steps/prerequisites.step";
@@ -23,21 +28,38 @@ const WEB_PORT = 3000;
 export class SetupHandler {
   private readonly runner: StepRunner;
 
-  constructor(
-    private readonly output: IOutputService,
-    private readonly filesystem: IFileSystemService,
-    private readonly shell: IShellService,
-    private readonly prompts: IPromptsService
-  ) {
-    // Create step runner with all steps
-    this.runner = new StepRunner([
+  /**
+   * Get the default setup steps.
+   * Useful for extending or testing.
+   */
+  static getDefaultSteps(): ISetupStep[] {
+    return [
       new FindProjectStep(),
       new PrerequisitesStep(),
       new EnvironmentStep(),
       new DatabaseStep(),
       new StartServersStep(),
       new OpenBrowserStep(),
-    ]);
+    ];
+  }
+
+  /**
+   * Create a setup handler.
+   * @param output - Output service
+   * @param filesystem - Filesystem service
+   * @param shell - Shell service
+   * @param prompts - Prompts service
+   * @param steps - Optional custom steps (DIP: allows injection for testing)
+   */
+  constructor(
+    private readonly output: IOutputService,
+    private readonly filesystem: IFileSystemService,
+    private readonly shell: IShellService,
+    private readonly prompts: IPromptsService,
+    steps?: ISetupStep[]
+  ) {
+    // Use provided steps or default (allows injection for testing)
+    this.runner = new StepRunner(steps ?? SetupHandler.getDefaultSteps());
   }
 
   /**
@@ -136,12 +158,18 @@ export class SetupHandler {
 
 /**
  * Factory function for creating setup handler with services.
+ * @param output - Output service
+ * @param filesystem - Filesystem service
+ * @param shell - Shell service
+ * @param prompts - Prompts service
+ * @param steps - Optional custom steps (for testing with custom steps)
  */
 export function createSetupHandler(
   output: IOutputService,
   filesystem: IFileSystemService,
   shell: IShellService,
-  prompts: IPromptsService
+  prompts: IPromptsService,
+  steps?: ISetupStep[]
 ): SetupHandler {
-  return new SetupHandler(output, filesystem, shell, prompts);
+  return new SetupHandler(output, filesystem, shell, prompts, steps);
 }

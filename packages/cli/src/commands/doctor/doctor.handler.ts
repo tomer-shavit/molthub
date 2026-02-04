@@ -13,13 +13,22 @@ import { CheckRunner, type DoctorOptions } from "./check-runner";
 export class DoctorHandler {
   private readonly runner: CheckRunner;
 
+  /**
+   * Create a doctor handler.
+   * @param output - Output service for display
+   * @param filesystem - Filesystem service
+   * @param shell - Shell service
+   * @param registry - Optional check registry (DIP: allows injection for testing)
+   */
   constructor(
     private readonly output: IOutputService,
     filesystem: IFileSystemService,
-    shell: IShellService
+    shell: IShellService,
+    registry?: CheckRegistry
   ) {
-    const registry = new CheckRegistry();
-    this.runner = new CheckRunner(registry, output, filesystem, shell);
+    // Use provided registry or create default (allows injection for testing)
+    const checkRegistry = registry ?? new CheckRegistry();
+    this.runner = new CheckRunner(checkRegistry, output, filesystem, shell);
   }
 
   /**
@@ -62,11 +71,16 @@ export class DoctorHandler {
 
 /**
  * Factory function for creating doctor handler with services.
+ * @param output - Output service
+ * @param filesystem - Filesystem service
+ * @param shell - Shell service
+ * @param registry - Optional check registry (for testing with custom checks)
  */
 export function createDoctorHandler(
   output: IOutputService,
   filesystem: IFileSystemService,
-  shell: IShellService
+  shell: IShellService,
+  registry?: CheckRegistry
 ): DoctorHandler {
-  return new DoctorHandler(output, filesystem, shell);
+  return new DoctorHandler(output, filesystem, shell, registry);
 }
