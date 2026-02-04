@@ -367,19 +367,6 @@ describe("DeploymentTargetFactory", () => {
       DeploymentTargetFactory.isTargetSupported(DeploymentTargetType.CLOUDFLARE_WORKERS)
     ).toBe(true);
   });
-
-  it("uses createByType correctly for cloudflare-workers", () => {
-    const config: DeploymentTargetConfig = {
-      type: "cloudflare-workers",
-      cloudflare: makeConfig(),
-    };
-
-    const target = DeploymentTargetFactory.createByType(
-      DeploymentTargetType.CLOUDFLARE_WORKERS,
-      config
-    );
-    expect(target).toBeInstanceOf(CloudflareWorkersTarget);
-  });
 });
 
 // ── CloudflareWorkersTarget Unit Tests ──

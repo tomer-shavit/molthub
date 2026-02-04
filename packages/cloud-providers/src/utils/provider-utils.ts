@@ -1,17 +1,20 @@
 /**
  * Shared utilities for cloud provider implementations
- * 
+ *
  * This module provides common patterns for:
  * - Error handling and retry logic
  * - Progress tracking
  * - Resource naming and tagging
  * - Idempotency helpers
- * 
+ *
  * When adding a new provider, use these utilities to ensure
  * consistent behavior across all implementations.
  */
 
-import { ProgressCallback } from "../interface/provider";
+/**
+ * Progress callback for long-running operations
+ */
+export type ProgressCallback = (step: string, status: "pending" | "in_progress" | "complete" | "error", message?: string) => void;
 
 /**
  * Standard error types that all providers should handle
