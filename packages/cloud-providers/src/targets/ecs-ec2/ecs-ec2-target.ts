@@ -71,6 +71,8 @@ import type {
   StackEventInfo,
 } from "./ecs-ec2-services.interface";
 import { generateProductionTemplate } from "./templates/production";
+import { generatePerBotTemplate } from "./per-bot/per-bot-template";
+import { ensureSharedInfra } from "./shared-infra/shared-infra-manager";
 
 // Re-export for external use
 export type { EcsEc2TargetOptions, EcsEc2Services };
@@ -396,8 +398,10 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
     this.secretName = `clawster/${profileName}/config`;
     this.logGroup = `/ecs/clawster-${profileName}`;
 
+    const useSharedInfra = this.config.useSharedInfra ?? true;
+
     try {
-      this.log(`Starting ECS EC2 deployment for ${profileName}`);
+      this.log(`Starting ECS EC2 deployment for ${profileName}${useSharedInfra ? " (shared infra)" : " (legacy)"}`);
 
       // 1. Resolve image: use public node:22-slim unless a custom image is provided
       const imageUri = this.config.image ?? "node:22-slim";
@@ -409,20 +413,47 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
       await this.ensureSecret(this.secretName, "{}");
       this.log("Secret created successfully");
 
-      // 3. Generate CloudFormation template (always uses secure VPC + ALB architecture)
-      this.log("Generating CloudFormation template...");
-      const template = generateProductionTemplate({
-        botName: profileName,
-        gatewayPort: this.gatewayPort,
-        imageUri,
-        usePublicImage,
-        cpu: this.cpu,
-        memory: this.memory,
-        gatewayAuthToken: options.gatewayAuthToken ?? "",
-        containerEnv: options.containerEnv ?? {},
-        allowedCidr: this.config.allowedCidr,
-        certificateArn: this.config.certificateArn,
-      });
+      // 3. Generate CloudFormation template
+      let template: Record<string, unknown>;
+
+      if (useSharedInfra) {
+        // Shared infra path: ensure shared stack exists, then create lightweight per-bot stack
+        this.log("Ensuring shared infrastructure is ready...");
+        await ensureSharedInfra(
+          this.cloudFormationService,
+          this.config.region,
+          (msg, stream) => this.log(msg, stream),
+        );
+
+        this.log("Generating per-bot CloudFormation template (shared infra mode)...");
+        template = generatePerBotTemplate({
+          botName: profileName,
+          gatewayPort: this.gatewayPort,
+          imageUri,
+          usePublicImage,
+          cpu: this.cpu,
+          memory: this.memory,
+          gatewayAuthToken: options.gatewayAuthToken ?? "",
+          containerEnv: options.containerEnv ?? {},
+          allowedCidr: this.config.allowedCidr,
+          certificateArn: this.config.certificateArn,
+        });
+      } else {
+        // Legacy path: full self-contained stack
+        this.log("Generating CloudFormation template (legacy full-stack mode)...");
+        template = generateProductionTemplate({
+          botName: profileName,
+          gatewayPort: this.gatewayPort,
+          imageUri,
+          usePublicImage,
+          cpu: this.cpu,
+          memory: this.memory,
+          gatewayAuthToken: options.gatewayAuthToken ?? "",
+          containerEnv: options.containerEnv ?? {},
+          allowedCidr: this.config.allowedCidr,
+          certificateArn: this.config.certificateArn,
+        });
+      }
 
       // 4. Deploy CloudFormation stack (create or update if it already exists)
       const stackExists = await this.cloudFormationService.stackExists(this.stackName);
@@ -468,7 +499,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
       return {
         success: true,
         instanceId: this.serviceName,
-        message: `ECS EC2 stack "${this.stackName}" created (VPC + ALB, secure)`,
+        message: `ECS EC2 stack "${this.stackName}" created (${useSharedInfra ? "shared infra" : "full stack"}, VPC + ALB, secure)`,
         serviceName: this.serviceName,
       };
     } catch (error) {
@@ -525,9 +556,13 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
   // ------------------------------------------------------------------
 
   async start(): Promise<void> {
+    this.log("Setting ECS service DesiredCount to 1...");
     await this.ecsService.updateService(this.clusterName, this.serviceName, {
       desiredCount: 1,
     });
+    // Wait for the task to actually start running (capacity provider scales ASG + task placement)
+    this.log("Waiting for ECS task to start...");
+    await this.waitForServiceStability(600000); // 10 min — EC2 instance launch + task start
   }
 
   // ------------------------------------------------------------------
@@ -798,6 +833,12 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
           const running = primary.runningCount ?? 0;
           const desired = primary.desiredCount ?? 0;
 
+          // Service starts with DesiredCount:0 — nothing to wait for
+          if (desired === 0 && running === 0) {
+            this.log("[ECS] Service created with DesiredCount: 0 (tasks start later)");
+            return;
+          }
+
           // Only log if running count changed
           if (running !== lastRunningCount) {
             this.log(`[ECS] Deployment: ${running}/${desired} tasks running`);
@@ -839,7 +880,8 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
       // ECS EC2 resource updates work by updating the CloudFormation stack
       // with new CPU/memory values. This triggers a rolling deployment.
       this.log("Generating updated CloudFormation template...");
-      const template = generateProductionTemplate({
+      const useSharedInfra = this.config.useSharedInfra ?? true;
+      const templateParams = {
         botName: this.config.profileName ?? "",
         gatewayPort: this.gatewayPort,
         imageUri: this.config.image ?? "node:22-slim",
@@ -850,7 +892,10 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
         containerEnv: {},
         allowedCidr: this.config.allowedCidr,
         certificateArn: this.config.certificateArn,
-      });
+      };
+      const template = useSharedInfra
+        ? generatePerBotTemplate(templateParams)
+        : generateProductionTemplate(templateParams);
 
       try {
         this.log("Updating CloudFormation stack...");

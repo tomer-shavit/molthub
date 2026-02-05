@@ -66,6 +66,12 @@ export type {
 export type { EcrPushOptions, EcrPushResult } from "./targets/ecs-ec2/ecr-push";
 export { generateProductionTemplate } from "./targets/ecs-ec2/templates/production";
 export type { ProductionTemplateParams } from "./targets/ecs-ec2/templates/production";
+export { generateSharedInfraTemplate } from "./targets/ecs-ec2/shared-infra/templates/shared-production";
+export { generatePerBotTemplate } from "./targets/ecs-ec2/per-bot/per-bot-template";
+export type { PerBotTemplateParams } from "./targets/ecs-ec2/per-bot/per-bot-template";
+export type { SharedInfraOutputs } from "./targets/ecs-ec2/shared-infra/shared-infra-config";
+export { SharedExportNames, getSharedInfraStackName, SHARED_INFRA_STACK_PREFIX } from "./targets/ecs-ec2/shared-infra/shared-infra-config";
+export { ensureSharedInfra, getSharedInfraOutputs, isSharedInfraReady } from "./targets/ecs-ec2/shared-infra/shared-infra-manager";
 
 // Factories
 export { DeploymentTargetFactory } from "./targets/factory";

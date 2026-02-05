@@ -143,7 +143,7 @@ export class OnboardingService {
 
     // Resolve saved AWS credentials if provided
     if (dto.awsCredentialId) {
-      const awsCreds = await this.credentialVault.resolve(dto.awsCredentialId, userId, workspace.id);
+      const awsCreds = await this.credentialVault.resolve(dto.awsCredentialId, workspace.id);
       if (!dto.deploymentTarget) {
         dto.deploymentTarget = { type: "ecs-ec2" } as any;
       }
@@ -155,7 +155,7 @@ export class OnboardingService {
 
     // Resolve saved model API key if provided
     if (dto.modelCredentialId) {
-      const modelCreds = await this.credentialVault.resolve(dto.modelCredentialId, userId, workspace.id);
+      const modelCreds = await this.credentialVault.resolve(dto.modelCredentialId, workspace.id);
       if (!dto.modelConfig) {
         dto.modelConfig = { provider: modelCreds.provider as string, model: "", apiKey: "" } as any;
       }
@@ -330,9 +330,10 @@ export class OnboardingService {
             region: dto.deploymentTarget?.region,
             accessKeyId: dto.deploymentTarget?.accessKeyId,
             secretAccessKey: dto.deploymentTarget?.secretAccessKey,
-            tier: dto.deploymentTarget?.tier || "simple",
+            tier: dto.deploymentTarget?.tier || "standard",
             certificateArn: dto.deploymentTarget?.certificateArn,
             allowedCidr: dto.deploymentTarget?.allowedCidr,
+            useSharedInfra: true,
           }
         : {
             containerName:
