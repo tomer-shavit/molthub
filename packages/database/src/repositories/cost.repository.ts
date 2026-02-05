@@ -86,7 +86,7 @@ export class PrismaCostRepository implements ICostRepository {
     });
 
     if (instance) {
-      // Update matching BudgetConfig currentSpendCents
+      // Update matching BudgetConfig currentSpendCents (monthly) and currentDailySpendCents (daily)
       await client.budgetConfig.updateMany({
         where: {
           isActive: true,
@@ -97,6 +97,9 @@ export class PrismaCostRepository implements ICostRepository {
         },
         data: {
           currentSpendCents: {
+            increment: data.costCents,
+          },
+          currentDailySpendCents: {
             increment: data.costCents,
           },
         },
@@ -551,6 +554,24 @@ export class PrismaCostRepository implements ICostRepository {
         currentSpendCents: 0,
         periodStart: newPeriodStart,
         periodEnd: newPeriodEnd,
+      },
+    });
+    return result.count;
+  }
+
+  async resetAllDailyBudgets(
+    newDailyPeriodStart: Date,
+    tx?: TransactionClient
+  ): Promise<number> {
+    const client = this.getClient(tx);
+    const result = await client.budgetConfig.updateMany({
+      where: {
+        isActive: true,
+        dailyLimitCents: { not: null },
+      },
+      data: {
+        currentDailySpendCents: 0,
+        dailyPeriodStart: newDailyPeriodStart,
       },
     });
     return result.count;

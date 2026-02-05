@@ -8,6 +8,7 @@ export interface BudgetConfig {
   fleetId?: string;
   name: string;
   description?: string;
+  // Monthly limits
   monthlyLimitCents: number;
   currency: string;
   warnThresholdPct: number;
@@ -15,6 +16,13 @@ export interface BudgetConfig {
   currentSpendCents: number;
   periodStart: string;
   periodEnd?: string;
+  // Daily limits (optional)
+  dailyLimitCents?: number;
+  dailyWarnThresholdPct?: number;
+  dailyCriticalThresholdPct?: number;
+  currentDailySpendCents: number;
+  dailyPeriodStart?: string;
+  // Status
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -30,6 +38,10 @@ export interface CreateBudgetPayload {
   currency?: string;
   warnThresholdPct?: number;
   criticalThresholdPct?: number;
+  // Daily limits (optional)
+  dailyLimitCents?: number;
+  dailyWarnThresholdPct?: number;
+  dailyCriticalThresholdPct?: number;
 }
 
 export interface UpdateBudgetPayload {
@@ -42,6 +54,10 @@ export interface UpdateBudgetPayload {
   warnThresholdPct?: number;
   criticalThresholdPct?: number;
   isActive?: boolean;
+  // Daily limits (optional)
+  dailyLimitCents?: number;
+  dailyWarnThresholdPct?: number;
+  dailyCriticalThresholdPct?: number;
 }
 
 export interface BudgetFilters {

@@ -92,3 +92,33 @@ export interface CostFilters {
   page?: number;
   limit?: number;
 }
+
+/**
+ * Live cost totals from gateway usage.cost RPC.
+ */
+export interface CostUsageTotals {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  totalTokens: number;
+  totalCost: number;
+}
+
+/**
+ * Per-instance cost entry in live aggregation.
+ */
+export interface InstanceCostEntry {
+  instanceId: string;
+  instanceName: string;
+  totals: CostUsageTotals;
+}
+
+/**
+ * Aggregated live cost data from all running instances.
+ */
+export interface LiveCostAggregation {
+  totals: CostUsageTotals;
+  byInstance: InstanceCostEntry[];
+  refreshedAt: string;
+}

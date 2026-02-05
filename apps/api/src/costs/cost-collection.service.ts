@@ -20,7 +20,21 @@ export class CostCollectionService {
     private readonly costsService: CostsService,
   ) {}
 
-  @Cron("0 */1 * * *")
+  /**
+   * Scheduled cost collection every 15 minutes.
+   * Syncs token usage from Gateway to CostEvent records.
+   */
+  @Cron("0 */15 * * * *")
+  async scheduledCostCollection(): Promise<void> {
+    this.logger.debug("Running scheduled cost collection");
+    await this.collectCosts();
+  }
+
+  /**
+   * Collect costs from all running instances.
+   * Called automatically every 15 minutes via scheduledCostCollection()
+   * or on-demand via POST /costs/refresh endpoint.
+   */
   async collectCosts(): Promise<void> {
     if (this.running) {
       this.logger.debug("Cost collection already in progress, skipping");

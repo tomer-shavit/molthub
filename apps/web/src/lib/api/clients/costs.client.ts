@@ -10,6 +10,7 @@ import type {
   PaginatedCostEvents,
   CreateCostEventPayload,
   CostFilters,
+  LiveCostAggregation,
 } from '../types/costs';
 
 export class CostsClient extends BaseHttpClient {
@@ -39,6 +40,14 @@ export class CostsClient extends BaseHttpClient {
    */
   getInstanceCosts(instanceId: string): Promise<CostSummary> {
     return this.get(`/costs/instance/${instanceId}`);
+  }
+
+  /**
+   * Refresh live cost data from all running instances.
+   * Fetches directly from gateway usage.cost RPC.
+   */
+  refresh(): Promise<LiveCostAggregation> {
+    return this.post('/costs/refresh', {});
   }
 }
 

@@ -1,11 +1,9 @@
-import { Injectable, NotFoundException, Logger, Inject } from "@nestjs/common";
+import { Injectable, NotFoundException, Logger, Inject, BadRequestException } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import {
   BudgetConfig,
   COST_REPOSITORY,
   ICostRepository,
-  ALERT_REPOSITORY,
-  IAlertRepository,
 } from "@clawster/database";
 import { CreateBudgetDto, UpdateBudgetDto, BudgetQueryDto } from "./costs.dto";
 
@@ -16,8 +14,6 @@ export class BudgetService {
   constructor(
     @Inject(COST_REPOSITORY)
     private readonly costRepo: ICostRepository,
-    @Inject(ALERT_REPOSITORY)
-    private readonly alertRepo: IAlertRepository,
   ) {}
 
   // ============================================
@@ -25,8 +21,16 @@ export class BudgetService {
   // ============================================
 
   async create(dto: CreateBudgetDto): Promise<BudgetConfig> {
+    // Validate threshold relationships
+    this.validateThresholds(dto);
+
     const now = new Date();
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    // Set daily period start to beginning of today (UTC)
+    const dailyPeriodStart = dto.dailyLimitCents
+      ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+      : undefined;
 
     return this.costRepo.createBudget({
       name: dto.name,
@@ -39,6 +43,11 @@ export class BudgetService {
       criticalThresholdPct: dto.criticalThresholdPct ?? 90,
       periodStart: now,
       periodEnd,
+      // Daily limit fields
+      dailyLimitCents: dto.dailyLimitCents,
+      dailyWarnThresholdPct: dto.dailyWarnThresholdPct ?? 75,
+      dailyCriticalThresholdPct: dto.dailyCriticalThresholdPct ?? 90,
+      dailyPeriodStart,
       createdBy: "system",
     });
   }
@@ -62,7 +71,15 @@ export class BudgetService {
   }
 
   async update(id: string, dto: UpdateBudgetDto): Promise<BudgetConfig> {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
+
+    // Validate threshold relationships (merge with existing values for validation)
+    this.validateThresholds({
+      warnThresholdPct: dto.warnThresholdPct ?? existing.warnThresholdPct,
+      criticalThresholdPct: dto.criticalThresholdPct ?? existing.criticalThresholdPct,
+      dailyWarnThresholdPct: dto.dailyWarnThresholdPct ?? existing.dailyWarnThresholdPct ?? undefined,
+      dailyCriticalThresholdPct: dto.dailyCriticalThresholdPct ?? existing.dailyCriticalThresholdPct ?? undefined,
+    });
 
     return this.costRepo.updateBudget(id, {
       ...(dto.name !== undefined && { name: dto.name }),
@@ -78,6 +95,16 @@ export class BudgetService {
         criticalThresholdPct: dto.criticalThresholdPct,
       }),
       ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+      // Daily limit fields
+      ...(dto.dailyLimitCents !== undefined && {
+        dailyLimitCents: dto.dailyLimitCents,
+      }),
+      ...(dto.dailyWarnThresholdPct !== undefined && {
+        dailyWarnThresholdPct: dto.dailyWarnThresholdPct,
+      }),
+      ...(dto.dailyCriticalThresholdPct !== undefined && {
+        dailyCriticalThresholdPct: dto.dailyCriticalThresholdPct,
+      }),
     });
   }
 
@@ -90,52 +117,11 @@ export class BudgetService {
   // Cron Jobs
   // ============================================
 
-  /**
-   * Check budget thresholds every 5 minutes.
-   * Creates or updates HealthAlert records when thresholds are exceeded.
-   * Resolves alerts when spend drops below thresholds.
-   */
-  @Cron("*/5 * * * *")
-  async checkBudgetThresholds(): Promise<void> {
-    this.logger.debug("Checking budget thresholds...");
-
-    const activeBudgets = await this.costRepo.findBudgets({ isActive: true });
-
-    for (const budget of activeBudgets) {
-      const spendPct =
-        budget.monthlyLimitCents > 0
-          ? (budget.currentSpendCents / budget.monthlyLimitCents) * 100
-          : 0;
-
-      const isCritical = spendPct >= budget.criticalThresholdPct;
-      const isWarning = spendPct >= budget.warnThresholdPct;
-
-      // Handle critical threshold
-      await this.handleThresholdAlert(
-        budget,
-        "budget_critical",
-        isCritical,
-        "CRITICAL",
-        spendPct,
-      );
-
-      // Handle warning threshold
-      await this.handleThresholdAlert(
-        budget,
-        "budget_warning",
-        isWarning && !isCritical,
-        "WARNING",
-        spendPct,
-      );
-    }
-
-    this.logger.debug(
-      `Budget threshold check complete. Checked ${activeBudgets.length} budgets.`,
-    );
-  }
+  // NOTE: Budget threshold checking is handled by AlertingService (every 60s).
+  // This service only handles period resets.
 
   /**
-   * Reset monthly budgets on the 1st of each month at midnight.
+   * Reset monthly budgets on the 1st of each month at midnight UTC.
    * Resets currentSpendCents to 0 and updates periodStart/periodEnd.
    */
   @Cron("0 0 1 * *")
@@ -150,43 +136,50 @@ export class BudgetService {
     this.logger.log(`Reset ${count} active budgets for new period.`);
   }
 
+  /**
+   * Reset daily budgets at midnight UTC every day.
+   * Resets currentDailySpendCents to 0 and updates dailyPeriodStart.
+   */
+  @Cron("0 0 * * *")
+  async resetDailyBudgets(): Promise<void> {
+    this.logger.log("Resetting daily budgets...");
+
+    const now = new Date();
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+    const count = await this.costRepo.resetAllDailyBudgets(todayStart);
+
+    this.logger.log(`Reset daily spend for ${count} active budgets.`);
+  }
+
   // ============================================
   // Private Helpers
   // ============================================
 
-  private async handleThresholdAlert(
-    budget: BudgetConfig,
-    rule: string,
-    isTriggered: boolean,
-    severity: string,
-    spendPct: number,
-  ): Promise<void> {
-    const title = `Budget ${rule === "budget_critical" ? "critical" : "warning"}: ${budget.name}`;
-    const message = `Budget "${budget.name}" is at ${spendPct.toFixed(1)}% ($${(budget.currentSpendCents / 100).toFixed(2)} of $${(budget.monthlyLimitCents / 100).toFixed(2)} limit).`;
+  /**
+   * Validate that warning thresholds are less than critical thresholds.
+   */
+  private validateThresholds(dto: {
+    warnThresholdPct?: number;
+    criticalThresholdPct?: number;
+    dailyWarnThresholdPct?: number;
+    dailyCriticalThresholdPct?: number;
+  }): void {
+    const warnPct = dto.warnThresholdPct ?? 75;
+    const critPct = dto.criticalThresholdPct ?? 90;
 
-    if (isTriggered) {
-      // Use upsertByKey to create or update the alert
-      await this.alertRepo.upsertByKey({
-        rule,
-        severity,
-        title,
-        message,
-        detail: JSON.stringify({
-          budgetId: budget.id,
-          budgetName: budget.name,
-          currentSpendCents: budget.currentSpendCents,
-          monthlyLimitCents: budget.monthlyLimitCents,
-          spendPct,
-        }),
-        remediationAction: "review_costs",
-        remediationNote: `Review cost events and consider adjusting the budget limit or reducing usage.`,
-        instanceId: budget.instanceId,
-        fleetId: budget.fleetId,
-      });
-    } else {
-      // Try to resolve any existing alert for this key
-      if (budget.instanceId) {
-        await this.alertRepo.resolveByKey(rule, budget.instanceId);
+    if (warnPct >= critPct) {
+      throw new BadRequestException(
+        "Monthly warning threshold must be less than critical threshold",
+      );
+    }
+
+    // Only validate daily thresholds if both are provided
+    if (dto.dailyWarnThresholdPct !== undefined && dto.dailyCriticalThresholdPct !== undefined) {
+      if (dto.dailyWarnThresholdPct >= dto.dailyCriticalThresholdPct) {
+        throw new BadRequestException(
+          "Daily warning threshold must be less than critical threshold",
+        );
       }
     }
   }

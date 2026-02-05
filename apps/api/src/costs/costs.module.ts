@@ -9,6 +9,6 @@ import { HealthModule } from "../health/health.module";
   imports: [HealthModule],
   controllers: [CostsController],
   providers: [CostsService, BudgetService, CostCollectionService],
-  exports: [CostsService, BudgetService],
+  exports: [CostsService, BudgetService, CostCollectionService],
 })
 export class CostsModule {}

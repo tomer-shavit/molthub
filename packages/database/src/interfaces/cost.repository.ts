@@ -262,4 +262,13 @@ export interface ICostRepository {
     newPeriodEnd: Date,
     tx?: TransactionClient
   ): Promise<number>;
+
+  /**
+   * Reset daily spend for all active budgets with daily limits
+   * Returns the count of budgets reset
+   */
+  resetAllDailyBudgets(
+    newDailyPeriodStart: Date,
+    tx?: TransactionClient
+  ): Promise<number>;
 }
