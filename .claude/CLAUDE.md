@@ -77,6 +77,12 @@ Once the plan is approved:
 - When a step requires changes to a shared package AND consuming apps, implement the package first, then launch app-level agents in parallel
 - Track progress with `TodoWrite`, marking each step as `in_progress` → `completed`
 - Follow existing codebase conventions (NestJS patterns for API, Next.js for web, Zod for schemas, Prisma for DB)
+- **ALWAYS follow SOLID principles** when adding new code:
+  - **S**ingle Responsibility: Each class/module has one reason to change
+  - **O**pen/Closed: Open for extension, closed for modification
+  - **L**iskov Substitution: Subtypes must be substitutable for their base types
+  - **I**nterface Segregation: Many specific interfaces over one general-purpose interface
+  - **D**ependency Inversion: Depend on abstractions, not concretions
 - Do not over-engineer — only implement what the plan specifies
 
 ---
@@ -105,13 +111,17 @@ After tests pass and before creating a PR, you MUST run the code review agent. *
      b. The **list of all files changed or created** during this session
      c. A brief summary of what was implemented
      d. Instruct the agent to follow the review process defined in `.claude/commands/review.md`
+     e. **Instruct the agent to check for dead code** — unused functions, variables, imports, types, and unreachable code paths
 2. Read the review agent's response carefully
 3. If the review returns **SUGGEST CHANGES** or **REQUEST CHANGES**:
    - Implement ALL critical issues immediately
+   - **Remove ALL dead code identified by the reviewer** — this is mandatory, not optional
    - Implement suggested improvements unless they contradict the approved plan
    - Re-run affected tests after making changes
 4. If the review returns **APPROVE**, proceed to Step 6
 5. After addressing review feedback, re-run the review agent ONE more time to confirm fixes
+
+**Dead code is a blocking issue.** The reviewer MUST flag unused code, and it MUST be removed before the PR is created. No exceptions.
 
 This step is automatic — the implementing agent triggers it as part of the normal workflow. The user does not need to request it.
 
@@ -190,6 +200,8 @@ Once everything passes verification:
 - **Never skip code review.** The review agent runs automatically after tests pass — do not skip it or ask the user first.
 - **Never skip runtime validation.** Build AND run the code to verify it works — "it compiles" is not enough. Test with realistic inputs and verify the happy path end-to-end.
 - **Never skip verification.** Re-read docs after implementation.
+- **ALWAYS follow SOLID principles.** Every new class, module, and function must adhere to Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, and Dependency Inversion.
+- **Never leave dead code.** Unused functions, variables, imports, types, and unreachable code paths must be removed immediately. The code reviewer will flag dead code as a blocking issue.
 - **ALWAYS prefer parallel execution.** This is a core principle. When multiple tool calls, agents, file reads, or searches are independent, launch them ALL concurrently in a single message. Never do sequentially what can be done in parallel. This applies to every step: reading docs, exploring code, researching OpenClaw, implementing features, running tests, and spawning review agents.
 - **One PR per feature/fix** pushed to `master` via `gh pr create`.
 - **Track everything** with `TodoWrite` for visibility.

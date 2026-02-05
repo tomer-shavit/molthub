@@ -1,9 +1,10 @@
 import { InstanceManifest, validateManifest } from "./manifest";
-import {
+import type {
   OpenClawConfig,
   OpenClawEvaluationContext,
-  evaluateOpenClawRule,
 } from "./openclaw-policies";
+// Import builtin rules to trigger self-registration, then use registry
+import { defaultRegistry } from "./policies/rules/builtin";
 
 // Note: Use PolicyViolation from policy-pack.ts for the enhanced version
 export interface LegacyPolicyViolation {
@@ -17,20 +18,6 @@ export interface PolicyResult {
   valid: boolean;
   violations: LegacyPolicyViolation[];
 }
-
-/** OpenClaw-specific rule type identifiers */
-const OPENCLAW_RULE_TYPES = new Set([
-  "require_gateway_auth",
-  "require_dm_policy",
-  "require_config_permissions",
-  "forbid_elevated_tools",
-  "require_sandbox",
-  "limit_tool_profile",
-  "require_model_guardrails",
-  "require_workspace_isolation",
-  "require_port_spacing",
-  "forbid_open_group_policy",
-]);
 
 export class PolicyEngine {
   validate(manifest: unknown): PolicyResult {
@@ -140,6 +127,9 @@ export class PolicyEngine {
    * Validate an OpenClaw configuration against a specific rule type.
    * Handles all OpenClaw-specific rule types (gateway auth, DM policy,
    * sandbox, tool profiles, workspace isolation, port spacing, etc.).
+   *
+   * Uses the PolicyRuleRegistry to look up and evaluate rules dynamically.
+   * Unknown rule types return a passing result (fail-open for backward compatibility).
    */
   validateOpenClawRule(
     ruleType: string,
@@ -147,11 +137,13 @@ export class PolicyEngine {
     ruleConfig: Record<string, unknown>,
     context?: OpenClawEvaluationContext,
   ): { passed: boolean; violation?: LegacyPolicyViolation } {
-    if (!OPENCLAW_RULE_TYPES.has(ruleType)) {
+    // Use registry to check if rule type is known
+    if (!defaultRegistry.has(ruleType)) {
       return { passed: true };
     }
 
-    const result = evaluateOpenClawRule(ruleType, config, ruleConfig, context);
+    // Delegate to registry for evaluation
+    const result = defaultRegistry.evaluate(ruleType, config, ruleConfig, context);
 
     if (!result.passed && result.violation) {
       return {
@@ -170,8 +162,9 @@ export class PolicyEngine {
 
   /**
    * Check whether a rule type is an OpenClaw-specific rule.
+   * Uses the PolicyRuleRegistry to dynamically discover registered rule types.
    */
   isOpenClawRuleType(ruleType: string): boolean {
-    return OPENCLAW_RULE_TYPES.has(ruleType);
+    return defaultRegistry.has(ruleType);
   }
 }

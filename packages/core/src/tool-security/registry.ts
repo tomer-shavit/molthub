@@ -15,10 +15,19 @@ import { defaultToolPatternProvider } from "./default-provider";
 export class ToolPatternProviderRegistry {
   private readonly providers = new Map<string, IToolPatternProvider>();
   private readonly priorities = new Map<string, number>();
+  private readonly defaultProvider: IToolPatternProvider;
 
-  constructor() {
+  /**
+   * Create a new registry.
+   *
+   * @param defaultProvider - Optional custom default provider.
+   *                          If not provided, uses the built-in defaultToolPatternProvider.
+   */
+  constructor(defaultProvider?: IToolPatternProvider) {
+    // Accept injected default or use the built-in one
+    this.defaultProvider = defaultProvider ?? defaultToolPatternProvider;
     // Register the default provider with lowest priority
-    this.register(defaultToolPatternProvider, 0);
+    this.register(this.defaultProvider, 0);
   }
 
   /**
@@ -145,7 +154,7 @@ export class ToolPatternProviderRegistry {
   reset(): void {
     this.providers.clear();
     this.priorities.clear();
-    this.register(defaultToolPatternProvider, 0);
+    this.register(this.defaultProvider, 0);
   }
 }
 
