@@ -7,8 +7,11 @@ import {
   PRISMA_CLIENT,
 } from "@clawster/database";
 import type { PrismaClient } from "@clawster/database";
-import * as crypto from "crypto";
 import { DelegationSkillGeneratorService } from "../bot-teams/delegation-skill-generator.service";
+import {
+  A2A_API_KEY_SERVICE,
+  type IA2aApiKeyService,
+} from "./interfaces";
 
 @Injectable()
 export class DelegationSkillWriterService {
@@ -17,6 +20,7 @@ export class DelegationSkillWriterService {
   constructor(
     @Inject(BOT_INSTANCE_REPOSITORY) private readonly botInstanceRepo: IBotInstanceRepository,
     @Inject(PRISMA_CLIENT) private readonly prisma: PrismaClient,
+    @Inject(A2A_API_KEY_SERVICE) private readonly apiKeyService: IA2aApiKeyService,
     private readonly skillGenerator: DelegationSkillGeneratorService,
   ) {}
 
@@ -58,7 +62,7 @@ export class DelegationSkillWriterService {
     }
 
     // 4. Auto-generate an A2A API key for delegation
-    const apiKey = await this.ensureDelegationApiKey(instanceId);
+    const apiKey = await this.apiKeyService.ensureDelegationApiKey(instanceId);
 
     // 5. Generate skill files
     const { skillMd, delegateJs } = this.skillGenerator.generateSkillFiles(
@@ -82,45 +86,6 @@ export class DelegationSkillWriterService {
     );
 
     return { written: true, memberCount: teamMembers.length };
-  }
-
-  /**
-   * Ensure a delegation API key exists for the bot.
-   * Revokes any previous delegation keys and generates a fresh one.
-   * Returns the plaintext key.
-   */
-  private async ensureDelegationApiKey(botInstanceId: string): Promise<string> {
-    const DELEGATION_LABEL = "clawster-delegation-auto";
-
-    // Revoke any previous delegation keys
-    await this.prisma.a2aApiKey.updateMany({
-      where: {
-        botInstanceId,
-        label: DELEGATION_LABEL,
-        isActive: true,
-      },
-      data: { isActive: false },
-    });
-
-    // Generate new key
-    const randomBytes = crypto.randomBytes(32);
-    const encoded = randomBytes.toString("base64url").replace(/[=]/g, "");
-    const key = `mh_a2a_${encoded}`;
-    const keyHash = crypto.createHash("sha256").update(key).digest("hex");
-    const keyPrefix = key.slice(0, 12) + "...";
-
-    await this.prisma.a2aApiKey.create({
-      data: {
-        keyHash,
-        keyPrefix,
-        label: DELEGATION_LABEL,
-        botInstanceId,
-      },
-    });
-
-    this.logger.debug(`Generated delegation API key ${keyPrefix} for bot ${botInstanceId}`);
-
-    return key;
   }
 
   private cleanupSkillDir(skillDir: string): void {

@@ -5,9 +5,11 @@ import {
   IBotInstanceRepository,
 } from "@clawster/database";
 import type { OpenClawManifest } from "@clawster/core";
-import { GatewayManager } from "@clawster/gateway-client";
-import type { GatewayConnectionOptions } from "@clawster/gateway-client";
 import { ConfigGeneratorService } from "./config-generator.service";
+import {
+  GATEWAY_CONNECTION_SERVICE,
+  type IGatewayConnectionService,
+} from "./interfaces";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,10 +52,10 @@ export interface DriftCheckResult {
 @Injectable()
 export class DriftDetectionService {
   private readonly logger = new Logger(DriftDetectionService.name);
-  private readonly gatewayManager = new GatewayManager();
 
   constructor(
     @Inject(BOT_INSTANCE_REPOSITORY) private readonly botInstanceRepo: IBotInstanceRepository,
+    @Inject(GATEWAY_CONNECTION_SERVICE) private readonly gatewayConnection: IGatewayConnectionService,
     private readonly configGenerator: ConfigGeneratorService,
   ) {}
 
@@ -87,7 +89,7 @@ export class DriftDetectionService {
     let actualHash: string | undefined;
 
     try {
-      const client = await this.getGatewayClient(instance);
+      const client = await this.gatewayConnection.getGatewayClient(instance, 10_000);
       gatewayReachable = true;
 
       // Config drift via remote hash
@@ -217,23 +219,6 @@ export class DriftDetectionService {
   // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------
-
-  private async getGatewayClient(instance: BotInstance) {
-    const gwConn = await this.botInstanceRepo.getGatewayConnection(instance.id);
-
-    const host = gwConn?.host ?? "localhost";
-    const port = gwConn?.port ?? instance.gatewayPort ?? 18789;
-    const token = gwConn?.authToken ?? undefined;
-
-    const options: GatewayConnectionOptions = {
-      host,
-      port,
-      auth: token ? { mode: "token", token } : { mode: "token", token: "clawster" },
-      timeoutMs: 10_000,
-    };
-
-    return this.gatewayManager.getClient(instance.id, options);
-  }
 
   private async updateHealthFromFindings(
     instance: BotInstance,

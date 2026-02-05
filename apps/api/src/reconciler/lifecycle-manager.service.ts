@@ -1,4 +1,3 @@
-import * as path from "path";
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import {
   BotInstance,
@@ -7,26 +6,17 @@ import {
   PRISMA_CLIENT,
 } from "@clawster/database";
 import type { PrismaClient } from "@clawster/database";
-import type { OpenClawManifest, OpenClawFullConfig } from "@clawster/core";
-import {
-  GatewayManager,
-  GatewayClient,
-} from "@clawster/gateway-client";
-import type { GatewayConnectionOptions } from "@clawster/gateway-client";
-import {
-  DeploymentTargetFactory,
-  DeploymentTargetType,
-  AdapterRegistry,
-} from "@clawster/cloud-providers";
-import type {
-  DeploymentTarget,
-  DeploymentTargetConfig,
-  TargetStatus,
-  GatewayEndpoint,
-  SelfDescribingDeploymentTarget,
-} from "@clawster/cloud-providers";
+import type { OpenClawManifest } from "@clawster/core";
+import type { IGatewayManager } from "@clawster/gateway-client";
 import { ConfigGeneratorService } from "./config-generator.service";
 import { ProvisioningEventsService } from "../provisioning/provisioning-events.service";
+import {
+  GATEWAY_MANAGER,
+  DEPLOYMENT_TARGET_RESOLVER,
+  GATEWAY_CONNECTION_SERVICE,
+  type IDeploymentTargetResolver,
+  type IGatewayConnectionService,
+} from "./interfaces";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,11 +55,13 @@ export interface StatusResult {
 @Injectable()
 export class LifecycleManagerService {
   private readonly logger = new Logger(LifecycleManagerService.name);
-  private readonly gatewayManager = new GatewayManager();
 
   constructor(
     @Inject(BOT_INSTANCE_REPOSITORY) private readonly botInstanceRepo: IBotInstanceRepository,
     @Inject(PRISMA_CLIENT) private readonly prisma: PrismaClient,
+    @Inject(GATEWAY_MANAGER) private readonly gatewayManager: IGatewayManager,
+    @Inject(DEPLOYMENT_TARGET_RESOLVER) private readonly deploymentTargetResolver: IDeploymentTargetResolver,
+    @Inject(GATEWAY_CONNECTION_SERVICE) private readonly gatewayConnection: IGatewayConnectionService,
     private readonly configGenerator: ConfigGeneratorService,
     private readonly provisioningEvents: ProvisioningEventsService,
   ) {}
@@ -93,7 +85,7 @@ export class LifecycleManagerService {
   ): Promise<ProvisionResult> {
     this.logger.log(`Provisioning instance ${instance.id} (${instance.name})`);
 
-    const deploymentType = this.resolveDeploymentType(instance);
+    const deploymentType = this.deploymentTargetResolver.resolveDeploymentType(instance);
     this.provisioningEvents.startProvisioning(instance.id, deploymentType);
 
     // Track the current step for log attribution
@@ -101,7 +93,7 @@ export class LifecycleManagerService {
 
     try {
       this.provisioningEvents.updateStep(instance.id, "validate_config", "in_progress");
-      const target = await this.resolveTarget(instance);
+      const target = await this.deploymentTargetResolver.resolveTarget(instance);
 
       // Wire streaming log callback if the target supports it
       if (target.setLogCallback) {
@@ -124,7 +116,7 @@ export class LifecycleManagerService {
       const containerEnv = (instanceMeta?.containerEnv as Record<string, string>) || undefined;
       const gatewayAuthToken = (instanceMeta?.gatewayAuthToken as string) ?? undefined;
 
-      const installStepId = this.getInstallStepId(deploymentType);
+      const installStepId = this.deploymentTargetResolver.getInstallStepId(deploymentType);
       currentStepId = installStepId;
       this.provisioningEvents.updateStep(instance.id, installStepId, "in_progress");
       const installResult = await target.install({
@@ -158,7 +150,7 @@ export class LifecycleManagerService {
         throw new Error(`Configure failed: ${configureResult.message}`);
       }
       this.provisioningEvents.updateStep(instance.id, "write_config", "completed");
-      const startStepId = this.getStartStepId(deploymentType);
+      const startStepId = this.deploymentTargetResolver.getStartStepId(deploymentType);
       currentStepId = startStepId;
       this.provisioningEvents.updateStep(instance.id, startStepId, "in_progress");
       await target.start();
@@ -169,7 +161,7 @@ export class LifecycleManagerService {
       this.provisioningEvents.updateStep(instance.id, "wait_for_gateway", "in_progress");
       const endpoint = await target.getEndpoint();
       const authToken = config.gateway?.auth?.token;
-      const client = await this.connectGateway(instance.id, endpoint, authToken);
+      const client = await this.gatewayConnection.connectGateway(instance.id, endpoint, authToken);
       this.provisioningEvents.updateStep(instance.id, "wait_for_gateway", "completed");
 
       currentStepId = "health_check";
@@ -192,10 +184,10 @@ export class LifecycleManagerService {
       });
 
       // Upsert GatewayConnection record (persist auth token for health poller)
-      await this.upsertGatewayConnection(instance.id, endpoint, configHash, authToken);
+      await this.gatewayConnection.upsertGatewayConnection(instance.id, endpoint, configHash, authToken);
 
       // Upsert OpenClawProfile record
-      await this.upsertOpenClawProfile(instance.id, profileName, gatewayPort);
+      await this.gatewayConnection.upsertOpenClawProfile(instance.id, profileName, gatewayPort);
       this.provisioningEvents.completeProvisioning(instance.id);
 
       this.logger.log(`Instance ${instance.id} provisioned successfully`);
@@ -248,7 +240,7 @@ export class LifecycleManagerService {
       }
 
       // Connect (or reuse) to gateway
-      const client = await this.getGatewayClient(instance);
+      const client = await this.gatewayConnection.getGatewayClient(instance);
 
       // Get current remote config + hash
       const remote = await client.configGet();
@@ -280,7 +272,7 @@ export class LifecycleManagerService {
       // Persist config to the deployment target's backing store (e.g., Secrets
       // Manager for ECS, disk for Docker) so config survives restarts.
       try {
-        const target = await this.resolveTarget(instance);
+        const target = await this.deploymentTargetResolver.resolveTarget(instance);
         const profileName = instance.profileName ?? manifest.metadata.name;
         const gatewayPort = instance.gatewayPort ?? (config as Record<string, unknown> & { gateway?: { port?: number } }).gateway?.port ?? 18789;
         await target.configure({
@@ -329,7 +321,7 @@ export class LifecycleManagerService {
   async restart(instance: BotInstance): Promise<void> {
     this.logger.log(`Restarting instance ${instance.id}`);
 
-    const target = await this.resolveTarget(instance);
+    const target = await this.deploymentTargetResolver.resolveTarget(instance);
     await target.restart();
 
     await this.botInstanceRepo.update(instance.id, {
@@ -354,7 +346,7 @@ export class LifecycleManagerService {
 
     try {
       // Attempt to restart via deployment target which may issue SIGUSR1
-      const target = await this.resolveTarget(instance);
+      const target = await this.deploymentTargetResolver.resolveTarget(instance);
       await target.restart();
 
       await this.botInstanceRepo.update(instance.id, {
@@ -379,7 +371,7 @@ export class LifecycleManagerService {
       this.gatewayManager.removeClient(instance.id);
 
       // Tear down via deployment target
-      const target = await this.resolveTarget(instance);
+      const target = await this.deploymentTargetResolver.resolveTarget(instance);
 
       // Wire streaming log callback if the target supports it
       if (target.setLogCallback) {
@@ -423,7 +415,7 @@ export class LifecycleManagerService {
 
     // Infrastructure status
     try {
-      const target = await this.resolveTarget(instance);
+      const target = await this.deploymentTargetResolver.resolveTarget(instance);
       const targetStatus = await target.getStatus();
       result.infraState = targetStatus.state;
     } catch {
@@ -432,7 +424,7 @@ export class LifecycleManagerService {
 
     // Gateway WS status
     try {
-      const client = await this.getGatewayClient(instance);
+      const client = await this.gatewayConnection.getGatewayClient(instance);
       result.gatewayConnected = true;
 
       const health = await client.health();
@@ -461,7 +453,7 @@ export class LifecycleManagerService {
   ): Promise<{ success: boolean; message: string; requiresRestart: boolean }> {
     this.logger.log(`Updating resources for instance ${instance.id}: cpu=${spec.cpu}, memory=${spec.memory}, disk=${spec.dataDiskSizeGb ?? "unchanged"}`);
 
-    const deploymentType = this.resolveDeploymentType(instance);
+    const deploymentType = this.deploymentTargetResolver.resolveDeploymentType(instance);
 
     // Start resource update tracking with step progress
     this.provisioningEvents.startResourceUpdate(instance.id, deploymentType);
@@ -471,7 +463,7 @@ export class LifecycleManagerService {
 
     try {
       this.provisioningEvents.updateStep(instance.id, "validate_resources", "in_progress");
-      const target = await this.resolveTarget(instance);
+      const target = await this.deploymentTargetResolver.resolveTarget(instance);
 
       // Check if the target supports resource updates
       if (!target.updateResources) {
@@ -530,327 +522,5 @@ export class LifecycleManagerService {
         requiresRestart: false,
       };
     }
-  }
-
-  // ------------------------------------------------------------------
-  // Internal helpers
-  // ------------------------------------------------------------------
-
-  /**
-   * Resolve the DeploymentTarget implementation for a given BotInstance.
-   * Uses the DeploymentTarget DB record if present, otherwise falls back
-   * to a `local` target.
-   */
-  private resolveDeploymentType(instance: BotInstance): string {
-    const typeStr = instance.deploymentType ?? "LOCAL";
-    const typeMap: Record<string, string> = { LOCAL: "local", DOCKER: "docker", ECS_EC2: "ecs-ec2", GCE: "gce", AZURE_VM: "azure-vm" };
-    return typeMap[typeStr] ?? "docker";
-  }
-
-  /**
-   * Get the install step ID from the adapter registry.
-   */
-  private getInstallStepId(deploymentType: string): string {
-    const typeEnum = this.stringToDeploymentTargetType(deploymentType);
-    if (!typeEnum) {
-      throw new Error(`Unknown deployment type: ${deploymentType}`);
-    }
-
-    const stepId = AdapterRegistry.getInstance().getOperationStepId(typeEnum, "install");
-    if (!stepId) {
-      throw new Error(
-        `No install step ID found for deployment type "${deploymentType}". ` +
-        `Ensure the adapter's getMetadata() defines operationSteps.install.`
-      );
-    }
-
-    return stepId;
-  }
-
-  /**
-   * Get the start step ID from the adapter registry.
-   */
-  private getStartStepId(deploymentType: string): string {
-    const typeEnum = this.stringToDeploymentTargetType(deploymentType);
-    if (!typeEnum) {
-      throw new Error(`Unknown deployment type: ${deploymentType}`);
-    }
-
-    const stepId = AdapterRegistry.getInstance().getOperationStepId(typeEnum, "start");
-    if (!stepId) {
-      throw new Error(
-        `No start step ID found for deployment type "${deploymentType}". ` +
-        `Ensure the adapter's getMetadata() defines operationSteps.start.`
-      );
-    }
-
-    return stepId;
-  }
-
-  /**
-   * Convert string deployment type to DeploymentTargetType enum.
-   */
-  private stringToDeploymentTargetType(type: string): DeploymentTargetType | undefined {
-    const typeMap: Record<string, DeploymentTargetType> = {
-      local: DeploymentTargetType.LOCAL,
-      docker: DeploymentTargetType.DOCKER,
-      "ecs-ec2": DeploymentTargetType.ECS_EC2,
-      gce: DeploymentTargetType.GCE,
-      "azure-vm": DeploymentTargetType.AZURE_VM,
-    };
-    return typeMap[type];
-  }
-
-  private async resolveTarget(instance: BotInstance): Promise<DeploymentTarget> {
-    if (instance.deploymentTargetId) {
-      const dbTarget = await this.prisma.deploymentTarget.findUnique({
-        where: { id: instance.deploymentTargetId },
-      });
-
-      if (dbTarget) {
-        const targetConfig = this.mapDbTargetToConfig(dbTarget, instance);
-        return DeploymentTargetFactory.create(targetConfig);
-      }
-    }
-
-    // Fallback: derive from deploymentType enum
-    const typeStr = instance.deploymentType ?? "LOCAL";
-    const instanceMeta = (typeof instance.metadata === "string" ? JSON.parse(instance.metadata) : instance.metadata) as Record<string, unknown> | null;
-    const configMap: Record<string, DeploymentTargetConfig> = {
-      LOCAL: { type: "local" },
-      DOCKER: {
-        type: "docker",
-        docker: {
-          containerName: `openclaw-${instance.name}`,
-          imageName: "openclaw:local",
-          dockerfilePath: path.join(__dirname, "../../../../../docker/openclaw"),
-          configPath: `/var/openclaw/${instance.name}`,
-          gatewayPort: instance.gatewayPort ?? 18789,
-        },
-      },
-      ECS_EC2: {
-        type: "ecs-ec2",
-        ecs: {
-          region: (instanceMeta?.region as string) ?? (instanceMeta?.awsRegion as string) ?? "us-east-1",
-          accessKeyId: (instanceMeta?.accessKeyId as string) ?? (instanceMeta?.awsAccessKeyId as string) ?? "",
-          secretAccessKey: (instanceMeta?.secretAccessKey as string) ?? (instanceMeta?.awsSecretAccessKey as string) ?? "",
-          certificateArn: instanceMeta?.certificateArn as string | undefined,
-          cpu: instanceMeta?.cpu as number | undefined,
-          memory: instanceMeta?.memory as number | undefined,
-          image: instanceMeta?.image as string | undefined,
-          profileName: instance.profileName ?? instance.name,
-        },
-      },
-      GCE: {
-        type: "gce",
-        gce: {
-          projectId: (instanceMeta?.projectId as string) ?? (instanceMeta?.gcpProjectId as string) ?? "",
-          zone: (instanceMeta?.zone as string) ?? (instanceMeta?.gcpZone as string) ?? "us-central1-a",
-          keyFilePath: instanceMeta?.keyFilePath as string | undefined,
-          machineType: instanceMeta?.machineType as string | undefined,
-          image: instanceMeta?.image as string | undefined,
-          profileName: instance.profileName ?? instance.name,
-        },
-      },
-      AZURE_VM: {
-        type: "azure-vm",
-        azureVm: {
-          subscriptionId: (instanceMeta?.subscriptionId as string) ?? (instanceMeta?.azureSubscriptionId as string) ?? "",
-          resourceGroup: (instanceMeta?.resourceGroup as string) ?? (instanceMeta?.azureResourceGroup as string) ?? "",
-          region: (instanceMeta?.region as string) ?? (instanceMeta?.azureRegion as string) ?? "eastus",
-          clientId: instanceMeta?.clientId as string | undefined,
-          clientSecret: instanceMeta?.clientSecret as string | undefined,
-          tenantId: instanceMeta?.tenantId as string | undefined,
-          keyVaultName: instanceMeta?.keyVaultName as string | undefined,
-          logAnalyticsWorkspaceId: instanceMeta?.logAnalyticsWorkspaceId as string | undefined,
-          logAnalyticsWorkspaceKey: instanceMeta?.logAnalyticsWorkspaceKey as string | undefined,
-          vmSize: instanceMeta?.vmSize as string | undefined,
-          image: instanceMeta?.image as string | undefined,
-          profileName: instance.profileName ?? instance.name,
-        },
-      },
-    };
-
-    const config = configMap[typeStr] ?? { type: "local" as const };
-    return DeploymentTargetFactory.create(config);
-  }
-
-  /**
-   * Map a Prisma DeploymentTarget row to the typed config union that the
-   * factory expects.
-   */
-  private mapDbTargetToConfig(
-    dbTarget: { type: string; config: unknown },
-    instance?: BotInstance,
-  ): DeploymentTargetConfig {
-    const cfg = (typeof dbTarget.config === "string" ? JSON.parse(dbTarget.config) : dbTarget.config ?? {}) as Record<string, unknown>;
-
-    switch (dbTarget.type) {
-      case "LOCAL":
-        return { type: "local" };
-      case "DOCKER":
-        return {
-          type: "docker",
-          docker: {
-            containerName: (cfg.containerName as string) ?? "openclaw",
-            imageName: (cfg.imageName as string) ?? "openclaw:local",
-            dockerfilePath: (cfg.dockerfilePath as string) ?? path.join(__dirname, "../../../../../docker/openclaw"),
-            configPath: (cfg.configPath as string) ?? "/var/openclaw",
-            gatewayPort: (cfg.gatewayPort as number) ?? 18789,
-            networkName: cfg.networkName as string | undefined,
-          },
-        };
-      case "ECS_EC2":
-        return {
-          type: "ecs-ec2",
-          ecs: {
-            region: (cfg.region as string) ?? "us-east-1",
-            accessKeyId: (cfg.accessKeyId as string) ?? "",
-            secretAccessKey: (cfg.secretAccessKey as string) ?? "",
-            certificateArn: cfg.certificateArn as string | undefined,
-            cpu: cfg.cpu as number | undefined,
-            memory: cfg.memory as number | undefined,
-            image: cfg.image as string | undefined,
-            profileName: instance?.profileName ?? instance?.name,
-          },
-        };
-      case "GCE":
-        return {
-          type: "gce",
-          gce: {
-            projectId: (cfg.projectId as string) ?? "",
-            zone: (cfg.zone as string) ?? "us-central1-a",
-            keyFilePath: cfg.keyFilePath as string | undefined,
-            machineType: cfg.machineType as string | undefined,
-            image: cfg.image as string | undefined,
-            profileName: instance?.profileName ?? instance?.name,
-          },
-        };
-      case "AZURE_VM":
-        return {
-          type: "azure-vm",
-          azureVm: {
-            subscriptionId: (cfg.subscriptionId as string) ?? "",
-            resourceGroup: (cfg.resourceGroup as string) ?? "",
-            region: (cfg.region as string) ?? "eastus",
-            clientId: cfg.clientId as string | undefined,
-            clientSecret: cfg.clientSecret as string | undefined,
-            tenantId: cfg.tenantId as string | undefined,
-            keyVaultName: cfg.keyVaultName as string | undefined,
-            logAnalyticsWorkspaceId: cfg.logAnalyticsWorkspaceId as string | undefined,
-            logAnalyticsWorkspaceKey: cfg.logAnalyticsWorkspaceKey as string | undefined,
-            vmSize: cfg.vmSize as string | undefined,
-            image: cfg.image as string | undefined,
-            profileName: instance?.profileName ?? instance?.name,
-          },
-        };
-      default:
-        return { type: "local" };
-    }
-  }
-
-  /**
-   * Build GatewayConnectionOptions from a BotInstance + optional endpoint
-   * override, then obtain a connected client from the GatewayManager pool.
-   */
-  private async getGatewayClient(instance: BotInstance): Promise<GatewayClient> {
-    // Look up stored connection info
-    const gwConn = await this.botInstanceRepo.getGatewayConnection(instance.id);
-
-    const host = gwConn?.host ?? "localhost";
-    const port = gwConn?.port ?? instance.gatewayPort ?? 18789;
-    const token = gwConn?.authToken ?? undefined;
-
-    const options: GatewayConnectionOptions = {
-      host,
-      port,
-      auth: token ? { mode: "token", token } : { mode: "token", token: "clawster" },
-    };
-
-    return this.gatewayManager.getClient(instance.id, options);
-  }
-
-  private async connectGateway(
-    instanceId: string,
-    endpoint: GatewayEndpoint,
-    authToken?: string,
-  ): Promise<GatewayClient> {
-    const options: GatewayConnectionOptions = {
-      host: endpoint.host,
-      port: endpoint.port,
-      auth: { mode: "token", token: authToken ?? "" },
-    };
-
-    const maxAttempts = 30;
-    const baseDelayMs = 5_000;
-    const maxDelayMs = 15_000;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const client = await this.gatewayManager.getClient(instanceId, options);
-        return client;
-      } catch (error) {
-        const errMsg = error instanceof Error ? error.message : String(error);
-        if (attempt === maxAttempts) {
-          this.logger.error(
-            `Gateway connection failed for ${instanceId} after ${maxAttempts} attempts: ${errMsg}`,
-          );
-          throw error;
-        }
-        const delay = Math.min(baseDelayMs * Math.pow(2, attempt - 1), maxDelayMs);
-        this.logger.debug(
-          `Gateway connection attempt ${attempt}/${maxAttempts} failed for ${instanceId}, retrying in ${delay}ms`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
-
-    // Unreachable, but satisfies TypeScript
-    throw new Error("Gateway connection failed");
-  }
-
-  private async upsertGatewayConnection(
-    instanceId: string,
-    endpoint: GatewayEndpoint,
-    configHash: string,
-    authToken?: string,
-  ): Promise<void> {
-    await this.botInstanceRepo.upsertGatewayConnection(instanceId, {
-      host: endpoint.host,
-      port: endpoint.port,
-      status: "CONNECTED",
-      configHash,
-      lastHeartbeat: new Date(),
-      ...(authToken ? { authToken } : {}),
-    });
-  }
-
-  private async upsertOpenClawProfile(
-    instanceId: string,
-    profileName: string,
-    basePort: number,
-  ): Promise<void> {
-    const configPath = `~/.openclaw/profiles/${profileName}/openclaw.json`;
-    const stateDir = `~/.openclaw/profiles/${profileName}/state/`;
-    const workspace = `~/openclaw/${profileName}/`;
-
-    await this.prisma.openClawProfile.upsert({
-      where: { instanceId },
-      create: {
-        instanceId,
-        profileName,
-        configPath,
-        stateDir,
-        workspace,
-        basePort,
-      },
-      update: {
-        profileName,
-        configPath,
-        stateDir,
-        workspace,
-        basePort,
-      },
-    });
   }
 }

@@ -1,5 +1,6 @@
 import { DriftDetectionService } from "../drift-detection.service";
 import { ConfigGeneratorService } from "../config-generator.service";
+import type { IGatewayConnectionService } from "../interfaces";
 
 jest.mock("@clawster/database", () => ({
   prisma: {
@@ -13,11 +14,12 @@ jest.mock("@clawster/database", () => ({
 
 const mockGatewayClient = { configGet: jest.fn(), health: jest.fn(), status: jest.fn() };
 
-jest.mock("@clawster/gateway-client", () => ({
-  GatewayManager: jest.fn().mockImplementation(() => ({
-    getClient: jest.fn().mockResolvedValue(mockGatewayClient),
-  })),
-}));
+const mockGatewayConnectionService = {
+  getGatewayClient: jest.fn().mockResolvedValue(mockGatewayClient),
+  connectGateway: jest.fn().mockResolvedValue(mockGatewayClient),
+  upsertGatewayConnection: jest.fn().mockResolvedValue(undefined),
+  upsertOpenClawProfile: jest.fn().mockResolvedValue(undefined),
+};
 
 function createManifest(openclawConfig: Record<string, unknown> = {}) {
   return {
@@ -41,14 +43,26 @@ function createInstance(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
+const mockBotInstanceRepo = {
+  findMany: jest.fn().mockResolvedValue({ data: [] }),
+  getGatewayConnection: jest.fn().mockResolvedValue(null),
+  updateHealth: jest.fn().mockResolvedValue(undefined),
+  upsertGatewayConnection: jest.fn().mockResolvedValue(undefined),
+};
+
 describe("DriftDetectionService", () => {
   let service: DriftDetectionService;
   let configGenerator: ConfigGeneratorService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGatewayConnectionService.getGatewayClient.mockResolvedValue(mockGatewayClient);
     configGenerator = new ConfigGeneratorService();
-    service = new DriftDetectionService(configGenerator);
+    service = new DriftDetectionService(
+      mockBotInstanceRepo as any,
+      mockGatewayConnectionService as any,
+      configGenerator,
+    );
   });
 
   describe("no drift scenario", () => {
@@ -98,11 +112,15 @@ describe("DriftDetectionService", () => {
 
   describe("gateway unreachable", () => {
     it("adds CRITICAL finding when gateway is unreachable", async () => {
-      const { GatewayManager } = require("@clawster/gateway-client");
-      GatewayManager.mockImplementationOnce(() => ({
-        getClient: jest.fn().mockRejectedValue(new Error("Connection refused")),
-      }));
-      const freshService = new DriftDetectionService(configGenerator);
+      const unreachableGatewayConnectionService = {
+        ...mockGatewayConnectionService,
+        getGatewayClient: jest.fn().mockRejectedValue(new Error("Connection refused")),
+      };
+      const freshService = new DriftDetectionService(
+        mockBotInstanceRepo as any,
+        unreachableGatewayConnectionService as any,
+        configGenerator,
+      );
       const result = await freshService.checkDrift(createInstance(), createManifest());
       expect(result.gatewayReachable).toBe(false);
       expect(result.findings.find((f: any) => f.field === "gatewayConnection")).toBeDefined();

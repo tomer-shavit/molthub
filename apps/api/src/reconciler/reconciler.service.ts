@@ -6,19 +6,22 @@ import {
   PRISMA_CLIENT,
 } from "@clawster/database";
 import type { PrismaClient } from "@clawster/database";
-import {
-  validateOpenClawManifest,
-} from "@clawster/core";
 import type { OpenClawManifest } from "@clawster/core";
 import { ConfigGeneratorService } from "./config-generator.service";
 import { LifecycleManagerService } from "./lifecycle-manager.service";
 import { DriftDetectionService } from "./drift-detection.service";
 import { DelegationSkillWriterService } from "./delegation-skill-writer.service";
 import { OpenClawSecurityAuditService } from "../security/security-audit.service";
+import { ManifestParserService, DoctorService, EventLoggerService } from "./services";
+import { PreprocessorChainService } from "./preprocessors";
+import type { DoctorResult } from "./services";
 import type { DriftCheckResult } from "./drift-detection.service";
 
 // Re-export for backward compatibility with the controller
 export { DriftCheckResult };
+
+// Re-export DoctorResult from the new service
+export type { DoctorResult, DoctorCheck } from "./services";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,18 +32,6 @@ export interface ReconcileResult {
   message: string;
   changes: string[];
   durationMs: number;
-}
-
-export interface DoctorResult {
-  instanceId: string;
-  checks: DoctorCheck[];
-  overallStatus: "healthy" | "degraded" | "unhealthy" | "error";
-}
-
-export interface DoctorCheck {
-  name: string;
-  status: "pass" | "warn" | "fail" | "skip";
-  message: string;
 }
 
 export interface UpdateOpenClawResult {
@@ -82,6 +73,10 @@ export class ReconcilerService {
     private readonly driftDetection: DriftDetectionService,
     private readonly securityAudit: OpenClawSecurityAuditService,
     private readonly delegationSkillWriter: DelegationSkillWriterService,
+    private readonly manifestParser: ManifestParserService,
+    private readonly doctorService: DoctorService,
+    private readonly eventLogger: EventLoggerService,
+    private readonly preprocessorChain: PreprocessorChainService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -106,21 +101,17 @@ export class ReconcilerService {
         runningSince: null,
       });
 
-      await this.logEvent(instanceId, "RECONCILE_START", "Starting v2 reconciliation");
+      await this.eventLogger.logEvent(instanceId, "RECONCILE_START", "Starting v2 reconciliation");
       changes.push("Reconciliation started");
 
       // 2. Parse and validate the desired manifest
-      const manifest = this.parseManifest(instance);
+      const manifest = this.manifestParser.parse(instance);
       changes.push("Manifest validated");
 
-      // 2b. Check for team members and inject delegation config into manifest
-      const teamMembers = await this.prisma.botTeamMember.findMany({
-        where: { ownerBotId: instanceId, enabled: true },
-      });
-
-      if (teamMembers.length > 0) {
-        this.injectDelegationConfig(manifest);
-        changes.push(`Delegation config injected (${teamMembers.length} team members)`);
+      // 2b. Run preprocessor chain (e.g., delegation config injection)
+      const preprocessResult = await this.preprocessorChain.process(manifest, { instance });
+      if (preprocessResult.modificationCount > 0) {
+        changes.push(...preprocessResult.changes);
       }
 
       // 3. Generate config + hash (BEFORE security audit so enforceSecureDefaults
@@ -244,7 +235,7 @@ export class ReconcilerService {
 
       const durationMs = Date.now() - startTime;
 
-      await this.logEvent(
+      await this.eventLogger.logEvent(
         instanceId,
         "RECONCILE_SUCCESS",
         `Reconciliation completed in ${durationMs}ms`,
@@ -270,7 +261,7 @@ export class ReconcilerService {
         lastReconcileAt: new Date(),
       });
 
-      await this.logEvent(instanceId, "RECONCILE_ERROR", message);
+      await this.eventLogger.logEvent(instanceId, "RECONCILE_ERROR", message);
 
       return {
         success: false,
@@ -282,105 +273,11 @@ export class ReconcilerService {
   }
 
   // ------------------------------------------------------------------
-  // Doctor — diagnostics for a single instance
+  // Doctor — diagnostics for a single instance (delegated)
   // ------------------------------------------------------------------
 
   async doctor(instanceId: string): Promise<DoctorResult> {
-    const checks: DoctorCheck[] = [];
-
-    // Check 1: Instance exists
-    const instance = await this.botInstanceRepo.findById(instanceId);
-
-    if (!instance) {
-      return {
-        instanceId,
-        checks: [{ name: "instance_exists", status: "fail", message: "Instance not found" }],
-        overallStatus: "error",
-      };
-    }
-    checks.push({ name: "instance_exists", status: "pass", message: "Instance found in DB" });
-
-    // Check 3: Gateway connection record
-    const gatewayConnection = await this.botInstanceRepo.getGatewayConnection(instanceId);
-    if (gatewayConnection) {
-      checks.push({
-        name: "gateway_record",
-        status: "pass",
-        message: `Gateway record: ${gatewayConnection.host}:${gatewayConnection.port} (${gatewayConnection.status})`,
-      });
-    } else {
-      checks.push({
-        name: "gateway_record",
-        status: "warn",
-        message: "No GatewayConnection record in DB",
-      });
-    }
-
-    // Check 2: Manifest valid
-    try {
-      this.parseManifest(instance);
-      checks.push({ name: "manifest_valid", status: "pass", message: "Manifest is a valid v2 OpenClawManifest" });
-    } catch (err) {
-      checks.push({
-        name: "manifest_valid",
-        status: "fail",
-        message: `Invalid manifest: ${err instanceof Error ? err.message : String(err)}`,
-      });
-    }
-
-    // Check 4: Gateway reachable + healthy
-    try {
-      const status = await this.lifecycleManager.getStatus(instance);
-
-      if (status.gatewayConnected) {
-        checks.push({ name: "gateway_reachable", status: "pass", message: "Gateway WS connection succeeded" });
-      } else {
-        checks.push({ name: "gateway_reachable", status: "fail", message: "Cannot connect to gateway" });
-      }
-
-      if (status.gatewayHealth?.ok) {
-        checks.push({ name: "gateway_healthy", status: "pass", message: `Gateway healthy (uptime: ${status.gatewayHealth.uptime}s)` });
-      } else if (status.gatewayConnected) {
-        checks.push({ name: "gateway_healthy", status: "warn", message: "Gateway connected but reports unhealthy" });
-      } else {
-        checks.push({ name: "gateway_healthy", status: "skip", message: "Skipped (gateway unreachable)" });
-      }
-
-      // Check 5: Config hash
-      if (status.configHash && instance.configHash) {
-        if (status.configHash === instance.configHash) {
-          checks.push({ name: "config_sync", status: "pass", message: "Config hash matches" });
-        } else {
-          checks.push({
-            name: "config_sync",
-            status: "warn",
-            message: `Config hash mismatch: DB=${instance.configHash?.slice(0, 12)} remote=${status.configHash?.slice(0, 12)}`,
-          });
-        }
-      } else {
-        checks.push({ name: "config_sync", status: "skip", message: "No config hash to compare" });
-      }
-
-      // Check 6: Infra state
-      checks.push({
-        name: "infra_state",
-        status: status.infraState === "running" ? "pass" : "warn",
-        message: `Infrastructure state: ${status.infraState}`,
-      });
-    } catch (err) {
-      checks.push({
-        name: "gateway_reachable",
-        status: "fail",
-        message: `Gateway check error: ${err instanceof Error ? err.message : String(err)}`,
-      });
-    }
-
-    // Determine overall status
-    const hasFail = checks.some((c) => c.status === "fail");
-    const hasWarn = checks.some((c) => c.status === "warn");
-    const overallStatus = hasFail ? "unhealthy" : hasWarn ? "degraded" : "healthy";
-
-    return { instanceId, checks, overallStatus };
+    return this.doctorService.diagnose(instanceId);
   }
 
   // ------------------------------------------------------------------
@@ -402,7 +299,7 @@ export class ReconcilerService {
       });
 
       // Full restart is required for version change — re-provision
-      const manifest = this.parseManifest(instance);
+      this.manifestParser.parse(instance); // Validate manifest before restart
       await this.lifecycleManager.restart(instance);
 
       this.logger.log(`Instance ${instanceId} updated from ${previousVersion ?? "unknown"} to ${newVersion}`);
@@ -429,7 +326,7 @@ export class ReconcilerService {
       throw new Error(`BotInstance ${instanceId} not found`);
     }
 
-    const manifest = this.parseManifest(instance);
+    const manifest = this.manifestParser.parse(instance);
     return this.driftDetection.checkDrift(instance, manifest);
   }
 
@@ -485,44 +382,6 @@ export class ReconcilerService {
   // ------------------------------------------------------------------
 
   /**
-   * Parse and validate the desiredManifest JSON field into a typed
-   * OpenClawManifest.  Falls back to wrapping legacy manifests in a v2 envelope.
-   */
-  private parseManifest(instance: BotInstance): OpenClawManifest {
-    const rawStr = instance.desiredManifest;
-
-    if (!rawStr) {
-      throw new Error(`Instance ${instance.id} has no desired manifest`);
-    }
-
-    const obj = (typeof rawStr === "string" ? JSON.parse(rawStr) : rawStr) as Record<string, unknown>;
-
-    // If it's already a v2 manifest, validate directly
-    if (obj.apiVersion === "clawster/v2") {
-      return validateOpenClawManifest(obj);
-    }
-
-    // Legacy format: wrap in v2 envelope
-    // Assume the raw manifest IS the openclawConfig section
-    const wrapped = {
-      apiVersion: "clawster/v2" as const,
-      kind: "OpenClawInstance" as const,
-      metadata: {
-        name: instance.name.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
-        workspace: instance.workspaceId,
-        environment: "dev" as const,
-        labels: {},
-        deploymentTarget: "local" as const,
-      },
-      spec: {
-        openclawConfig: obj,
-      },
-    };
-
-    return validateOpenClawManifest(wrapped);
-  }
-
-  /**
    * Determine if an instance needs full provisioning vs config-only update.
    * An instance is "new" only if it has NEVER been successfully reconciled.
    * PENDING instances that were previously reconciled (e.g., after fleet
@@ -532,53 +391,5 @@ export class ReconcilerService {
     if (instance.status === "CREATING") return true;
     if (instance.lastReconcileAt || instance.configHash) return false;
     return true;
-  }
-
-  /**
-   * Inject delegation-related config into the manifest so the generated
-   * OpenClaw config includes tools.alsoAllow for exec and skills.load.extraDirs
-   * pointing to the delegation skill directory.
-   */
-  private injectDelegationConfig(manifest: OpenClawManifest): void {
-    const cfg = manifest.spec.openclawConfig as Record<string, unknown>;
-
-    // Add group:runtime so the bot can exec the delegation script.
-    // OpenClaw does NOT allow both tools.allow and tools.alsoAllow at the same
-    // time. If the user already has tools.allow, merge into it. Otherwise use
-    // tools.alsoAllow (additive on top of the profile).
-    const tools = (cfg.tools ?? {}) as Record<string, unknown>;
-    const existingAllow = (tools.allow ?? []) as string[];
-    if (existingAllow.length > 0) {
-      // Merge into existing allow list
-      if (!existingAllow.includes("group:runtime")) {
-        tools.allow = [...existingAllow, "group:runtime"];
-      }
-    } else {
-      // Use alsoAllow (additive) — doesn't replace the profile's base allowlist
-      const existingAlsoAllow = (tools.alsoAllow ?? []) as string[];
-      if (!existingAlsoAllow.includes("group:runtime")) {
-        tools.alsoAllow = [...existingAlsoAllow, "group:runtime"];
-      }
-    }
-    cfg.tools = tools;
-
-    // Add skills.load.extraDirs so OpenClaw discovers the delegation skill
-    const skills = (cfg.skills ?? {}) as Record<string, unknown>;
-    const load = (skills.load ?? {}) as Record<string, unknown>;
-    const extraDirs = (load.extraDirs ?? []) as string[];
-    const delegationSkillPath = "/home/node/.openclaw/skills";
-    if (!extraDirs.includes(delegationSkillPath)) {
-      load.extraDirs = [...extraDirs, delegationSkillPath];
-    }
-    skills.load = load;
-    cfg.skills = skills;
-  }
-
-  private async logEvent(
-    instanceId: string,
-    eventType: string,
-    message: string,
-  ): Promise<void> {
-    this.logger.debug(`[${instanceId}] ${eventType}: ${message}`);
   }
 }
