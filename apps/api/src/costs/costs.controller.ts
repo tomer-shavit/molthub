@@ -13,6 +13,7 @@ import {
 import { CostEvent, BudgetConfig } from "@clawster/database";
 import { CostsService, CostSummaryResult, PaginatedCostEvents } from "./costs.service";
 import { BudgetService } from "./budget.service";
+import { CostCollectionService } from "./cost-collection.service";
 import {
   CreateCostEventDto,
   CostQueryDto,
@@ -27,7 +28,19 @@ export class CostsController {
   constructor(
     private readonly costsService: CostsService,
     private readonly budgetService: BudgetService,
+    private readonly costCollectionService: CostCollectionService,
   ) {}
+
+  // ============================================
+  // Cost Collection (Manual Trigger)
+  // ============================================
+
+  @Post("costs/refresh")
+  @HttpCode(HttpStatus.OK)
+  async refreshCosts(): Promise<{ message: string }> {
+    await this.costCollectionService.collectCosts();
+    return { message: "Cost collection triggered" };
+  }
 
   // ============================================
   // Cost Event Endpoints

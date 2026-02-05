@@ -90,6 +90,30 @@ export interface BudgetFilters {
 // REPOSITORY INTERFACE
 // ============================================
 
+/**
+ * Input for upserting a daily cost event (for incremental sync)
+ */
+export interface UpsertDailyCostInput {
+  instanceId: string;
+  date: string; // YYYY-MM-DD format
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
+}
+
+/**
+ * Result of upserting a daily cost event
+ */
+export interface UpsertDailyCostResult {
+  event: CostEvent;
+  deltaInputTokens: number;
+  deltaOutputTokens: number;
+  deltaCostCents: number;
+  isNew: boolean;
+}
+
 export interface ICostRepository {
   // ==========================================
   // COST EVENTS
@@ -102,6 +126,17 @@ export interface ICostRepository {
     data: CreateCostEventInput,
     tx?: TransactionClient
   ): Promise<CostEvent>;
+
+  /**
+   * Upsert a daily cost event with delta-based budget updates.
+   * - If event exists for (instanceId, date): updates with new totals, budget gets delta
+   * - If event doesn't exist: creates new event, budget gets full amount
+   * This allows safe re-syncing of the same day without double-counting.
+   */
+  upsertDailyCostEvent(
+    data: UpsertDailyCostInput,
+    tx?: TransactionClient
+  ): Promise<UpsertDailyCostResult>;
 
   /**
    * Find cost events by instance ID
@@ -260,6 +295,15 @@ export interface ICostRepository {
   resetAllActiveBudgets(
     newPeriodStart: Date,
     newPeriodEnd: Date,
+    tx?: TransactionClient
+  ): Promise<number>;
+
+  /**
+   * Reset daily spend for all active budgets with daily limits
+   * Returns the count of budgets reset
+   */
+  resetAllDailyBudgets(
+    newDailyPeriodStart: Date,
     tx?: TransactionClient
   ): Promise<number>;
 }

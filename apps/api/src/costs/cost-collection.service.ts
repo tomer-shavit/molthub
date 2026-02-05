@@ -3,10 +3,10 @@ import { Cron } from "@nestjs/schedule";
 import {
   BOT_INSTANCE_REPOSITORY,
   IBotInstanceRepository,
+  COST_REPOSITORY,
+  ICostRepository,
 } from "@clawster/database";
 import { OpenClawHealthService } from "../health/openclaw-health.service";
-import { CostsService } from "./costs.service";
-import { CreateCostEventDto } from "./costs.dto";
 
 @Injectable()
 export class CostCollectionService {
@@ -16,11 +16,26 @@ export class CostCollectionService {
   constructor(
     @Inject(BOT_INSTANCE_REPOSITORY)
     private readonly botInstanceRepo: IBotInstanceRepository,
+    @Inject(COST_REPOSITORY)
+    private readonly costRepo: ICostRepository,
     private readonly openClawHealthService: OpenClawHealthService,
-    private readonly costsService: CostsService,
   ) {}
 
-  @Cron("0 */1 * * *")
+  /**
+   * Scheduled cost collection every 15 minutes.
+   * Syncs token usage from Gateway to CostEvent records.
+   */
+  @Cron("0 */15 * * * *")
+  async scheduledCostCollection(): Promise<void> {
+    this.logger.debug("Running scheduled cost collection");
+    await this.collectCosts();
+  }
+
+  /**
+   * Collect costs from all running instances.
+   * Called automatically every 15 minutes via scheduledCostCollection()
+   * or on-demand via POST /costs/refresh endpoint.
+   */
   async collectCosts(): Promise<void> {
     if (this.running) {
       this.logger.debug("Cost collection already in progress, skipping");
@@ -71,7 +86,7 @@ export class CostCollectionService {
 
     if (totalEvents > 0) {
       this.logger.log(
-        `Cost collection complete: ${totalEvents} event(s) recorded`,
+        `Cost collection complete: ${totalEvents} event(s) synced`,
       );
     }
   }
@@ -94,51 +109,73 @@ export class CostCollectionService {
     const todayStr = new Date().toISOString().split("T")[0];
     const lastSyncDate = instance.lastCostSyncDate;
 
-    const newEntries = usage.daily.filter((entry) => {
-      if (entry.date === todayStr) return false;
-      if (lastSyncDate && entry.date <= lastSyncDate) return false;
+    // Filter entries to process:
+    // - Include today (will be upserted with delta calculation)
+    // - Include any day after lastSyncDate (for completed days)
+    // - Skip entries with zero cost and tokens
+    const entriesToProcess = usage.daily.filter((entry) => {
+      // Skip empty entries
       if (entry.totalCost === 0 && entry.totalTokens === 0) return false;
-      return true;
-    });
 
-    const entriesToProcess = newEntries.slice(-30);
+      // Always include today (upsert handles delta)
+      if (entry.date === todayStr) return true;
+
+      // For past days, only include if after lastSyncDate
+      if (lastSyncDate && entry.date <= lastSyncDate) return false;
+
+      return true;
+    }).slice(-30); // Limit to last 30 days
 
     if (entriesToProcess.length === 0) {
       return 0;
     }
 
-    let latestDate = lastSyncDate;
-    let eventsCreated = 0;
+    let latestCompletedDate = lastSyncDate;
+    let eventsProcessed = 0;
 
     for (const entry of entriesToProcess) {
       const costCents = Math.round(entry.totalCost * 100);
 
-      const dto = new CreateCostEventDto();
-      dto.instanceId = instance.id;
-      dto.provider = provider;
-      dto.model = model;
-      dto.inputTokens = entry.input;
-      dto.outputTokens = entry.output;
-      dto.costCents = costCents;
+      // Use upsert to handle both new entries and updates to today's entry
+      const result = await this.costRepo.upsertDailyCostEvent({
+        instanceId: instance.id,
+        date: entry.date,
+        provider,
+        model,
+        inputTokens: entry.input,
+        outputTokens: entry.output,
+        costCents,
+      });
 
-      await this.costsService.recordCostEvent(dto);
-      eventsCreated++;
+      eventsProcessed++;
 
-      if (!latestDate || entry.date > latestDate) {
-        latestDate = entry.date;
+      // Only track completed days (not today) for lastCostSyncDate
+      // This ensures we don't skip re-syncing completed days
+      if (entry.date !== todayStr) {
+        if (!latestCompletedDate || entry.date > latestCompletedDate) {
+          latestCompletedDate = entry.date;
+        }
+      }
+
+      // Log if there was a significant delta for today
+      if (entry.date === todayStr && !result.isNew && result.deltaCostCents > 0) {
+        this.logger.debug(
+          `Updated today's costs for ${instance.name}: +$${(result.deltaCostCents / 100).toFixed(4)}`,
+        );
       }
     }
 
-    if (latestDate && latestDate !== lastSyncDate) {
+    // Update lastCostSyncDate only for completed days
+    if (latestCompletedDate && latestCompletedDate !== lastSyncDate) {
       await this.botInstanceRepo.update(instance.id, {
-        lastCostSyncDate: latestDate,
+        lastCostSyncDate: latestCompletedDate,
       });
     }
 
     this.logger.debug(
-      `Synced ${eventsCreated} cost event(s) for ${instance.name}`,
+      `Synced ${eventsProcessed} cost event(s) for ${instance.name}`,
     );
-    return eventsCreated;
+    return eventsProcessed;
   }
 
   private extractProviderModel(desiredManifest: string): {

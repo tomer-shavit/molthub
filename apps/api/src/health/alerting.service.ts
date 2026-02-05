@@ -19,7 +19,9 @@ export type AlertRule =
   | "health_check_failed"
   | "token_spike"
   | "budget_warning"
-  | "budget_critical";
+  | "budget_critical"
+  | "budget_daily_warning"
+  | "budget_daily_critical";
 
 // ---- Thresholds ------------------------------------------------------------
 
@@ -55,6 +57,8 @@ const REMEDIATION_ACTIONS: Record<AlertRule, string> = {
   token_spike: "review_costs",
   budget_warning: "review_costs",
   budget_critical: "review_costs",
+  budget_daily_warning: "review_costs",
+  budget_daily_critical: "review_costs",
 };
 
 // ---- Service ---------------------------------------------------------------
@@ -411,8 +415,8 @@ export class AlertingService {
   /**
    * Evaluate budget thresholds for an instance.
    * Queries active BudgetConfig records scoped to this instance or its fleet,
-   * sums CostEvents for the current calendar month, and fires WARNING or
-   * CRITICAL alerts when spend exceeds the configured threshold percentages.
+   * checks both monthly and daily spend against configured thresholds,
+   * and fires WARNING or CRITICAL alerts when thresholds are exceeded.
    *
    * Alert payload includes: bot name, current spend, budget limit, percentage used.
    */
@@ -436,41 +440,48 @@ export class AlertingService {
       // No budgets configured — resolve any lingering budget alerts
       await this.alertsService.resolveAlertByKey("budget_warning", instance.id);
       await this.alertsService.resolveAlertByKey("budget_critical", instance.id);
+      await this.alertsService.resolveAlertByKey("budget_daily_warning", instance.id);
+      await this.alertsService.resolveAlertByKey("budget_daily_critical", instance.id);
       return;
     }
 
-    // Sum CostEvents for the current calendar month for this instance
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    // Evaluate monthly and daily thresholds
+    await this.evaluateMonthlyBudgetThresholds(instance, budgets);
+    await this.evaluateDailyBudgetThresholds(instance, budgets);
+  }
 
-    const costAggregate = await this.prisma.costEvent.aggregate({
-      where: {
-        instanceId: instance.id,
-        occurredAt: { gte: monthStart, lte: now },
-      },
-      _sum: {
-        costCents: true,
-      },
-    });
-
-    const currentSpendCents = costAggregate._sum.costCents ?? 0;
-
-    // Evaluate against each budget — track worst threshold breached
+  /**
+   * Evaluate monthly budget thresholds.
+   */
+  private async evaluateMonthlyBudgetThresholds(
+    instance: { id: string; name: string; fleetId: string },
+    budgets: Array<{
+      id: string;
+      name: string;
+      monthlyLimitCents: number;
+      warnThresholdPct: number;
+      criticalThresholdPct: number;
+      currentSpendCents: number;
+    }>,
+  ): Promise<void> {
+    // Use stored currentSpendCents from budget (updated on each cost event)
     let worstCritical = false;
     let worstWarning = false;
     let worstBudget: (typeof budgets)[0] | null = null;
     let worstSpendPct = 0;
+    let worstSpendCents = 0;
 
     for (const budget of budgets) {
       if (budget.monthlyLimitCents <= 0) continue;
 
-      const spendPct = (currentSpendCents / budget.monthlyLimitCents) * 100;
+      const spendPct = (budget.currentSpendCents / budget.monthlyLimitCents) * 100;
 
       if (spendPct >= budget.criticalThresholdPct && spendPct > worstSpendPct) {
         worstCritical = true;
         worstWarning = false;
         worstBudget = budget;
         worstSpendPct = spendPct;
+        worstSpendCents = budget.currentSpendCents;
       } else if (
         spendPct >= budget.warnThresholdPct &&
         !worstCritical &&
@@ -479,6 +490,7 @@ export class AlertingService {
         worstWarning = true;
         worstBudget = budget;
         worstSpendPct = spendPct;
+        worstSpendCents = budget.currentSpendCents;
       }
     }
 
@@ -490,15 +502,16 @@ export class AlertingService {
           severity: "CRITICAL",
           instanceId: instance.id,
           fleetId: instance.fleetId,
-          title: `Budget critical: ${instance.name}`,
-          message: `Budget "${worstBudget.name}" is at ${worstSpendPct.toFixed(1)}% ($${(currentSpendCents / 100).toFixed(2)} of $${(worstBudget.monthlyLimitCents / 100).toFixed(2)} limit)`,
+          title: `Monthly budget critical: ${instance.name}`,
+          message: `Budget "${worstBudget.name}" is at ${worstSpendPct.toFixed(1)}% ($${(worstSpendCents / 100).toFixed(2)} of $${(worstBudget.monthlyLimitCents / 100).toFixed(2)} monthly limit)`,
           detail: JSON.stringify({
             budgetId: worstBudget.id,
             budgetName: worstBudget.name,
-            currentSpendCents,
+            currentSpendCents: worstSpendCents,
             monthlyLimitCents: worstBudget.monthlyLimitCents,
             spendPct: worstSpendPct,
             instanceName: instance.name,
+            type: "monthly",
           }),
           remediationAction: REMEDIATION_ACTIONS.budget_critical,
           remediationNote:
@@ -518,15 +531,16 @@ export class AlertingService {
           severity: "WARNING",
           instanceId: instance.id,
           fleetId: instance.fleetId,
-          title: `Budget warning: ${instance.name}`,
-          message: `Budget "${worstBudget.name}" is at ${worstSpendPct.toFixed(1)}% ($${(currentSpendCents / 100).toFixed(2)} of $${(worstBudget.monthlyLimitCents / 100).toFixed(2)} limit)`,
+          title: `Monthly budget warning: ${instance.name}`,
+          message: `Budget "${worstBudget.name}" is at ${worstSpendPct.toFixed(1)}% ($${(worstSpendCents / 100).toFixed(2)} of $${(worstBudget.monthlyLimitCents / 100).toFixed(2)} monthly limit)`,
           detail: JSON.stringify({
             budgetId: worstBudget.id,
             budgetName: worstBudget.name,
-            currentSpendCents,
+            currentSpendCents: worstSpendCents,
             monthlyLimitCents: worstBudget.monthlyLimitCents,
             spendPct: worstSpendPct,
             instanceName: instance.name,
+            type: "monthly",
           }),
           remediationAction: REMEDIATION_ACTIONS.budget_warning,
           remediationNote:
@@ -536,6 +550,116 @@ export class AlertingService {
       );
     } else {
       await this.alertsService.resolveAlertByKey("budget_warning", instance.id);
+    }
+  }
+
+  /**
+   * Evaluate daily budget thresholds.
+   */
+  private async evaluateDailyBudgetThresholds(
+    instance: { id: string; name: string; fleetId: string },
+    budgets: Array<{
+      id: string;
+      name: string;
+      dailyLimitCents: number | null;
+      dailyWarnThresholdPct: number | null;
+      dailyCriticalThresholdPct: number | null;
+      currentDailySpendCents: number;
+    }>,
+  ): Promise<void> {
+    // Filter to budgets that have daily limits configured
+    const dailyBudgets = budgets.filter((b) => b.dailyLimitCents && b.dailyLimitCents > 0);
+
+    if (dailyBudgets.length === 0) {
+      // No daily budgets configured — resolve any lingering daily alerts
+      await this.alertsService.resolveAlertByKey("budget_daily_warning", instance.id);
+      await this.alertsService.resolveAlertByKey("budget_daily_critical", instance.id);
+      return;
+    }
+
+    let worstCritical = false;
+    let worstWarning = false;
+    let worstBudget: (typeof dailyBudgets)[0] | null = null;
+    let worstSpendPct = 0;
+    let worstSpendCents = 0;
+
+    for (const budget of dailyBudgets) {
+      const dailyLimit = budget.dailyLimitCents!;
+      const warnPct = budget.dailyWarnThresholdPct ?? 75;
+      const critPct = budget.dailyCriticalThresholdPct ?? 90;
+
+      const spendPct = (budget.currentDailySpendCents / dailyLimit) * 100;
+
+      if (spendPct >= critPct && spendPct > worstSpendPct) {
+        worstCritical = true;
+        worstWarning = false;
+        worstBudget = budget;
+        worstSpendPct = spendPct;
+        worstSpendCents = budget.currentDailySpendCents;
+      } else if (spendPct >= warnPct && !worstCritical && spendPct > worstSpendPct) {
+        worstWarning = true;
+        worstBudget = budget;
+        worstSpendPct = spendPct;
+        worstSpendCents = budget.currentDailySpendCents;
+      }
+    }
+
+    // Fire or resolve daily CRITICAL alert
+    if (worstCritical && worstBudget) {
+      await this.upsertAlertAndNotify(
+        {
+          rule: "budget_daily_critical",
+          severity: "CRITICAL",
+          instanceId: instance.id,
+          fleetId: instance.fleetId,
+          title: `Daily budget critical: ${instance.name}`,
+          message: `Budget "${worstBudget.name}" daily spend is at ${worstSpendPct.toFixed(1)}% ($${(worstSpendCents / 100).toFixed(2)} of $${(worstBudget.dailyLimitCents! / 100).toFixed(2)} daily limit)`,
+          detail: JSON.stringify({
+            budgetId: worstBudget.id,
+            budgetName: worstBudget.name,
+            currentDailySpendCents: worstSpendCents,
+            dailyLimitCents: worstBudget.dailyLimitCents,
+            spendPct: worstSpendPct,
+            instanceName: instance.name,
+            type: "daily",
+          }),
+          remediationAction: REMEDIATION_ACTIONS.budget_daily_critical,
+          remediationNote:
+            "Daily spend limit exceeded. Review today's cost events and consider reducing usage.",
+        },
+        instance.id,
+      );
+    } else {
+      await this.alertsService.resolveAlertByKey("budget_daily_critical", instance.id);
+    }
+
+    // Fire or resolve daily WARNING alert (only fires when warning but not critical)
+    if (worstWarning && worstBudget) {
+      await this.upsertAlertAndNotify(
+        {
+          rule: "budget_daily_warning",
+          severity: "WARNING",
+          instanceId: instance.id,
+          fleetId: instance.fleetId,
+          title: `Daily budget warning: ${instance.name}`,
+          message: `Budget "${worstBudget.name}" daily spend is at ${worstSpendPct.toFixed(1)}% ($${(worstSpendCents / 100).toFixed(2)} of $${(worstBudget.dailyLimitCents! / 100).toFixed(2)} daily limit)`,
+          detail: JSON.stringify({
+            budgetId: worstBudget.id,
+            budgetName: worstBudget.name,
+            currentDailySpendCents: worstSpendCents,
+            dailyLimitCents: worstBudget.dailyLimitCents,
+            spendPct: worstSpendPct,
+            instanceName: instance.name,
+            type: "daily",
+          }),
+          remediationAction: REMEDIATION_ACTIONS.budget_daily_warning,
+          remediationNote:
+            "Approaching daily spend limit. Review today's cost events and consider reducing usage.",
+        },
+        instance.id,
+      );
+    } else {
+      await this.alertsService.resolveAlertByKey("budget_daily_warning", instance.id);
     }
   }
 }

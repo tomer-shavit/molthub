@@ -779,7 +779,7 @@ model SloDefinition {
   @@index([isActive])
 }
 
-// BudgetConfig: Per-bot or per-fleet monthly cost limits
+// BudgetConfig: Per-bot or per-fleet monthly and daily cost limits
 model BudgetConfig {
   id String @id @default(cuid())
 
@@ -792,18 +792,25 @@ model BudgetConfig {
   name        String
   description String?
 
-  // Budget settings
+  // Monthly budget settings
   monthlyLimitCents Int // Monthly budget in cents (e.g., 10000 = $100.00)
   currency          String @default("USD")
 
-  // Alert thresholds (percentages of monthly limit)
+  // Monthly alert thresholds (percentages of monthly limit)
   warnThresholdPct     Int @default(75)  // Alert at 75% of budget
   criticalThresholdPct Int @default(90)  // Critical alert at 90%
 
-  // Current state
+  // Monthly current state
   currentSpendCents Int      @default(0)
   periodStart       DateTime @default(now())
   periodEnd         DateTime?
+
+  // Daily budget settings (optional - null means no daily limit)
+  dailyLimitCents           Int?
+  dailyWarnThresholdPct     Int?      @default(75)
+  dailyCriticalThresholdPct Int?      @default(90)
+  currentDailySpendCents    Int       @default(0)
+  dailyPeriodStart          DateTime?
 
   isActive Boolean @default(true)
 

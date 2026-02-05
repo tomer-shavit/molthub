@@ -157,7 +157,31 @@ export const ALERT_RULE_DEFINITIONS: AlertRuleDefinition[] = [
     rule: "budget_critical",
     displayName: "Budget Critical",
     description:
-      "Fires when spend reaches the critical threshold configured in Budget Config.",
+      "Fires when monthly spend reaches the critical threshold configured in Budget Config.",
+    category: "cost",
+    defaultSeverity: "CRITICAL",
+    defaultEnabled: true,
+    defaultThresholds: null,
+    thresholdSchema: {},
+    remediationAction: "review_costs",
+  },
+  {
+    rule: "budget_daily_warning",
+    displayName: "Daily Budget Warning",
+    description:
+      "Fires when daily spend reaches the warning threshold configured in Budget Config.",
+    category: "cost",
+    defaultSeverity: "WARNING",
+    defaultEnabled: true,
+    defaultThresholds: null,
+    thresholdSchema: {},
+    remediationAction: "review_costs",
+  },
+  {
+    rule: "budget_daily_critical",
+    displayName: "Daily Budget Critical",
+    description:
+      "Fires when daily spend reaches the critical threshold configured in Budget Config.",
     category: "cost",
     defaultSeverity: "CRITICAL",
     defaultEnabled: true,

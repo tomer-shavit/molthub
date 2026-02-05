@@ -135,6 +135,27 @@ export class CreateBudgetDto {
   @Type(() => Number)
   @IsOptional()
   criticalThresholdPct?: number;
+
+  // Daily limit fields (optional - null means no daily limit)
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  @IsOptional()
+  dailyLimitCents?: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @Type(() => Number)
+  @IsOptional()
+  dailyWarnThresholdPct?: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @Type(() => Number)
+  @IsOptional()
+  dailyCriticalThresholdPct?: number;
 }
 
 export class UpdateBudgetDto {
@@ -173,6 +194,27 @@ export class UpdateBudgetDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  // Daily limit fields (optional - null means no daily limit)
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  @IsOptional()
+  dailyLimitCents?: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @Type(() => Number)
+  @IsOptional()
+  dailyWarnThresholdPct?: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @Type(() => Number)
+  @IsOptional()
+  dailyCriticalThresholdPct?: number;
 }
 
 export class BudgetQueryDto {

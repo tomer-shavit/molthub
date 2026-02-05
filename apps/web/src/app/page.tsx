@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { MetricCard } from "@/components/dashboard/metric-card";
+import { CostSummaryCard } from "@/components/dashboard/cost-summary-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge, HealthIndicator } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
@@ -113,6 +114,11 @@ export default async function DashboardPage() {
             (metrics?.unhealthyBots ?? 0) > 0 ? "border-l-red-500" : "border-l-gray-300"
           )}
         />
+      </div>
+
+      {/* Cost Summary */}
+      <div className="mb-8">
+        <CostSummaryCard />
       </div>
 
       {/* Bots List */}

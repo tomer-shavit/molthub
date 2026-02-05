@@ -25,6 +25,10 @@ import {
   GatewayConnectionService,
   A2aApiKeyService,
 } from "./services";
+import {
+  PreprocessorChainService,
+  DelegationConfigPreprocessor,
+} from "./preprocessors";
 
 @Module({
   imports: [DatabaseModule, SecurityAuditModule, ProvisioningModule],
@@ -39,6 +43,9 @@ import {
     ManifestParserService,
     DoctorService,
     EventLoggerService,
+    // Manifest preprocessors
+    DelegationConfigPreprocessor,
+    PreprocessorChainService,
     // DIP: Extracted services injected via interface tokens (Phase 2)
     {
       provide: DEPLOYMENT_TARGET_RESOLVER,

@@ -10,6 +10,8 @@ import type {
   BudgetStatus,
   BudgetFilters,
   CreateCostEventInput,
+  UpsertDailyCostInput,
+  UpsertDailyCostResult,
 } from "../interfaces/cost.repository";
 import type {
   PaginationOptions,
@@ -86,7 +88,7 @@ export class PrismaCostRepository implements ICostRepository {
     });
 
     if (instance) {
-      // Update matching BudgetConfig currentSpendCents
+      // Update matching BudgetConfig currentSpendCents (monthly) and currentDailySpendCents (daily)
       await client.budgetConfig.updateMany({
         where: {
           isActive: true,
@@ -99,11 +101,126 @@ export class PrismaCostRepository implements ICostRepository {
           currentSpendCents: {
             increment: data.costCents,
           },
+          currentDailySpendCents: {
+            increment: data.costCents,
+          },
         },
       });
     }
 
     return costEvent;
+  }
+
+  async upsertDailyCostEvent(
+    data: UpsertDailyCostInput,
+    tx?: TransactionClient
+  ): Promise<UpsertDailyCostResult> {
+    const client = this.getClient(tx);
+
+    // Parse the date string to create start/end of day boundaries
+    const [year, month, day] = data.date.split("-").map(Number);
+    const dayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const dayEnd = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+
+    // Find existing event for this instance and date
+    const existingEvent = await client.costEvent.findFirst({
+      where: {
+        instanceId: data.instanceId,
+        occurredAt: {
+          gte: dayStart,
+          lte: dayEnd,
+        },
+      },
+    });
+
+    // Get the instance to find its fleet (for budget updates)
+    const instance = await client.botInstance.findUnique({
+      where: { id: data.instanceId },
+      select: { fleetId: true },
+    });
+
+    if (existingEvent) {
+      // Calculate deltas (new values minus old values)
+      const deltaInputTokens = data.inputTokens - existingEvent.inputTokens;
+      const deltaOutputTokens = data.outputTokens - existingEvent.outputTokens;
+      const deltaCostCents = data.costCents - existingEvent.costCents;
+
+      // Update the existing event with new totals
+      const updatedEvent = await client.costEvent.update({
+        where: { id: existingEvent.id },
+        data: {
+          inputTokens: data.inputTokens,
+          outputTokens: data.outputTokens,
+          costCents: data.costCents,
+          provider: data.provider,
+          model: data.model,
+        },
+      });
+
+      // Only update budgets if there's a positive delta
+      if (deltaCostCents > 0 && instance) {
+        await client.budgetConfig.updateMany({
+          where: {
+            isActive: true,
+            OR: [
+              { instanceId: data.instanceId },
+              { fleetId: instance.fleetId },
+            ],
+          },
+          data: {
+            currentSpendCents: { increment: deltaCostCents },
+            currentDailySpendCents: { increment: deltaCostCents },
+          },
+        });
+      }
+
+      return {
+        event: updatedEvent,
+        deltaInputTokens,
+        deltaOutputTokens,
+        deltaCostCents,
+        isNew: false,
+      };
+    }
+
+    // No existing event - create new one
+    const newEvent = await client.costEvent.create({
+      data: {
+        instanceId: data.instanceId,
+        provider: data.provider,
+        model: data.model,
+        inputTokens: data.inputTokens,
+        outputTokens: data.outputTokens,
+        costCents: data.costCents,
+        occurredAt: dayStart, // Use start of day as the timestamp
+        metadata: "{}",
+      },
+    });
+
+    // Update budgets with full amount
+    if (instance) {
+      await client.budgetConfig.updateMany({
+        where: {
+          isActive: true,
+          OR: [
+            { instanceId: data.instanceId },
+            { fleetId: instance.fleetId },
+          ],
+        },
+        data: {
+          currentSpendCents: { increment: data.costCents },
+          currentDailySpendCents: { increment: data.costCents },
+        },
+      });
+    }
+
+    return {
+      event: newEvent,
+      deltaInputTokens: data.inputTokens,
+      deltaOutputTokens: data.outputTokens,
+      deltaCostCents: data.costCents,
+      isNew: true,
+    };
   }
 
   async findByInstance(
@@ -551,6 +668,24 @@ export class PrismaCostRepository implements ICostRepository {
         currentSpendCents: 0,
         periodStart: newPeriodStart,
         periodEnd: newPeriodEnd,
+      },
+    });
+    return result.count;
+  }
+
+  async resetAllDailyBudgets(
+    newDailyPeriodStart: Date,
+    tx?: TransactionClient
+  ): Promise<number> {
+    const client = this.getClient(tx);
+    const result = await client.budgetConfig.updateMany({
+      where: {
+        isActive: true,
+        dailyLimitCents: { not: null },
+      },
+      data: {
+        currentDailySpendCents: 0,
+        dailyPeriodStart: newDailyPeriodStart,
       },
     });
     return result.count;
