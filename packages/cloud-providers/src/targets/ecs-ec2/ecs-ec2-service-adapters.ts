@@ -24,6 +24,7 @@ import type {
   ISecretsManagerService,
   ICloudWatchLogsService,
   IAutoScalingService,
+  IEC2Service,
   EcsEc2Services,
   EcsServiceDescription,
   StackEventInfo,
@@ -181,6 +182,34 @@ export class InternalAutoScalingService implements IAutoScalingService {
   }
 }
 
+/**
+ * Internal EC2 service for NAT instance termination protection removal.
+ * Used only during shared infra cleanup.
+ */
+export class InternalEC2Service implements IEC2Service {
+  private readonly region: string;
+  private readonly credentials: { accessKeyId: string; secretAccessKey: string };
+
+  constructor(region: string, credentials: { accessKeyId: string; secretAccessKey: string }) {
+    this.region = region;
+    this.credentials = credentials;
+  }
+
+  async disableTerminationProtection(instanceId: string): Promise<void> {
+    const { EC2Client, ModifyInstanceAttributeCommand } = require("@aws-sdk/client-ec2");
+    const client = new EC2Client({
+      region: this.region,
+      credentials: this.credentials,
+    });
+    await client.send(
+      new ModifyInstanceAttributeCommand({
+        InstanceId: instanceId,
+        DisableApiTermination: { Value: false },
+      })
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Adapter wrappers for @clawster/adapters-aws services
 // ---------------------------------------------------------------------------
@@ -217,7 +246,7 @@ export class CloudFormationServiceAdapter implements ICloudFormationService {
 
   async deleteStack(
     stackName: string,
-    options?: { retainResources?: string[] }
+    options?: { retainResources?: string[]; force?: boolean }
   ): Promise<void> {
     return this.service.deleteStack(stackName, options);
   }
@@ -244,6 +273,13 @@ export class CloudFormationServiceAdapter implements ICloudFormationService {
 
   async stackExists(stackName: string): Promise<boolean> {
     return this.service.stackExists(stackName);
+  }
+
+  async listStacks(options?: {
+    statusFilter?: import("@clawster/adapters-aws").StackStatus[];
+    namePrefix?: string;
+  }): Promise<Array<{ stackName: string; status: string }>> {
+    return this.service.listStacks(options);
   }
 }
 
@@ -328,5 +364,6 @@ export function createDefaultServices(
       createCloudWatchLogsService(region)
     ),
     autoScaling: new InternalAutoScalingService(region, credentials),
+    ec2: new InternalEC2Service(region, credentials),
   };
 }

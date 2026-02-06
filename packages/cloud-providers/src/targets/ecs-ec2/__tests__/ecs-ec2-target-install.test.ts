@@ -89,6 +89,7 @@ function createSmartCfMock(opts: {
       if (stackName === BOT_STACK) return Promise.resolve(perBotExists);
       return Promise.resolve(false);
     }),
+    listStacks: jest.fn().mockResolvedValue([]),
   };
 }
 
@@ -235,7 +236,7 @@ describe("EcsEc2Target.install() — stack state handling", () => {
     const result = await target.install(defaultInstallOpts);
 
     expect(result.success).toBe(true);
-    expect(services.cloudFormation.deleteStack).toHaveBeenCalledWith(BOT_STACK);
+    expect(services.cloudFormation.deleteStack).toHaveBeenCalledWith(BOT_STACK, { force: true });
     expect(services.cloudFormation.waitForStackStatus).toHaveBeenCalledWith(
       BOT_STACK,
       "DELETE_COMPLETE",
@@ -258,7 +259,7 @@ describe("EcsEc2Target.install() — stack state handling", () => {
     const result = await target.install(defaultInstallOpts);
 
     expect(result.success).toBe(true);
-    expect(services.cloudFormation.deleteStack).toHaveBeenCalledWith(BOT_STACK);
+    expect(services.cloudFormation.deleteStack).toHaveBeenCalledWith(BOT_STACK, { force: true });
     const createCalls = (services.cloudFormation.createStack as jest.Mock).mock.calls;
     const botCreateCalls = createCalls.filter(
       (args: unknown[]) => args[0] === BOT_STACK,
@@ -406,7 +407,7 @@ describe("EcsEc2Target.install() — stack state handling", () => {
     // Should have called deleteStack with retainResources on the second attempt
     expect(cfMock.deleteStack).toHaveBeenCalledWith(
       BOT_STACK,
-      { retainResources: ["VpcGatewayAttachment", "EcsCluster"] },
+      { retainResources: ["VpcGatewayAttachment", "EcsCluster"], force: true },
     );
   });
 

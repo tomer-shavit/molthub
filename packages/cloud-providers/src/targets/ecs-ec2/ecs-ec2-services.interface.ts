@@ -53,7 +53,7 @@ export interface ICloudFormationService {
    */
   deleteStack(
     stackName: string,
-    options?: { retainResources?: string[] }
+    options?: { retainResources?: string[]; force?: boolean }
   ): Promise<void>;
 
   /**
@@ -84,6 +84,15 @@ export interface ICloudFormationService {
    * Check if a stack exists and is not in a deleted state.
    */
   stackExists(stackName: string): Promise<boolean>;
+
+  /**
+   * List stacks filtered by status and optional name prefix.
+   * Used to discover remaining per-bot stacks before shared infra cleanup.
+   */
+  listStacks(options?: {
+    statusFilter?: StackStatus[];
+    namePrefix?: string;
+  }): Promise<Array<{ stackName: string; status: string }>>;
 }
 
 /**
@@ -239,6 +248,18 @@ export interface IAutoScalingService {
 }
 
 /**
+ * Interface for EC2 operations used during shared infra cleanup.
+ * Follows Interface Segregation — only exposes the method needed.
+ */
+export interface IEC2Service {
+  /**
+   * Disable termination protection on an EC2 instance.
+   * Required before CloudFormation can terminate the NAT instance.
+   */
+  disableTerminationProtection(instanceId: string): Promise<void>;
+}
+
+/**
  * Collection of AWS services required by EcsEc2Target.
  */
 export interface EcsEc2Services {
@@ -248,6 +269,8 @@ export interface EcsEc2Services {
   cloudWatchLogs: ICloudWatchLogsService;
   /** Optional — only needed for DELETE_FAILED stack recovery. Created internally if not provided. */
   autoScaling?: IAutoScalingService;
+  /** Optional — only needed for shared infra cleanup (NAT termination protection). */
+  ec2?: IEC2Service;
 }
 
 /**

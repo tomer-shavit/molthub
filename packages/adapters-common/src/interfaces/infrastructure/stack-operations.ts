@@ -61,7 +61,7 @@ export interface IStackOperations {
    */
   deleteStack(
     name: string,
-    options?: { retainResources?: string[] }
+    options?: { retainResources?: string[]; force?: boolean }
   ): Promise<void>;
 
   /**

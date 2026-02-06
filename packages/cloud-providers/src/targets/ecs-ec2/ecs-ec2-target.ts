@@ -71,6 +71,7 @@ import type {
   ISecretsManagerService,
   ICloudWatchLogsService,
   IAutoScalingService,
+  IEC2Service,
   EcsEc2Services,
   EcsEc2TargetOptions,
   StackEventInfo,
@@ -79,8 +80,8 @@ import { StackCleanupService } from "./ecs-ec2-stack-cleanup";
 import { createDefaultServices, InternalAutoScalingService } from "./ecs-ec2-service-adapters";
 import { generateProductionTemplate } from "./templates/production";
 import { generatePerBotTemplate } from "./per-bot/per-bot-template";
-import { ensureSharedInfra } from "./shared-infra/shared-infra-manager";
-import { VPC_CIDR } from "./shared-infra/shared-infra-config";
+import { ensureSharedInfra, cleanupSharedInfraIfOrphaned } from "./shared-infra/shared-infra-manager";
+import { VPC_CIDR, BOT_STACK_PREFIX } from "./shared-infra/shared-infra-config";
 
 // Re-export for external use
 export type { EcsEc2TargetOptions, EcsEc2Services };
@@ -117,6 +118,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
   private readonly secretsManagerService: ISecretsManagerService;
   private readonly cloudWatchLogsService: ICloudWatchLogsService;
   private readonly autoScalingService: IAutoScalingService;
+  private readonly ec2Service: IEC2Service | undefined;
 
   /** Derived resource names — set during install */
   private stackName = "";
@@ -155,7 +157,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
     // to operate on existing resources without calling install() again)
     if (config.profileName) {
       const p = config.profileName;
-      this.stackName = `clawster-bot-${p}`;
+      this.stackName = `${BOT_STACK_PREFIX}${p}`;
       this.clusterName = `clawster-${p}`;
       this.serviceName = `clawster-${p}`;
       this.secretName = `clawster/${p}/config`;
@@ -176,6 +178,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
       this.cloudWatchLogsService = providedServices.cloudWatchLogs;
       this.autoScalingService = providedServices.autoScaling
         ?? new InternalAutoScalingService(config.region, credentials);
+      this.ec2Service = providedServices.ec2;
     } else {
       // Factory path - create services from @clawster/adapters-aws
       const defaults = createDefaultServices(config.region, credentials);
@@ -185,6 +188,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
       this.cloudWatchLogsService = defaults.cloudWatchLogs;
       this.autoScalingService = defaults.autoScaling
         ?? new InternalAutoScalingService(config.region, credentials);
+      this.ec2Service = defaults.ec2;
     }
   }
 
@@ -258,7 +262,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
     }
 
     this.gatewayPort = options.port;
-    this.stackName = `clawster-bot-${profileName}`;
+    this.stackName = `${BOT_STACK_PREFIX}${profileName}`;
     this.clusterName = `clawster-${profileName}`;
     this.serviceName = `clawster-${profileName}`;
     this.secretName = `clawster/${profileName}/config`;
@@ -349,7 +353,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
           status === "UPDATE_ROLLBACK_FAILED"
         ) {
           this.log(`Stack ${this.stackName} is in ${status} state, deleting before re-creation...`);
-          await this.cloudFormationService.deleteStack(this.stackName);
+          await this.cloudFormationService.deleteStack(this.stackName, { force: true });
           await this.waitForStack("DELETE_COMPLETE");
           stackExists = false;
         }
@@ -597,7 +601,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
     // 2. Delete CloudFormation stack (handles all CF-managed resources)
     try {
       this.log("Deleting CloudFormation stack...");
-      await this.cloudFormationService.deleteStack(this.stackName);
+      await this.cloudFormationService.deleteStack(this.stackName, { force: true });
       await this.waitForStack("DELETE_COMPLETE");
       this.log("CloudFormation stack deleted");
     } catch {
@@ -639,6 +643,16 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
     }
 
     this.log("ECS EC2 resource destruction completed");
+
+    // 5. Clean up shared infra if this was the last bot (best-effort, fire-and-forget)
+    if (this.config.useSharedInfra ?? true) {
+      await cleanupSharedInfraIfOrphaned(
+        this.cloudFormationService,
+        this.ec2Service,
+        this.config.region,
+        (msg, stream) => this.log(msg, stream),
+      );
+    }
   }
 
   // ------------------------------------------------------------------

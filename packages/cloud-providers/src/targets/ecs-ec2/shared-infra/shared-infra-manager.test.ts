@@ -28,6 +28,7 @@ function mockCfService(overrides?: Partial<ICloudFormationService>): ICloudForma
       TaskExecutionRoleArn: "arn:aws:iam::123:role/clawster-shared-exec",
     }),
     stackExists: jest.fn().mockResolvedValue(false),
+      listStacks: jest.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
@@ -110,6 +111,7 @@ describe("ensureSharedInfra", () => {
   it("handles AlreadyExistsException race condition", async () => {
     const cf = mockCfService({
       stackExists: jest.fn().mockResolvedValue(false),
+      listStacks: jest.fn().mockResolvedValue([]),
       createStack: jest.fn().mockRejectedValue(new Error("AlreadyExistsException")),
     });
 
@@ -127,6 +129,7 @@ describe("ensureSharedInfra", () => {
   it("rethrows non-AlreadyExists errors during creation", async () => {
     const cf = mockCfService({
       stackExists: jest.fn().mockResolvedValue(false),
+      listStacks: jest.fn().mockResolvedValue([]),
       createStack: jest.fn().mockRejectedValue(new Error("InsufficientPermissions")),
     });
 
@@ -185,6 +188,7 @@ describe("isSharedInfraReady", () => {
   it("returns false when stack does not exist", async () => {
     const cf = mockCfService({
       stackExists: jest.fn().mockResolvedValue(false),
+      listStacks: jest.fn().mockResolvedValue([]),
     });
 
     expect(await isSharedInfraReady(cf, "us-east-1")).toBe(false);

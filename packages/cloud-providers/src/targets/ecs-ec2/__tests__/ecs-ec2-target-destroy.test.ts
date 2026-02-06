@@ -45,6 +45,7 @@ function createMockCfService(overrides?: Partial<ICloudFormationService>): IClou
     }),
     getStackOutputs: jest.fn().mockResolvedValue({}),
     stackExists: jest.fn().mockResolvedValue(false),
+    listStacks: jest.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
@@ -120,7 +121,7 @@ describe("EcsEc2Target.destroy()", () => {
 
     await target.destroy();
 
-    expect(services.cloudFormation.deleteStack).toHaveBeenCalledWith(BOT_STACK);
+    expect(services.cloudFormation.deleteStack).toHaveBeenCalledWith(BOT_STACK, { force: true });
     expect(services.secretsManager.deleteSecret).toHaveBeenCalled();
     expect(services.cloudWatchLogs.deleteLogGroup).toHaveBeenCalled();
   });

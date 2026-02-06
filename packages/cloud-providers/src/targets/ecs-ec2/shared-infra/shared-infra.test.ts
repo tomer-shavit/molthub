@@ -13,6 +13,8 @@ import {
   getSharedInfraStackName,
   SHARED_INFRA_STACK_PREFIX,
 } from "./shared-infra-config";
+import { cleanupSharedInfraIfOrphaned, deleteSharedInfra } from "./shared-infra-manager";
+import type { ICloudFormationService, IEC2Service } from "../ecs-ec2-services.interface";
 
 describe("SharedInfraConfig", () => {
   it("generates stack name from region", () => {
@@ -256,5 +258,176 @@ describe("generateSharedInfraTemplate", () => {
     expect(resources.TaskDefinition).toBeUndefined();
     expect(resources.EcsService).toBeUndefined();
     expect(resources.Alb).toBeUndefined();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Helpers for cleanup / delete tests                                */
+/* ------------------------------------------------------------------ */
+
+function createMockCfServiceForCleanup(): jest.Mocked<ICloudFormationService> {
+  return {
+    stackExists: jest.fn().mockResolvedValue(true),
+    listStacks: jest.fn().mockResolvedValue([]),
+    getStackOutputs: jest.fn().mockResolvedValue({ NatInstanceId: "i-nat123" }),
+    deleteStack: jest.fn().mockResolvedValue(undefined),
+    waitForStackStatus: jest.fn().mockResolvedValue({ status: "DELETE_COMPLETE" }),
+    createStack: jest.fn().mockResolvedValue("stack-id"),
+    updateStack: jest.fn().mockResolvedValue("stack-id"),
+    describeStack: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+function createMockEc2Service(): jest.Mocked<IEC2Service> {
+  return {
+    disableTerminationProtection: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+/** Flush microtask queue so fire-and-forget promises settle. */
+async function flushPromises(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/* ------------------------------------------------------------------ */
+/*  cleanupSharedInfraIfOrphaned                                      */
+/* ------------------------------------------------------------------ */
+
+describe("cleanupSharedInfraIfOrphaned", () => {
+  it("does nothing when shared stack does not exist", async () => {
+    const cfService = createMockCfServiceForCleanup();
+    cfService.stackExists.mockResolvedValue(false);
+    const log = jest.fn();
+
+    await cleanupSharedInfraIfOrphaned(cfService, undefined, "us-east-1", log);
+    await flushPromises();
+
+    expect(cfService.stackExists).toHaveBeenCalledWith("clawster-shared-us-east-1");
+    expect(cfService.listStacks).not.toHaveBeenCalled();
+    expect(cfService.deleteStack).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when bot stacks still exist", async () => {
+    const cfService = createMockCfServiceForCleanup();
+    cfService.listStacks.mockResolvedValue([
+      { stackName: "clawster-bot-test", status: "CREATE_COMPLETE" },
+    ]);
+    const log = jest.fn();
+
+    await cleanupSharedInfraIfOrphaned(cfService, undefined, "us-east-1", log);
+    await flushPromises();
+
+    expect(cfService.listStacks).toHaveBeenCalled();
+    expect(cfService.deleteStack).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("1 bot stack(s) still active"),
+    );
+  });
+
+  it("triggers deletion when no bot stacks remain", async () => {
+    const cfService = createMockCfServiceForCleanup();
+    cfService.listStacks.mockResolvedValue([]);
+    const ec2Service = createMockEc2Service();
+    const log = jest.fn();
+
+    await cleanupSharedInfraIfOrphaned(cfService, ec2Service, "us-east-1", log);
+    await flushPromises();
+
+    expect(cfService.getStackOutputs).toHaveBeenCalledWith("clawster-shared-us-east-1");
+    expect(cfService.deleteStack).toHaveBeenCalledWith("clawster-shared-us-east-1", { force: true });
+  });
+
+  it("handles listStacks failure gracefully", async () => {
+    const cfService = createMockCfServiceForCleanup();
+    cfService.listStacks.mockRejectedValue(new Error("API throttled"));
+    const log = jest.fn();
+
+    await expect(
+      cleanupSharedInfraIfOrphaned(cfService, undefined, "us-east-1", log),
+    ).resolves.toBeUndefined();
+
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("cleanup check failed"),
+      "stderr",
+    );
+  });
+
+  it("handles stackExists failure gracefully", async () => {
+    const cfService = createMockCfServiceForCleanup();
+    cfService.stackExists.mockRejectedValue(new Error("Network error"));
+    const log = jest.fn();
+
+    await expect(
+      cleanupSharedInfraIfOrphaned(cfService, undefined, "us-east-1", log),
+    ).resolves.toBeUndefined();
+
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("cleanup check failed"),
+      "stderr",
+    );
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  deleteSharedInfra                                                 */
+/* ------------------------------------------------------------------ */
+
+describe("deleteSharedInfra", () => {
+  it("disables NAT termination protection then deletes stack", async () => {
+    const cfService = createMockCfServiceForCleanup();
+    const ec2Service = createMockEc2Service();
+    const log = jest.fn();
+
+    await deleteSharedInfra(cfService, ec2Service, "clawster-shared-us-east-1", log);
+
+    // Verify termination protection disabled first
+    expect(ec2Service.disableTerminationProtection).toHaveBeenCalledWith("i-nat123");
+    // Then stack deleted
+    expect(cfService.deleteStack).toHaveBeenCalledWith("clawster-shared-us-east-1", { force: true });
+    // Then waited for deletion
+    expect(cfService.waitForStackStatus).toHaveBeenCalledWith(
+      "clawster-shared-us-east-1",
+      "DELETE_COMPLETE",
+      expect.objectContaining({ timeoutMs: 600000 }),
+    );
+  });
+
+  it("handles missing NAT instance ID in outputs", async () => {
+    const cfService = createMockCfServiceForCleanup();
+    cfService.getStackOutputs.mockResolvedValue({});
+    const ec2Service = createMockEc2Service();
+    const log = jest.fn();
+
+    await deleteSharedInfra(cfService, ec2Service, "clawster-shared-us-east-1", log);
+
+    expect(ec2Service.disableTerminationProtection).not.toHaveBeenCalled();
+    expect(cfService.deleteStack).toHaveBeenCalledWith("clawster-shared-us-east-1", { force: true });
+  });
+
+  it("proceeds with delete even if termination protection disable fails", async () => {
+    const cfService = createMockCfServiceForCleanup();
+    const ec2Service = createMockEc2Service();
+    ec2Service.disableTerminationProtection.mockRejectedValue(
+      new Error("Instance not found"),
+    );
+    const log = jest.fn();
+
+    await deleteSharedInfra(cfService, ec2Service, "clawster-shared-us-east-1", log);
+
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("could not disable NAT termination protection"),
+      "stderr",
+    );
+    expect(cfService.deleteStack).toHaveBeenCalledWith("clawster-shared-us-east-1", { force: true });
+  });
+
+  it("skips termination protection when ec2Service is undefined", async () => {
+    const cfService = createMockCfServiceForCleanup();
+    const log = jest.fn();
+
+    await deleteSharedInfra(cfService, undefined, "clawster-shared-us-east-1", log);
+
+    expect(cfService.getStackOutputs).not.toHaveBeenCalled();
+    expect(cfService.deleteStack).toHaveBeenCalledWith("clawster-shared-us-east-1", { force: true });
   });
 });

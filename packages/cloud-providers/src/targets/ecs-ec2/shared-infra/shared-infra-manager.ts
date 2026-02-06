@@ -11,9 +11,9 @@
  * - Output retrieval (reads CF exports as SharedInfraOutputs)
  */
 
-import type { ICloudFormationService } from "../ecs-ec2-services.interface";
+import type { ICloudFormationService, IEC2Service, StackStatus } from "../ecs-ec2-services.interface";
 import type { SharedInfraOutputs } from "./shared-infra-config";
-import { getSharedInfraStackName } from "./shared-infra-config";
+import { getSharedInfraStackName, BOT_STACK_PREFIX } from "./shared-infra-config";
 import { generateSharedInfraTemplate } from "./templates/shared-production";
 
 /**
@@ -148,4 +148,116 @@ export async function isSharedInfraReady(
 
   const stack = await cfService.describeStack(stackName);
   return stack?.status === "CREATE_COMPLETE" || stack?.status === "UPDATE_COMPLETE";
+}
+
+/** Active CF stack statuses — everything except DELETE_COMPLETE */
+const ACTIVE_STACK_STATUSES: StackStatus[] = [
+  "CREATE_COMPLETE",
+  "CREATE_IN_PROGRESS",
+  "CREATE_FAILED",
+  "UPDATE_COMPLETE",
+  "UPDATE_IN_PROGRESS",
+  "UPDATE_FAILED",
+  "DELETE_IN_PROGRESS",
+  "DELETE_FAILED",
+  "ROLLBACK_IN_PROGRESS",
+  "ROLLBACK_COMPLETE",
+  "ROLLBACK_FAILED",
+  "UPDATE_ROLLBACK_COMPLETE",
+  "UPDATE_ROLLBACK_IN_PROGRESS",
+  "UPDATE_ROLLBACK_FAILED",
+];
+
+/**
+ * Clean up shared infrastructure if no per-bot stacks remain.
+ *
+ * Called after a per-bot stack is deleted. Checks whether any other
+ * per-bot stacks still exist in the region. If none remain, fires
+ * off shared stack deletion (non-blocking).
+ *
+ * Best-effort: errors are logged but never thrown.
+ */
+export async function cleanupSharedInfraIfOrphaned(
+  cfService: ICloudFormationService,
+  ec2Service: IEC2Service | undefined,
+  region: string,
+  onLog?: (message: string, stream?: "stdout" | "stderr") => void,
+): Promise<void> {
+  const log = onLog ?? (() => {});
+  const sharedStackName = getSharedInfraStackName(region);
+
+  try {
+    // 1. Check if shared stack even exists
+    const sharedExists = await cfService.stackExists(sharedStackName);
+    if (!sharedExists) {
+      log("Shared infra stack does not exist, nothing to clean up");
+      return;
+    }
+
+    // 2. Check for remaining per-bot stacks (including those still deleting)
+    const botStacks = await cfService.listStacks({
+      statusFilter: ACTIVE_STACK_STATUSES,
+      namePrefix: BOT_STACK_PREFIX,
+    });
+
+    if (botStacks.length > 0) {
+      log(
+        `${botStacks.length} bot stack(s) still active, keeping shared infra: ` +
+        botStacks.map((s) => s.stackName).join(", "),
+      );
+      return;
+    }
+
+    // 3. No bot stacks remain — clean up shared infra
+    log("No bot stacks remaining, starting shared infra cleanup...");
+    try {
+      await deleteSharedInfra(cfService, ec2Service, sharedStackName, log);
+    } catch (deleteErr) {
+      const msg = deleteErr instanceof Error ? deleteErr.message : String(deleteErr);
+      log(`Shared infra cleanup failed (non-fatal): ${msg}`, "stderr");
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log(`Shared infra cleanup check failed (non-fatal): ${msg}`, "stderr");
+  }
+}
+
+/**
+ * Delete the shared infra stack after disabling NAT termination protection.
+ *
+ * @internal Exported for testing.
+ */
+export async function deleteSharedInfra(
+  cfService: ICloudFormationService,
+  ec2Service: IEC2Service | undefined,
+  sharedStackName: string,
+  log: (message: string, stream?: "stdout" | "stderr") => void,
+): Promise<void> {
+  // 1. Disable NAT instance termination protection
+  if (ec2Service) {
+    try {
+      const outputs = await cfService.getStackOutputs(sharedStackName);
+      const natInstanceId = outputs["NatInstanceId"];
+      if (natInstanceId) {
+        log(`Disabling termination protection on NAT instance ${natInstanceId}...`);
+        await ec2Service.disableTerminationProtection(natInstanceId);
+        log("NAT termination protection disabled");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log(`Warning: could not disable NAT termination protection: ${msg}`, "stderr");
+      // Continue — CF will fail if protection is still on, but that's non-fatal
+    }
+  }
+
+  // 2. Delete the shared stack
+  log(`Deleting shared infra stack ${sharedStackName}...`);
+  await cfService.deleteStack(sharedStackName, { force: true });
+
+  // 3. Wait for deletion (VPC resources can take 2-5 minutes)
+  await cfService.waitForStackStatus(sharedStackName, "DELETE_COMPLETE", {
+    timeoutMs: 600000, // 10 min max
+  });
+
+  log("Shared infra stack deleted successfully");
 }

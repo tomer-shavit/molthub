@@ -39,6 +39,9 @@ export function getSharedInfraStackName(region: string): string {
   return `${SHARED_INFRA_STACK_PREFIX}-${region}`;
 }
 
+/** CloudFormation stack name prefix for per-bot stacks */
+export const BOT_STACK_PREFIX = "clawster-bot-";
+
 /**
  * CloudFormation export name prefix.
  * All shared stack exports use this prefix for cross-stack references.

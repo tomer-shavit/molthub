@@ -89,7 +89,7 @@ export class StackCleanupService {
 
     // First retry: delete normally (stuck resources should be unblocked now)
     this.deps.log("Retrying stack deletion...");
-    await this.deps.cloudFormation.deleteStack(this.deps.stackName);
+    await this.deps.cloudFormation.deleteStack(this.deps.stackName, { force: true });
 
     try {
       await this.deps.waitForStack("DELETE_COMPLETE");
@@ -112,6 +112,7 @@ export class StackCleanupService {
           this.deps.log(`Retaining stuck resources and forcing deletion: ${stuckResources.join(", ")}`, "stderr");
           await this.deps.cloudFormation.deleteStack(this.deps.stackName, {
             retainResources: stuckResources,
+            force: true,
           });
           await this.deps.waitForStack("DELETE_COMPLETE");
           return;

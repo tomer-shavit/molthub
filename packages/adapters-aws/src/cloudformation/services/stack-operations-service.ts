@@ -15,6 +15,7 @@ import {
   Stack,
   StackEvent,
   Output,
+  ListStacksCommand,
 } from "@aws-sdk/client-cloudformation";
 import { AwsErrorHandler } from "../../errors";
 
@@ -152,12 +153,13 @@ export class StackOperationsService {
    */
   async deleteStack(
     stackName: string,
-    options?: { retainResources?: string[] }
+    options?: { retainResources?: string[]; force?: boolean }
   ): Promise<void> {
     await this.client.send(
       new DeleteStackCommand({
         StackName: stackName,
         RetainResources: options?.retainResources,
+        DeletionMode: options?.force ? "FORCE_DELETE_STACK" : undefined,
       })
     );
   }
@@ -260,6 +262,42 @@ export class StackOperationsService {
     const stack = await this.describeStack(stackName);
     if (!stack) return false;
     return stack.status !== "DELETE_COMPLETE";
+  }
+
+  /**
+   * List stacks filtered by status and optional name prefix.
+   * Status filtering is server-side; prefix filtering is client-side
+   * (ListStacks API does not support server-side name filtering).
+   */
+  async listStacks(options?: {
+    statusFilter?: StackStatus[];
+    namePrefix?: string;
+  }): Promise<Array<{ stackName: string; status: string }>> {
+    const results: Array<{ stackName: string; status: string }> = [];
+    let nextToken: string | undefined;
+
+    do {
+      const response = await this.client.send(
+        new ListStacksCommand({
+          StackStatusFilter: options?.statusFilter,
+          NextToken: nextToken,
+        })
+      );
+
+      for (const summary of response.StackSummaries ?? []) {
+        const name = summary.StackName ?? "";
+        if (!options?.namePrefix || name.startsWith(options.namePrefix)) {
+          results.push({
+            stackName: name,
+            status: summary.StackStatus ?? "",
+          });
+        }
+      }
+
+      nextToken = response.NextToken;
+    } while (nextToken);
+
+    return results;
   }
 
   private mapStackToInfo(stack: Stack): StackInfo {

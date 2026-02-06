@@ -16,7 +16,7 @@ import type {
   StackInfo,
   StackOutput,
 } from "@clawster/adapters-common";
-import { StackOperationsService } from "./services/stack-operations-service";
+import { StackOperationsService, type StackStatus } from "./services/stack-operations-service";
 import {
   StackWaiterService,
   type WaitOptions,
@@ -154,7 +154,7 @@ export class CloudFormationService implements IInfrastructureService {
 
   async deleteStack(
     name: string,
-    options?: { retainResources?: string[] }
+    options?: { retainResources?: string[]; force?: boolean }
   ): Promise<void> {
     return this.operationsService.deleteStack(name, options);
   }
@@ -219,6 +219,16 @@ export class CloudFormationService implements IInfrastructureService {
       targetStatus,
       options
     );
+  }
+
+  /**
+   * List stacks filtered by status and optional name prefix.
+   */
+  async listStacks(options?: {
+    statusFilter?: StackStatus[];
+    namePrefix?: string;
+  }): Promise<Array<{ stackName: string; status: string }>> {
+    return this.operationsService.listStacks(options);
   }
 }
 
