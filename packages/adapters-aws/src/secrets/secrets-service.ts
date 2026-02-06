@@ -77,6 +77,12 @@ export class SecretsManagerService implements ISecretsService {
     return this.crudService.deleteSecret(name, forceDelete);
   }
 
+  // --- Describe ---
+
+  async describeSecret(secretId: string): Promise<{ arn: string }> {
+    return this.crudService.describeSecret(secretId);
+  }
+
   // --- ISecretProvisioner ---
 
   async ensureSecretsForInstance(

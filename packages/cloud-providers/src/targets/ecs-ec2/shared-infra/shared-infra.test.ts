@@ -3,7 +3,9 @@
  */
 import { generateSharedInfraTemplate } from "./templates/shared-production";
 import { buildSharedVpcResources } from "./templates/shared-vpc-template";
-import { buildSharedVpcEndpointResources } from "./templates/shared-vpc-endpoints-template";
+import { buildSharedNatResources } from "./templates/shared-nat-template";
+import { buildSharedFlowLogResources } from "./templates/shared-flow-logs-template";
+import type { CloudFormationResources } from "../templates/types";
 import { buildSharedIamResources } from "./templates/shared-iam-template";
 import { buildSharedOutputs } from "./templates/shared-outputs-template";
 import {
@@ -29,7 +31,7 @@ describe("SharedInfraConfig", () => {
     expect(SharedExportNames.PrivateSubnet1).toBe("clawster-shared-PrivateSubnet1");
     expect(SharedExportNames.PrivateSubnet2).toBe("clawster-shared-PrivateSubnet2");
     expect(SharedExportNames.PrivateRouteTable).toBe("clawster-shared-PrivateRouteTable");
-    expect(SharedExportNames.VpcEndpointSecurityGroupId).toBe("clawster-shared-VpcEndpointSgId");
+    expect(SharedExportNames.NatInstanceId).toBe("clawster-shared-NatInstanceId");
     expect(SharedExportNames.Ec2InstanceProfileArn).toBe("clawster-shared-Ec2InstanceProfileArn");
     expect(SharedExportNames.TaskExecutionRoleArn).toBe("clawster-shared-TaskExecRoleArn");
   });
@@ -76,52 +78,65 @@ describe("Shared VPC Template", () => {
   });
 });
 
-describe("Shared VPC Endpoints Template", () => {
-  const resources = buildSharedVpcEndpointResources();
+describe("Shared NAT Instance Template", () => {
+  const resources: CloudFormationResources = buildSharedNatResources();
 
-  it("creates VPC endpoint security group", () => {
-    expect(resources.VpcEndpointSecurityGroup).toBeDefined();
-    expect(resources.VpcEndpointSecurityGroup.Type).toBe("AWS::EC2::SecurityGroup");
+  it("creates NAT security group with HTTP/HTTPS ingress from VPC CIDR", () => {
+    expect(resources.NatSecurityGroup).toBeDefined();
+    expect(resources.NatSecurityGroup.Type).toBe("AWS::EC2::SecurityGroup");
+    const ingress = resources.NatSecurityGroup.Properties.SecurityGroupIngress as Array<{
+      FromPort: number;
+    }>;
+    const ports = ingress.map((r) => r.FromPort);
+    expect(ports).toContain(80);
+    expect(ports).toContain(443);
   });
 
-  it("creates all 9 VPC endpoints", () => {
-    const endpointNames = [
-      "EcrApiEndpoint",
-      "EcrDkrEndpoint",
-      "S3Endpoint",
-      "LogsEndpoint",
-      "SecretsManagerEndpoint",
-      "SsmEndpoint",
-      "EcsEndpoint",
-      "EcsAgentEndpoint",
-      "EcsTelemetryEndpoint",
-    ];
-
-    for (const name of endpointNames) {
-      expect(resources[name]).toBeDefined();
-      expect(resources[name].Type).toBe("AWS::EC2::VPCEndpoint");
-    }
+  it("creates NAT instance (t4g.nano) with SourceDestCheck disabled", () => {
+    expect(resources.NatInstance).toBeDefined();
+    expect(resources.NatInstance.Type).toBe("AWS::EC2::Instance");
+    expect(resources.NatInstance.Properties.InstanceType).toBe("t4g.nano");
+    expect(resources.NatInstance.Properties.SourceDestCheck).toBe(false);
   });
 
-  it("uses Gateway type for S3 endpoint (free)", () => {
-    expect(resources.S3Endpoint.Properties.VpcEndpointType).toBe("Gateway");
+  it("has DisableApiTermination enabled", () => {
+    expect(resources.NatInstance.Properties.DisableApiTermination).toBe(true);
   });
 
-  it("uses Interface type for all other endpoints", () => {
-    const interfaceEndpoints = [
-      "EcrApiEndpoint",
-      "EcrDkrEndpoint",
-      "LogsEndpoint",
-      "SecretsManagerEndpoint",
-      "SsmEndpoint",
-      "EcsEndpoint",
-      "EcsAgentEndpoint",
-      "EcsTelemetryEndpoint",
-    ];
+  it("creates Elastic IP and private route", () => {
+    expect(resources.NatElasticIp).toBeDefined();
+    expect(resources.NatElasticIp.Type).toBe("AWS::EC2::EIP");
+    expect(resources.PrivateNatRoute).toBeDefined();
+    expect(resources.PrivateNatRoute.Type).toBe("AWS::EC2::Route");
+  });
 
-    for (const name of interfaceEndpoints) {
-      expect(resources[name].Properties.VpcEndpointType).toBe("Interface");
-    }
+  it("creates CloudWatch auto-recovery alarm", () => {
+    expect(resources.NatRecoveryAlarm).toBeDefined();
+    expect(resources.NatRecoveryAlarm.Type).toBe("AWS::CloudWatch::Alarm");
+    expect(resources.NatRecoveryAlarm.Properties.MetricName).toBe(
+      "StatusCheckFailed_System",
+    );
+  });
+});
+
+describe("Shared Flow Logs Template", () => {
+  const resources: CloudFormationResources = buildSharedFlowLogResources();
+
+  it("creates CloudWatch log group with 30-day retention", () => {
+    expect(resources.FlowLogGroup).toBeDefined();
+    expect(resources.FlowLogGroup.Type).toBe("AWS::Logs::LogGroup");
+    expect(resources.FlowLogGroup.Properties.RetentionInDays).toBe(30);
+  });
+
+  it("creates IAM role for flow log delivery", () => {
+    expect(resources.FlowLogRole).toBeDefined();
+    expect(resources.FlowLogRole.Type).toBe("AWS::IAM::Role");
+  });
+
+  it("creates VPC Flow Log with REJECT traffic only", () => {
+    expect(resources.VpcFlowLog).toBeDefined();
+    expect(resources.VpcFlowLog.Type).toBe("AWS::EC2::FlowLog");
+    expect(resources.VpcFlowLog.Properties.TrafficType).toBe("REJECT");
   });
 });
 
@@ -209,11 +224,18 @@ describe("generateSharedInfraTemplate", () => {
     expect(resources.InternetGateway).toBeDefined();
   });
 
-  it("includes VPC endpoints", () => {
+  it("includes NAT Instance resources", () => {
     const resources = template.Resources as Record<string, unknown>;
-    expect(resources.EcrApiEndpoint).toBeDefined();
-    expect(resources.EcrDkrEndpoint).toBeDefined();
-    expect(resources.S3Endpoint).toBeDefined();
+    expect(resources.NatSecurityGroup).toBeDefined();
+    expect(resources.NatInstance).toBeDefined();
+    expect(resources.NatElasticIp).toBeDefined();
+    expect(resources.PrivateNatRoute).toBeDefined();
+  });
+
+  it("includes Flow Log resources", () => {
+    const resources = template.Resources as Record<string, unknown>;
+    expect(resources.FlowLogGroup).toBeDefined();
+    expect(resources.VpcFlowLog).toBeDefined();
   });
 
   it("includes IAM resources", () => {

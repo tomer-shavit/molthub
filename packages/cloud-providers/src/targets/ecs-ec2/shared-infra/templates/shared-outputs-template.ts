@@ -45,10 +45,10 @@ export function buildSharedOutputs(): Record<string, unknown> {
       Value: { Ref: "PrivateRouteTable" },
       Export: { Name: SharedExportNames.PrivateRouteTable },
     },
-    VpcEndpointSecurityGroupId: {
-      Description: "VPC endpoint security group ID",
-      Value: { Ref: "VpcEndpointSecurityGroup" },
-      Export: { Name: SharedExportNames.VpcEndpointSecurityGroupId },
+    NatInstanceId: {
+      Description: "NAT Instance ID",
+      Value: { Ref: "NatInstance" },
+      Export: { Name: SharedExportNames.NatInstanceId },
     },
     Ec2InstanceProfileArn: {
       Description: "EC2 instance profile ARN",

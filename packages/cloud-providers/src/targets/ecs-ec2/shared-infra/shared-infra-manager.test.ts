@@ -23,7 +23,7 @@ function mockCfService(overrides?: Partial<ICloudFormationService>): ICloudForma
       PrivateSubnet1Id: "subnet-priv1",
       PrivateSubnet2Id: "subnet-priv2",
       PrivateRouteTableId: "rtb-123",
-      VpcEndpointSecurityGroupId: "sg-vpce",
+      NatInstanceId: "i-nat123",
       Ec2InstanceProfileArn: "arn:aws:iam::123:instance-profile/clawster-shared-ec2-profile",
       TaskExecutionRoleArn: "arn:aws:iam::123:role/clawster-shared-exec",
     }),
@@ -146,7 +146,7 @@ describe("getSharedInfraOutputs", () => {
       privateSubnet1: "subnet-priv1",
       privateSubnet2: "subnet-priv2",
       privateRouteTable: "rtb-123",
-      vpcEndpointSecurityGroupId: "sg-vpce",
+      natInstanceId: "i-nat123",
       ec2InstanceProfileArn: "arn:aws:iam::123:instance-profile/clawster-shared-ec2-profile",
       taskExecutionRoleArn: "arn:aws:iam::123:role/clawster-shared-exec",
     });

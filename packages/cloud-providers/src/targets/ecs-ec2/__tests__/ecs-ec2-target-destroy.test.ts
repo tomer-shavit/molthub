@@ -64,6 +64,7 @@ function createMockSecretsService(): ISecretsManagerService {
     updateSecret: jest.fn().mockResolvedValue(undefined),
     deleteSecret: jest.fn().mockResolvedValue(undefined),
     secretExists: jest.fn().mockResolvedValue(false),
+    describeSecret: jest.fn().mockResolvedValue({ arn: "arn:aws:secretsmanager:us-east-1:123:secret:test-AbCdEf" }),
   };
 }
 

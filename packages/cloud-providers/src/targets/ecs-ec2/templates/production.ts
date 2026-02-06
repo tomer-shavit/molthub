@@ -30,6 +30,8 @@ export interface ProductionTemplateParams {
   usePublicImage?: boolean;
   cpu?: number;
   memory?: number;
+  /** EC2 instance type for the ASG (default: "t3.medium") */
+  instanceType?: string;
   gatewayAuthToken: string;
   containerEnv?: Record<string, string>;
   certificateArn?: string;
@@ -47,6 +49,7 @@ export function generateProductionTemplate(
     usePublicImage,
     cpu = 1024,
     memory = 2048,
+    instanceType = "t3.medium",
     gatewayAuthToken,
     containerEnv = {},
     certificateArn,
@@ -97,6 +100,7 @@ export function generateProductionTemplate(
         usePublicImage,
         cpu,
         memory,
+        instanceType,
         gatewayAuthToken,
         containerEnv,
         listenerDependency,

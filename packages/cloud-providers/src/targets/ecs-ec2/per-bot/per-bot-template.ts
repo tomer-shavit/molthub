@@ -16,7 +16,7 @@
  */
 
 import { SharedExportNames } from "../shared-infra/shared-infra-config";
-import { buildSysboxInstallScript } from "../../../base/startup-script-builder";
+import { buildEcsEc2UserData } from "./user-data-builder";
 
 export interface PerBotTemplateParams {
   botName: string;
@@ -25,10 +25,15 @@ export interface PerBotTemplateParams {
   usePublicImage?: boolean;
   cpu?: number;
   memory?: number;
+  /** EC2 instance type for the ASG (default: "t3.medium") */
+  instanceType?: string;
   gatewayAuthToken: string;
   containerEnv?: Record<string, string>;
   certificateArn?: string;
   allowedCidr?: string[];
+  openclawVersion?: string;
+  /** Full ARN of the OPENCLAW_CONFIG secret (includes random 6-char suffix) */
+  openclawConfigSecretArn?: string;
 }
 
 /** Helper to create Fn::ImportValue for a shared export */
@@ -50,6 +55,7 @@ export function generatePerBotTemplate(
     usePublicImage,
     cpu = 1024,
     memory = 2048,
+    instanceType = "t3.medium",
     gatewayAuthToken,
     containerEnv = {},
     certificateArn,
@@ -58,14 +64,16 @@ export function generatePerBotTemplate(
 
   const tag = { Key: "clawster:bot", Value: botName };
 
-  // Build container command for public image deployments
+  // Build container command — detects if openclaw is pre-installed (prebuild image)
+  // and falls back to runtime install if not. docker.io is NOT needed — OpenClaw
+  // communicates with Docker daemon via REST API over the mounted Unix socket.
+  const ocVersion = params.openclawVersion ?? "latest";
   const command = usePublicImage
     ? [
         "sh",
         "-c",
         [
-          `apt-get update && apt-get install -y git docker.io`,
-          `npm install -g openclaw@latest`,
+          `which openclaw || (apt-get update && apt-get install -y git && npm install -g openclaw@${ocVersion})`,
           `mkdir -p ~/.openclaw`,
           `if [ -n "$OPENCLAW_CONFIG" ]; then printenv OPENCLAW_CONFIG > ~/.openclaw/openclaw.json; fi`,
           `chmod 660 /var/run/docker.sock 2>/dev/null || true`,
@@ -84,30 +92,11 @@ export function generatePerBotTemplate(
     })),
   ];
 
-  // Build UserData script with ECS agent config and Sysbox
-  const sysboxScript = buildSysboxInstallScript();
-  const userData = Buffer.from(
-    [
-      `#!/bin/bash`,
-      `set -e`,
-      ``,
-      `# Configure ECS agent`,
-      `echo "ECS_CLUSTER=clawster-${botName}" >> /etc/ecs/ecs.config`,
-      `echo "ECS_ENABLE_TASK_IAM_ROLE=true" >> /etc/ecs/ecs.config`,
-      `echo "ECS_ENABLE_TASK_ENI=true" >> /etc/ecs/ecs.config`,
-      `echo "ECS_IMAGE_PULL_BEHAVIOR=prefer-cached" >> /etc/ecs/ecs.config`,
-      ``,
-      sysboxScript,
-      ``,
-      `# Register sysbox-runc as available runtime for ECS`,
-      `if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-runc'; then`,
-      `  echo 'ECS_AVAILABLE_RUNTIMES=["sysbox-runc"]' >> /etc/ecs/ecs.config`,
-      `  # Restart Docker and ECS agent to pick up new runtime`,
-      `  systemctl restart docker`,
-      `  systemctl restart ecs`,
-      `fi`,
-    ].join("\n"),
-  ).toString("base64");
+  // Build UserData script with kernel modules, Sysbox .deb install, ECS config, prebuild
+  const userData = buildEcsEc2UserData({
+    botName,
+    openclawVersion: params.openclawVersion,
+  });
 
   // ── Build Resources ──
   const resources: Record<string, unknown> = {};
@@ -144,6 +133,26 @@ export function generatePerBotTemplate(
       Tags: [
         tag,
         { Key: "Name", Value: `clawster-${botName}-alb-sg` },
+      ],
+    },
+  };
+
+  // Instance Security Group — outbound-only (EC2 primary ENI)
+  resources.InstanceSecurityGroup = {
+    Type: "AWS::EC2::SecurityGroup",
+    Properties: {
+      GroupDescription: `Clawster ${botName} EC2 instance security group`,
+      VpcId: importShared(SharedExportNames.VpcId),
+      SecurityGroupEgress: [
+        {
+          IpProtocol: "-1",
+          CidrIp: "0.0.0.0/0",
+          Description: "All outbound traffic",
+        },
+      ],
+      Tags: [
+        tag,
+        { Key: "Name", Value: `clawster-${botName}-instance-sg` },
       ],
     },
   };
@@ -189,6 +198,12 @@ export function generatePerBotTemplate(
         importShared(SharedExportNames.PublicSubnet2),
       ],
       SecurityGroups: [{ Ref: "AlbSecurityGroup" }],
+      LoadBalancerAttributes: [
+        {
+          Key: "idle_timeout.timeout_seconds",
+          Value: "120",
+        },
+      ],
       Tags: [tag],
     },
   };
@@ -203,7 +218,7 @@ export function generatePerBotTemplate(
       VpcId: importShared(SharedExportNames.VpcId),
       TargetType: "ip",
       HealthCheckEnabled: true,
-      HealthCheckPath: "/",
+      HealthCheckPath: "/health",
       HealthCheckPort: String(gatewayPort),
       HealthCheckProtocol: "HTTP",
       HealthCheckIntervalSeconds: 5,
@@ -283,11 +298,14 @@ export function generatePerBotTemplate(
     };
   }
 
-  // ECS Cluster
+  // ECS Cluster (Container Insights enabled for debugging)
   resources.EcsCluster = {
     Type: "AWS::ECS::Cluster",
     Properties: {
       ClusterName: `clawster-${botName}`,
+      ClusterSettings: [
+        { Name: "containerInsights", Value: "enabled" },
+      ],
       Tags: [tag],
     },
   };
@@ -309,11 +327,26 @@ export function generatePerBotTemplate(
       LaunchTemplateName: `clawster-${botName}-lt`,
       LaunchTemplateData: {
         ImageId: { Ref: "LatestEcsAmiId" },
-        InstanceType: "t3.small",
+        InstanceType: instanceType,
         IamInstanceProfile: {
           Arn: importShared(SharedExportNames.Ec2InstanceProfileArn),
         },
-        SecurityGroupIds: [{ Ref: "TaskSecurityGroup" }],
+        SecurityGroupIds: [{ Ref: "InstanceSecurityGroup" }],
+        MetadataOptions: {
+          HttpTokens: "required",
+          HttpPutResponseHopLimit: 2,
+          HttpEndpoint: "enabled",
+        },
+        BlockDeviceMappings: [
+          {
+            DeviceName: "/dev/xvda",
+            Ebs: {
+              Encrypted: true,
+              VolumeType: "gp3",
+              VolumeSize: 30,
+            },
+          },
+        ],
         UserData: userData,
         TagSpecifications: [
           {
@@ -369,6 +402,7 @@ export function generatePerBotTemplate(
           MaximumScalingStepSize: 1,
         },
         ManagedTerminationProtection: "ENABLED",
+        ManagedDraining: "ENABLED",
       },
     },
   };
@@ -447,7 +481,9 @@ export function generatePerBotTemplate(
           Secrets: [
             {
               Name: "OPENCLAW_CONFIG",
-              ValueFrom: {
+              // Full ARN with random 6-char suffix from describeSecret()
+              // Fn::Sub without suffix fails: ECS ResourceInitializationError
+              ValueFrom: params.openclawConfigSecretArn ?? {
                 "Fn::Sub": `arn:aws:secretsmanager:\${AWS::Region}:\${AWS::AccountId}:secret:clawster/${botName}/config`,
               },
             },
@@ -483,6 +519,15 @@ export function generatePerBotTemplate(
       Cluster: { Ref: "EcsCluster" },
       TaskDefinition: { Ref: "TaskDefinition" },
       DesiredCount: 0,
+      DeploymentConfiguration: {
+        MinimumHealthyPercent: 0,
+        MaximumPercent: 100,
+        DeploymentCircuitBreaker: {
+          Enable: true,
+          Rollback: true,
+        },
+      },
+      HealthCheckGracePeriodSeconds: 180,
       CapacityProviderStrategy: [
         {
           CapacityProvider: { Ref: "EcsCapacityProvider" },

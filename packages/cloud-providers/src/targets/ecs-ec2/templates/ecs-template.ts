@@ -22,6 +22,8 @@ export interface EcsResourceOptions {
   usePublicImage?: boolean;
   cpu: number;
   memory: number;
+  /** EC2 instance type for the ASG (default: "t3.medium") */
+  instanceType?: string;
   gatewayAuthToken: string;
   containerEnv: Record<string, string>;
   listenerDependency: string;
@@ -41,6 +43,7 @@ export function buildEcsResources(options: EcsResourceOptions): CloudFormationRe
     usePublicImage,
     cpu,
     memory,
+    instanceType = "t3.medium",
     gatewayAuthToken,
     containerEnv,
     listenerDependency,
@@ -128,7 +131,7 @@ export function buildEcsResources(options: EcsResourceOptions): CloudFormationRe
         LaunchTemplateName: { "Fn::Sub": `clawster-${botName}-lt` },
         LaunchTemplateData: {
           ImageId: { Ref: "LatestEcsAmiId" },
-          InstanceType: "t3.small",
+          InstanceType: instanceType,
           IamInstanceProfile: {
             Arn: { "Fn::GetAtt": ["Ec2InstanceProfile", "Arn"] },
           },

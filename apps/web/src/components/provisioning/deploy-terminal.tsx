@@ -138,7 +138,7 @@ export function DeployTerminal({
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="max-h-[28rem] overflow-y-auto px-3 pb-3 font-mono text-xs leading-5 scroll-smooth"
+          className="max-h-[28rem] overflow-y-auto px-3 pb-3 font-mono text-xs leading-5 scroll-smooth terminal-scrollbar"
         >
           {logs.map((entry, i) => (
             <div key={i} className="flex gap-2 hover:bg-gray-900/50">

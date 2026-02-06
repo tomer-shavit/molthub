@@ -123,6 +123,9 @@ export function ProvisioningScreen({
               <ConnectionBadge connected={isConnected} />
             </div>
           </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            This usually takes 5–10 minutes. Subsequent deploys in the same region are faster.
+          </p>
         </CardHeader>
         <CardContent>
           {progress ? (

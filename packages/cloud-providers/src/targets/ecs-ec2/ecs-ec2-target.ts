@@ -36,20 +36,34 @@ const ECS_TIER_SPECS: Record<Exclude<ResourceTier, "custom">, TierSpec> = {
     cpu: 512,
     memory: 1024,
     dataDiskSizeGb: 5,
+    machineType: "t3.small",
   },
   standard: {
     tier: "standard",
     cpu: 1024,
     memory: 2048,
     dataDiskSizeGb: 10,
+    machineType: "t3.medium",
   },
   performance: {
     tier: "performance",
     cpu: 2048,
     memory: 4096,
     dataDiskSizeGb: 20,
+    machineType: "t3.large",
   },
 };
+
+/**
+ * Determine the EC2 instance type that can accommodate the given memory.
+ * Used for both initial install and resource updates.
+ */
+function getInstanceTypeForMemory(memoryMiB: number): string {
+  if (memoryMiB <= 1024) return "t3.small";
+  if (memoryMiB <= 2048) return "t3.medium";
+  if (memoryMiB <= 4096) return "t3.large";
+  return "t3.xlarge";
+}
 import type { EcsEc2Config } from "./ecs-ec2-config";
 import type {
   ICloudFormationService,
@@ -66,12 +80,17 @@ import { createDefaultServices, InternalAutoScalingService } from "./ecs-ec2-ser
 import { generateProductionTemplate } from "./templates/production";
 import { generatePerBotTemplate } from "./per-bot/per-bot-template";
 import { ensureSharedInfra } from "./shared-infra/shared-infra-manager";
+import { VPC_CIDR } from "./shared-infra/shared-infra-config";
 
 // Re-export for external use
 export type { EcsEc2TargetOptions, EcsEc2Services };
 
 const DEFAULT_CPU = 1024;
 const DEFAULT_MEMORY = 2048;
+const MAX_BOT_NAME_LENGTH = 20;
+const MIN_BOT_NAME_LENGTH = 2;
+const BOT_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+const OPENCLAW_VERSION_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9.\-]*$/;
 
 /**
  * EcsEc2Target manages an OpenClaw gateway instance running
@@ -90,6 +109,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
   private readonly config: EcsEc2Config;
   private readonly cpu: number;
   private readonly memory: number;
+  private readonly instanceType: string;
 
   // Injected services (using interfaces for dependency inversion)
   private readonly cloudFormationService: ICloudFormationService;
@@ -129,6 +149,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
     this.config = config;
     this.cpu = config.cpu ?? DEFAULT_CPU;
     this.memory = config.memory ?? DEFAULT_MEMORY;
+    this.instanceType = getInstanceTypeForMemory(this.memory);
 
     // Derive resource names from profileName (allows re-instantiated targets
     // to operate on existing resources without calling install() again)
@@ -173,21 +194,25 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
 
   /**
    * ECS-specific config transformation options.
-   * Forces gateway.bind = "lan" and removes port (container networking requirement).
+   * Sets gateway.mode, gateway.bind, and gateway.trustedProxies for ALB architecture.
    */
   protected override getTransformOptions(): TransformOptions {
     return {
       customTransforms: [
         (config) => {
-          // ECS containers MUST bind to 0.0.0.0 (lan) - container networking requirement
-          if (config.gateway && typeof config.gateway === "object") {
-            const gw = { ...(config.gateway as Record<string, unknown>) };
-            gw.bind = "lan";
-            delete gw.host;
-            delete gw.port;
-            return { ...config, gateway: gw };
-          }
-          return config;
+          // ECS containers require specific gateway config for ALB architecture
+          const existing = (config.gateway as Record<string, unknown>) ?? {};
+          const { host: _h, port: _p, ...rest } = existing;
+          const gw = {
+            ...rest,
+            // Required: gateway refuses to start without mode
+            mode: "local",
+            // Required: bind to 0.0.0.0 so ALB can reach the container
+            bind: "lan",
+            // Trust ALB proxy headers (VPC CIDR)
+            trustedProxies: [VPC_CIDR],
+          };
+          return { ...config, gateway: gw };
         },
       ],
     };
@@ -199,6 +224,39 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
 
   async install(options: InstallOptions): Promise<InstallResult> {
     const profileName = options.profileName;
+
+    // Validate bot name (ALB/TG names have 32-char max; with prefix/suffix we allow 20)
+    if (profileName.length < MIN_BOT_NAME_LENGTH) {
+      return {
+        success: false,
+        instanceId: "",
+        message: `Bot name "${profileName}" must be at least ${MIN_BOT_NAME_LENGTH} characters`,
+      };
+    }
+    if (profileName.length > MAX_BOT_NAME_LENGTH) {
+      return {
+        success: false,
+        instanceId: "",
+        message: `Bot name "${profileName}" exceeds ${MAX_BOT_NAME_LENGTH} characters (ALB name limit)`,
+      };
+    }
+    if (!BOT_NAME_PATTERN.test(profileName)) {
+      return {
+        success: false,
+        instanceId: "",
+        message: `Bot name "${profileName}" must contain only lowercase alphanumeric characters and hyphens, and cannot start/end with a hyphen`,
+      };
+    }
+
+    // Validate openclawVersion to prevent command injection in shell scripts
+    if (this.config.openclawVersion && !OPENCLAW_VERSION_PATTERN.test(this.config.openclawVersion)) {
+      return {
+        success: false,
+        instanceId: "",
+        message: `Invalid openclawVersion "${this.config.openclawVersion}" — must be alphanumeric with dots and hyphens`,
+      };
+    }
+
     this.gatewayPort = options.port;
     this.stackName = `clawster-bot-${profileName}`;
     this.clusterName = `clawster-${profileName}`;
@@ -211,14 +269,16 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
     try {
       this.log(`Starting ECS EC2 deployment for ${profileName}${useSharedInfra ? " (shared infra)" : " (legacy)"}`);
 
-      // 1. Resolve image: use public node:22-slim unless a custom image is provided
-      const imageUri = this.config.image ?? "node:22-slim";
+      // 1. Resolve image: use prebuild image name (built by UserData) or custom
+      const imageUri = this.config.image ?? "openclaw-prebuilt:latest";
       const usePublicImage = !this.config.image;
       this.log(`Using container image: ${imageUri}`);
 
-      // 2. Create the config secret in Secrets Manager (empty initially, configure() fills it)
+      // 2. Create the config secret and get its full ARN (includes random 6-char suffix)
       this.log("Creating Secrets Manager secret...");
       await this.ensureSecret(this.secretName, "{}");
+      const secretInfo = await this.secretsManagerService.describeSecret(this.secretName);
+      const openclawConfigSecretArn = secretInfo.arn;
       this.log("Secret created successfully");
 
       // 3. Generate CloudFormation template
@@ -241,10 +301,13 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
           usePublicImage,
           cpu: this.cpu,
           memory: this.memory,
+          instanceType: this.instanceType,
           gatewayAuthToken: options.gatewayAuthToken ?? "",
           containerEnv: options.containerEnv ?? {},
           allowedCidr: this.config.allowedCidr,
           certificateArn: this.config.certificateArn,
+          openclawVersion: this.config.openclawVersion,
+          openclawConfigSecretArn,
         });
       } else {
         // Legacy path: full self-contained stack
@@ -762,6 +825,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
         usePublicImage: !this.config.image,
         cpu: spec.cpu,
         memory: spec.memory,
+        instanceType: getInstanceTypeForMemory(spec.memory),
         gatewayAuthToken: "",
         containerEnv: {},
         allowedCidr: this.config.allowedCidr,

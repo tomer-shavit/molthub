@@ -39,7 +39,7 @@ export function StepDeploying({ instanceId, botName, onRetryDeploy }: StepDeploy
 
   // Polling fallback: poll deploy status endpoint every 5s for error detection
   useEffect(() => {
-    const SLOW_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+    const SLOW_THRESHOLD_MS = 7 * 60 * 1000; // 7 minutes
 
     const interval = setInterval(async () => {
       // Check if deployment is taking too long
@@ -170,9 +170,9 @@ export function StepDeploying({ instanceId, botName, onRetryDeploy }: StepDeploy
   return (
     <div className="space-y-6">
       {isSlow && (
-        <div className="flex items-center gap-2 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          <span>Taking longer than expected. Your bot may still be starting up&hellip;</span>
+        <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+          <Info className="w-4 h-4 flex-shrink-0" />
+          <span>Deployments can take up to 10 minutes on the first run. Your bot is still being set up.</span>
         </div>
       )}
       <ProvisioningScreen instanceId={instanceId} instanceName={botName} />

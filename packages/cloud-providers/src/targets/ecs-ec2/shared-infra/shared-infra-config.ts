@@ -20,8 +20,8 @@ export interface SharedInfraOutputs {
   privateSubnet2: string;
   /** Private route table ID */
   privateRouteTable: string;
-  /** VPC endpoint security group ID */
-  vpcEndpointSecurityGroupId: string;
+  /** NAT Instance ID (for monitoring/reference) */
+  natInstanceId: string;
   /** EC2 instance profile ARN (for Launch Template) */
   ec2InstanceProfileArn: string;
   /** Task execution role ARN (for Task Definition) */
@@ -45,6 +45,12 @@ export function getSharedInfraStackName(region: string): string {
  */
 const SHARED_EXPORT_PREFIX = "clawster-shared";
 
+/** Default VPC CIDR block — used in VPC template, NAT SG ingress, and ALB trustedProxies */
+export const VPC_CIDR = "10.0.0.0/16";
+
+/** Shared resource tag applied to all shared infrastructure resources */
+export const SHARED_TAG = { Key: "clawster:shared", Value: "true" } as const;
+
 /** Well-known export names from the shared infrastructure stack */
 export const SharedExportNames = {
   VpcId: `${SHARED_EXPORT_PREFIX}-VpcId`,
@@ -53,7 +59,7 @@ export const SharedExportNames = {
   PrivateSubnet1: `${SHARED_EXPORT_PREFIX}-PrivateSubnet1`,
   PrivateSubnet2: `${SHARED_EXPORT_PREFIX}-PrivateSubnet2`,
   PrivateRouteTable: `${SHARED_EXPORT_PREFIX}-PrivateRouteTable`,
-  VpcEndpointSecurityGroupId: `${SHARED_EXPORT_PREFIX}-VpcEndpointSgId`,
+  NatInstanceId: `${SHARED_EXPORT_PREFIX}-NatInstanceId`,
   Ec2InstanceProfileArn: `${SHARED_EXPORT_PREFIX}-Ec2InstanceProfileArn`,
   TaskExecutionRoleArn: `${SHARED_EXPORT_PREFIX}-TaskExecRoleArn`,
 } as const;

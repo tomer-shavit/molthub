@@ -80,7 +80,7 @@ function createSmartCfMock(opts: {
       PrivateSubnet1Id: "sub-3",
       PrivateSubnet2Id: "sub-4",
       PrivateRouteTableId: "rt-1",
-      VpcEndpointSecurityGroupId: "sg-1",
+      NatInstanceId: "i-nat1",
       Ec2InstanceProfileArn: "arn:aws:iam::123:instance-profile/ip",
       TaskExecutionRoleArn: "arn:aws:iam::123:role/exec",
     }),
@@ -113,6 +113,7 @@ function createMockSecretsService(): ISecretsManagerService {
     updateSecret: jest.fn().mockResolvedValue(undefined),
     deleteSecret: jest.fn().mockResolvedValue(undefined),
     secretExists: jest.fn().mockResolvedValue(false),
+    describeSecret: jest.fn().mockResolvedValue({ arn: "arn:aws:secretsmanager:us-east-1:123:secret:clawster/test-bot/config-AbCdEf" }),
   };
 }
 

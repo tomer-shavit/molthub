@@ -55,7 +55,7 @@ export function buildAlbResources(
         VpcId: { Ref: "Vpc" },
         TargetType: "ip",
         HealthCheckEnabled: true,
-        HealthCheckPath: "/",
+        HealthCheckPath: "/health",
         HealthCheckPort: String(gatewayPort),
         HealthCheckProtocol: "HTTP",
         HealthCheckIntervalSeconds: 5,

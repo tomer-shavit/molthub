@@ -58,25 +58,26 @@ export class ReconcilerScheduler {
 
   /**
    * Health check for stuck instances every minute.
-   * Detects BotInstances stuck in CREATING or RECONCILING for > 10 minutes.
+   * Detects BotInstances stuck in CREATING or RECONCILING for > 15 minutes.
+   * (First ECS EC2 deploy with shared infra creation can take 10+ minutes.)
    */
   @Cron(CronExpression.EVERY_MINUTE)
   async healthCheckStuckInstances(): Promise<void> {
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
 
     try {
       const { data: stuckInstances } = await this.botInstanceRepo.findMany({
         status: ["CREATING", "RECONCILING"],
       });
 
-      // Filter for instances older than 10 minutes
+      // Filter for instances older than 15 minutes
       const stuckOldInstances = stuckInstances.filter(
-        (instance) => instance.updatedAt < tenMinutesAgo
+        (instance) => instance.updatedAt < fifteenMinutesAgo
       );
 
       for (const instance of stuckOldInstances) {
         this.logger.warn(
-          `Instance ${instance.id} (${instance.name}) stuck in ${instance.status} for > 10 minutes`,
+          `Instance ${instance.id} (${instance.name}) stuck in ${instance.status} for > 15 minutes`,
         );
 
         await this.botInstanceRepo.update(instance.id, {

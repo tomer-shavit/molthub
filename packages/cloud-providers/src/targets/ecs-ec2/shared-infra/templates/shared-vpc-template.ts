@@ -5,15 +5,14 @@
  * - VPC with DNS support
  * - Internet Gateway
  * - Public subnets (2 AZs) with public IPs
- * - Private subnets (2 AZs) without NAT (uses VPC endpoints)
+ * - Private subnets (2 AZs) routed through NAT Instance
  * - Route tables and associations
  *
  * Adapted from the per-bot vpc-template.ts with `clawster-shared` naming.
  */
 
 import type { CloudFormationResources } from "../../templates/types";
-
-const SHARED_TAG = { Key: "clawster:shared", Value: "true" };
+import { SHARED_TAG, VPC_CIDR } from "../shared-infra-config";
 
 /**
  * Builds shared VPC, subnets, internet gateway, and route table resources.
@@ -22,7 +21,7 @@ const SHARED_TAG = { Key: "clawster:shared", Value: "true" };
  * @returns CloudFormation resources for shared VPC infrastructure
  */
 export function buildSharedVpcResources(
-  vpcCidr: string = "10.0.0.0/16",
+  vpcCidr: string = VPC_CIDR,
 ): CloudFormationResources {
   return {
     // ── VPC ──
@@ -154,7 +153,7 @@ export function buildSharedVpcResources(
       },
     },
 
-    // ── Private Route Table (no NAT - uses VPC endpoints) ──
+    // ── Private Route Table (NAT route added by shared-nat-template) ──
     PrivateRouteTable: {
       Type: "AWS::EC2::RouteTable",
       Properties: {

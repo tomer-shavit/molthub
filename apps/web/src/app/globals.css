@@ -65,3 +65,23 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Slim scrollbar for the deploy terminal */
+.terminal-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.terminal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.terminal-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(55 65 81); /* gray-700 */
+  border-radius: 3px;
+}
+.terminal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(75 85 99); /* gray-600 */
+}
+/* Firefox */
+.terminal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(55 65 81) transparent;
+}

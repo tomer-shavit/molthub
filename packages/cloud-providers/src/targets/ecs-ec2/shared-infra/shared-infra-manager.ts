@@ -77,7 +77,7 @@ export async function ensureSharedInfra(
         },
       );
 
-      log("Waiting for shared infra stack to complete (VPC endpoints take ~3 min)...");
+      log("Waiting for shared infra stack to complete (~3 min for IAM InstanceProfile)...");
       await cfService.waitForStackStatus(stackName, "CREATE_COMPLETE", {
         timeoutMs: 600000, // 10 min max
       });
@@ -124,7 +124,7 @@ export async function getSharedInfraOutputs(
     privateSubnet1: outputs["PrivateSubnet1Id"] ?? "",
     privateSubnet2: outputs["PrivateSubnet2Id"] ?? "",
     privateRouteTable: outputs["PrivateRouteTableId"] ?? "",
-    vpcEndpointSecurityGroupId: outputs["VpcEndpointSecurityGroupId"] ?? "",
+    natInstanceId: outputs["NatInstanceId"] ?? "",
     ec2InstanceProfileArn: outputs["Ec2InstanceProfileArn"] ?? "",
     taskExecutionRoleArn: outputs["TaskExecutionRoleArn"] ?? "",
   };

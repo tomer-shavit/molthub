@@ -30,4 +30,6 @@ export interface EcsEc2Config {
   allowedCidr?: string[];
   /** Use shared infrastructure (VPC, endpoints, IAM) for faster deployments. Defaults to true for new deploys. */
   useSharedInfra?: boolean;
+  /** Pinned OpenClaw version (e.g. "0.5.3"). If not set, uses "latest". */
+  openclawVersion?: string;
 }

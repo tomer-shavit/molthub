@@ -109,4 +109,17 @@ export class SecretCrudService implements ISecretReader, ISecretWriter {
       throw error;
     }
   }
+
+  /**
+   * Describe a secret to get its full ARN (includes random 6-char suffix).
+   */
+  async describeSecret(secretId: string): Promise<{ arn: string }> {
+    const result = await this.client.send(
+      new DescribeSecretCommand({ SecretId: secretId })
+    );
+    if (!result.ARN) {
+      throw new Error(`Secret "${secretId}" has no ARN — DescribeSecret returned undefined`);
+    }
+    return { arn: result.ARN };
+  }
 }

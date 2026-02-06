@@ -272,6 +272,10 @@ export class SecretsManagerServiceAdapter implements ISecretsManagerService {
   async secretExists(name: string): Promise<boolean> {
     return this.service.secretExists(name);
   }
+
+  async describeSecret(secretId: string): Promise<{ arn: string }> {
+    return this.service.describeSecret(secretId);
+  }
 }
 
 /**

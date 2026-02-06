@@ -182,6 +182,11 @@ export interface ISecretsManagerService {
    * Check if a secret exists.
    */
   secretExists(name: string): Promise<boolean>;
+
+  /**
+   * Describe a secret to get its full ARN (includes random 6-char suffix).
+   */
+  describeSecret(secretId: string): Promise<{ arn: string }>;
 }
 
 /**
