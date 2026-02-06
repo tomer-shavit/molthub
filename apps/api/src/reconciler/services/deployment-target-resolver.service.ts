@@ -165,6 +165,7 @@ export class DeploymentTargetResolverService implements IDeploymentTargetResolve
             memory: cfg.memory as number | undefined,
             image: cfg.image as string | undefined,
             profileName: instance?.profileName ?? instance?.name,
+            useSharedInfra: (cfg.useSharedInfra as boolean | undefined) ?? true,
           },
         };
       case "GCE":
@@ -234,6 +235,7 @@ export class DeploymentTargetResolverService implements IDeploymentTargetResolve
           memory: instanceMeta?.memory as number | undefined,
           image: instanceMeta?.image as string | undefined,
           profileName: instance.profileName ?? instance.name,
+          useSharedInfra: (instanceMeta?.useSharedInfra as boolean | undefined) ?? true,
         },
       },
       GCE: {

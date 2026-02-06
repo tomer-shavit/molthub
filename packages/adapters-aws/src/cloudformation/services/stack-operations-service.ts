@@ -147,11 +147,17 @@ export class StackOperationsService {
 
   /**
    * Delete a CloudFormation stack.
+   * When retainResources is provided, those logical IDs are skipped during deletion
+   * (useful for recovering from DELETE_FAILED state).
    */
-  async deleteStack(stackName: string): Promise<void> {
+  async deleteStack(
+    stackName: string,
+    options?: { retainResources?: string[] }
+  ): Promise<void> {
     await this.client.send(
       new DeleteStackCommand({
         StackName: stackName,
+        RetainResources: options?.retainResources,
       })
     );
   }
@@ -246,14 +252,14 @@ export class StackOperationsService {
 
   /**
    * Check if a stack exists and is not in a deleted state.
+   * Note: ROLLBACK_COMPLETE stacks ARE considered "existing" because they
+   * block creation of a new stack with the same name. Callers must handle
+   * ROLLBACK_COMPLETE by deleting the stack before re-creating.
    */
   async stackExists(stackName: string): Promise<boolean> {
     const stack = await this.describeStack(stackName);
     if (!stack) return false;
-    return (
-      stack.status !== "DELETE_COMPLETE" &&
-      stack.status !== "ROLLBACK_COMPLETE"
-    );
+    return stack.status !== "DELETE_COMPLETE";
   }
 
   private mapStackToInfo(stack: Stack): StackInfo {

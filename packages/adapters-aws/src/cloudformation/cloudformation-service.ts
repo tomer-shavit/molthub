@@ -152,8 +152,11 @@ export class CloudFormationService implements IInfrastructureService {
     );
   }
 
-  async deleteStack(name: string): Promise<void> {
-    return this.operationsService.deleteStack(name);
+  async deleteStack(
+    name: string,
+    options?: { retainResources?: string[] }
+  ): Promise<void> {
+    return this.operationsService.deleteStack(name, options);
   }
 
   async describeStack(name: string): Promise<StackInfo | undefined> {

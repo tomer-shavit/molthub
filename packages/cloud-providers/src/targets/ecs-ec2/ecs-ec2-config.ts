@@ -28,4 +28,6 @@ export interface EcsEc2Config {
   profileName?: string;
   /** CIDR blocks for ALB security group ingress. Defaults to ["0.0.0.0/0"] for webhook access */
   allowedCidr?: string[];
+  /** Use shared infrastructure (VPC, endpoints, IAM) for faster deployments. Defaults to true for new deploys. */
+  useSharedInfra?: boolean;
 }

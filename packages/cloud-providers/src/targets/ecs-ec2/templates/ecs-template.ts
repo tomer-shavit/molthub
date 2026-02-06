@@ -87,6 +87,8 @@ export function buildEcsResources(options: EcsResourceOptions): CloudFormationRe
       `echo "ECS_CLUSTER=clawster-${botName}" >> /etc/ecs/ecs.config`,
       `echo "ECS_ENABLE_TASK_IAM_ROLE=true" >> /etc/ecs/ecs.config`,
       `echo "ECS_ENABLE_TASK_ENI=true" >> /etc/ecs/ecs.config`,
+      `echo "ECS_WARM_POOLS_CHECK=true" >> /etc/ecs/ecs.config`,
+      `echo "ECS_IMAGE_PULL_BEHAVIOR=prefer-cached" >> /etc/ecs/ecs.config`,
       ``,
       sysboxScript,
       ``,
@@ -170,6 +172,17 @@ export function buildEcsResources(options: EcsResourceOptions): CloudFormationRe
             PropagateAtLaunch: true,
           },
         ],
+      },
+    },
+
+    // ── Warm Pool (pre-initialized stopped instances for fast scale-out) ──
+    WarmPool: {
+      Type: "AWS::AutoScaling::WarmPool",
+      Properties: {
+        AutoScalingGroupName: { Ref: "AutoScalingGroup" },
+        PoolState: "Stopped",
+        MinSize: 0,
+        MaxGroupPreparedCapacity: 1,
       },
     },
 

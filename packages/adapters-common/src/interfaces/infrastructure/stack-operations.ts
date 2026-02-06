@@ -57,8 +57,12 @@ export interface IStackOperations {
   /**
    * Delete an infrastructure stack and all its resources.
    * @param name - Stack name or ID
+   * @param options - Optional deletion options (e.g. retainResources for recovery from failed deletes)
    */
-  deleteStack(name: string): Promise<void>;
+  deleteStack(
+    name: string,
+    options?: { retainResources?: string[] }
+  ): Promise<void>;
 
   /**
    * Describe an infrastructure stack.
