@@ -13,15 +13,6 @@
  */
 
 import {
-  createCloudFormationService,
-  createSecretsManagerService,
-  createCloudWatchLogsService,
-  CloudFormationService,
-  SecretsManagerService,
-  CloudWatchLogsService,
-} from "@clawster/adapters-aws";
-
-import {
   DeploymentTargetType,
   InstallOptions,
   InstallResult,
@@ -65,11 +56,13 @@ import type {
   IECSService,
   ISecretsManagerService,
   ICloudWatchLogsService,
+  IAutoScalingService,
   EcsEc2Services,
   EcsEc2TargetOptions,
-  EcsServiceDescription,
   StackEventInfo,
 } from "./ecs-ec2-services.interface";
+import { StackCleanupService } from "./ecs-ec2-stack-cleanup";
+import { createDefaultServices, InternalAutoScalingService } from "./ecs-ec2-service-adapters";
 import { generateProductionTemplate } from "./templates/production";
 import { generatePerBotTemplate } from "./per-bot/per-bot-template";
 import { ensureSharedInfra } from "./shared-infra/shared-infra-manager";
@@ -79,189 +72,6 @@ export type { EcsEc2TargetOptions, EcsEc2Services };
 
 const DEFAULT_CPU = 1024;
 const DEFAULT_MEMORY = 2048;
-
-/**
- * Internal ECS service wrapper that adapts the raw ECS SDK operations.
- * This provides the IECSService interface on top of direct SDK calls
- * for backward compatibility when no services are injected.
- */
-class InternalECSService implements IECSService {
-  private readonly client: import("@aws-sdk/client-ecs").ECSClient;
-
-  constructor(region: string, credentials: { accessKeyId: string; secretAccessKey: string }) {
-    // Dynamic import to avoid requiring the SDK at module load time
-    const { ECSClient } = require("@aws-sdk/client-ecs");
-    this.client = new ECSClient({ region, credentials });
-  }
-
-  async updateService(
-    cluster: string,
-    service: string,
-    options: { desiredCount?: number; forceNewDeployment?: boolean }
-  ): Promise<void> {
-    const { UpdateServiceCommand } = require("@aws-sdk/client-ecs");
-    await this.client.send(
-      new UpdateServiceCommand({
-        cluster,
-        service,
-        desiredCount: options.desiredCount,
-        forceNewDeployment: options.forceNewDeployment,
-      })
-    );
-  }
-
-  async describeService(
-    cluster: string,
-    service: string
-  ): Promise<EcsServiceDescription | undefined> {
-    const { DescribeServicesCommand } = require("@aws-sdk/client-ecs");
-    const result = await this.client.send(
-      new DescribeServicesCommand({
-        cluster,
-        services: [service],
-      })
-    ) as { services?: Array<{
-      status?: string;
-      runningCount?: number;
-      desiredCount?: number;
-      deployments?: Array<{ status?: string; runningCount?: number; desiredCount?: number }>;
-      events?: Array<{ createdAt?: Date; message?: string }>;
-    }> };
-
-    const svc = result.services?.[0];
-    if (!svc) {
-      return undefined;
-    }
-
-    return {
-      status: svc.status ?? "",
-      runningCount: svc.runningCount ?? 0,
-      desiredCount: svc.desiredCount ?? 0,
-      deployments: (svc.deployments ?? []).map((d: { status?: string; runningCount?: number; desiredCount?: number }) => ({
-        status: d.status ?? "",
-        runningCount: d.runningCount ?? 0,
-        desiredCount: d.desiredCount ?? 0,
-      })),
-      events: (svc.events ?? []).map((e: { createdAt?: Date; message?: string }) => ({
-        createdAt: e.createdAt,
-        message: e.message,
-      })),
-    };
-  }
-}
-
-/**
- * Wrapper that adapts CloudFormationService to ICloudFormationService interface.
- */
-class CloudFormationServiceAdapter implements ICloudFormationService {
-  constructor(private readonly service: CloudFormationService) {}
-
-  async createStack(
-    stackName: string,
-    templateBody: string,
-    options?: {
-      parameters?: Record<string, string>;
-      tags?: Record<string, string>;
-      capabilities?: ("CAPABILITY_IAM" | "CAPABILITY_NAMED_IAM" | "CAPABILITY_AUTO_EXPAND")[];
-    }
-  ): Promise<string> {
-    return this.service.createStack(stackName, templateBody, options);
-  }
-
-  async updateStack(
-    stackName: string,
-    templateBody: string,
-    options?: {
-      parameters?: Record<string, string>;
-      tags?: Record<string, string>;
-      capabilities?: ("CAPABILITY_IAM" | "CAPABILITY_NAMED_IAM" | "CAPABILITY_AUTO_EXPAND")[];
-    }
-  ): Promise<string> {
-    return this.service.updateStack(stackName, templateBody, options);
-  }
-
-  async deleteStack(stackName: string): Promise<void> {
-    return this.service.deleteStack(stackName);
-  }
-
-  async describeStack(stackName: string) {
-    return this.service.describeStack(stackName);
-  }
-
-  async waitForStackStatus(
-    stackName: string,
-    targetStatus: import("@clawster/adapters-aws").StackStatus,
-    options?: {
-      pollIntervalMs?: number;
-      timeoutMs?: number;
-      onEvent?: (event: StackEventInfo) => void;
-    }
-  ) {
-    return this.service.waitForStackStatus(stackName, targetStatus, options);
-  }
-
-  async getStackOutputs(stackName: string): Promise<Record<string, string>> {
-    return this.service.getStackOutputs(stackName);
-  }
-
-  async stackExists(stackName: string): Promise<boolean> {
-    return this.service.stackExists(stackName);
-  }
-}
-
-/**
- * Wrapper that adapts SecretsManagerService to ISecretsManagerService interface.
- */
-class SecretsManagerServiceAdapter implements ISecretsManagerService {
-  constructor(private readonly service: SecretsManagerService) {}
-
-  async createSecret(
-    name: string,
-    value: string,
-    tags?: Record<string, string>
-  ): Promise<string> {
-    return this.service.createSecret(name, value, tags);
-  }
-
-  async updateSecret(name: string, value: string): Promise<void> {
-    return this.service.updateSecret(name, value);
-  }
-
-  async deleteSecret(name: string, forceDelete?: boolean): Promise<void> {
-    return this.service.deleteSecret(name, forceDelete);
-  }
-
-  async secretExists(name: string): Promise<boolean> {
-    return this.service.secretExists(name);
-  }
-}
-
-/**
- * Wrapper that adapts CloudWatchLogsService to ICloudWatchLogsService interface.
- */
-class CloudWatchLogsServiceAdapter implements ICloudWatchLogsService {
-  constructor(private readonly service: CloudWatchLogsService) {}
-
-  async getLogStreams(logGroupName: string): Promise<string[]> {
-    return this.service.getLogStreams(logGroupName);
-  }
-
-  async getLogs(
-    logGroupName: string,
-    options?: {
-      startTime?: Date;
-      endTime?: Date;
-      limit?: number;
-      nextToken?: string;
-    }
-  ) {
-    return this.service.getLogs(logGroupName, options);
-  }
-
-  async deleteLogGroup(logGroupName: string): Promise<void> {
-    return this.service.deleteLogGroup(logGroupName);
-  }
-}
 
 /**
  * EcsEc2Target manages an OpenClaw gateway instance running
@@ -286,6 +96,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
   private readonly ecsService: IECSService;
   private readonly secretsManagerService: ISecretsManagerService;
   private readonly cloudWatchLogsService: ICloudWatchLogsService;
+  private readonly autoScalingService: IAutoScalingService;
 
   /** Derived resource names — set during install */
   private stackName = "";
@@ -331,31 +142,28 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
     }
 
     // Use provided services (for testing) or create via adapters-aws (production)
+    const credentials = {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+    };
+
     if (providedServices) {
       // Dependency injection path - use provided services
       this.cloudFormationService = providedServices.cloudFormation;
       this.ecsService = providedServices.ecs;
       this.secretsManagerService = providedServices.secretsManager;
       this.cloudWatchLogsService = providedServices.cloudWatchLogs;
+      this.autoScalingService = providedServices.autoScaling
+        ?? new InternalAutoScalingService(config.region, credentials);
     } else {
       // Factory path - create services from @clawster/adapters-aws
-      const credentials = {
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-      };
-      const region = config.region;
-
-      // Create adapters-aws services using factory functions and wrap them
-      this.cloudFormationService = new CloudFormationServiceAdapter(
-        createCloudFormationService(region, credentials)
-      );
-      this.ecsService = new InternalECSService(region, credentials);
-      this.secretsManagerService = new SecretsManagerServiceAdapter(
-        createSecretsManagerService(region)
-      );
-      this.cloudWatchLogsService = new CloudWatchLogsServiceAdapter(
-        createCloudWatchLogsService(region)
-      );
+      const defaults = createDefaultServices(config.region, credentials);
+      this.cloudFormationService = defaults.cloudFormation;
+      this.ecsService = defaults.ecs;
+      this.secretsManagerService = defaults.secretsManager;
+      this.cloudWatchLogsService = defaults.cloudWatchLogs;
+      this.autoScalingService = defaults.autoScaling
+        ?? new InternalAutoScalingService(config.region, credentials);
     }
   }
 
@@ -456,7 +264,33 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
       }
 
       // 4. Deploy CloudFormation stack (create or update if it already exists)
-      const stackExists = await this.cloudFormationService.stackExists(this.stackName);
+      let stackExists = await this.cloudFormationService.stackExists(this.stackName);
+
+      // If the stack exists, check if it's in a transitional delete/rollback state
+      if (stackExists) {
+        const stackInfo = await this.cloudFormationService.describeStack(this.stackName);
+        const status = stackInfo?.status ?? "";
+
+        if (status === "DELETE_IN_PROGRESS") {
+          this.log(`Stack ${this.stackName} is being deleted, waiting for completion...`);
+          await this.waitForStack("DELETE_COMPLETE");
+          stackExists = false;
+        } else if (status === "DELETE_FAILED") {
+          this.log(`Stack ${this.stackName} is in DELETE_FAILED state, force-deleting...`);
+          await this.createStackCleanupService().forceDeleteStack();
+          stackExists = false;
+        } else if (
+          status === "ROLLBACK_COMPLETE" ||
+          status === "CREATE_FAILED" ||
+          status === "UPDATE_FAILED" ||
+          status === "UPDATE_ROLLBACK_FAILED"
+        ) {
+          this.log(`Stack ${this.stackName} is in ${status} state, deleting before re-creation...`);
+          await this.cloudFormationService.deleteStack(this.stackName);
+          await this.waitForStack("DELETE_COMPLETE");
+          stackExists = false;
+        }
+      }
 
       if (stackExists) {
         this.log(`Stack ${this.stackName} exists, updating...`);
@@ -688,18 +522,42 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
 
   async destroy(): Promise<void> {
     this.log(`Starting destruction of ECS EC2 resources for ${this.stackName}`);
+    const cleanup = this.createStackCleanupService();
 
-    // 1. Delete CloudFormation stack (handles all CF-managed resources)
+    // 1. Clean up resources that block CF deletion (best effort)
+    try {
+      await cleanup.cleanupStuckResources();
+    } catch {
+      // Best effort — proceed with deletion anyway
+    }
+
+    // 2. Delete CloudFormation stack (handles all CF-managed resources)
     try {
       this.log("Deleting CloudFormation stack...");
       await this.cloudFormationService.deleteStack(this.stackName);
       await this.waitForStack("DELETE_COMPLETE");
       this.log("CloudFormation stack deleted");
     } catch {
-      this.log("CloudFormation stack not found or already deleted");
+      // If delete failed, try the force-delete path.
+      // Entire recovery block is wrapped so a failure here doesn't skip
+      // secret / log-group cleanup in steps 3-4.
+      try {
+        const stackInfo = await this.cloudFormationService.describeStack(this.stackName);
+        if (stackInfo && stackInfo.status === "DELETE_FAILED") {
+          this.log("Stack deletion failed, attempting force-delete...");
+          await cleanup.forceDeleteStack();
+          this.log("CloudFormation stack force-deleted");
+        } else if (!stackInfo || stackInfo.status === "DELETE_COMPLETE") {
+          this.log("CloudFormation stack deleted");
+        } else {
+          this.log(`CloudFormation stack in ${stackInfo.status} state after deletion attempt`, "stderr");
+        }
+      } catch {
+        this.log("CloudFormation stack could not be fully deleted", "stderr");
+      }
     }
 
-    // 2. Delete the Secrets Manager secret
+    // 3. Delete the Secrets Manager secret
     try {
       this.log("Deleting Secrets Manager secret...");
       await this.secretsManagerService.deleteSecret(this.secretName, true);
@@ -708,7 +566,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
       this.log("Secret not found or already deleted");
     }
 
-    // 3. Delete the CloudWatch log group
+    // 4. Delete the CloudWatch log group
     try {
       this.log("Deleting CloudWatch log group...");
       await this.cloudWatchLogsService.deleteLogGroup(this.logGroup);
@@ -723,6 +581,22 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
   // ------------------------------------------------------------------
   // Private helpers
   // ------------------------------------------------------------------
+
+  /**
+   * Create a StackCleanupService bound to this target's current state.
+   * Used for DELETE_FAILED recovery in install() and destroy().
+   */
+  private createStackCleanupService(): StackCleanupService {
+    return new StackCleanupService({
+      cloudFormation: this.cloudFormationService,
+      ecs: this.ecsService,
+      autoScaling: this.autoScalingService,
+      clusterName: this.clusterName,
+      stackName: this.stackName,
+      log: (msg, stream) => this.log(msg, stream),
+      waitForStack: (targetStatus) => this.waitForStack(targetStatus),
+    });
+  }
 
   private async ensureSecret(name: string, value: string): Promise<void> {
     const exists = await this.secretsManagerService.secretExists(name);

@@ -65,6 +65,14 @@ export interface UpdateOpenClawResult {
 export class ReconcilerService {
   private readonly logger = new Logger(ReconcilerService.name);
 
+  /**
+   * Tracks which instances are currently being reconciled to prevent concurrent runs.
+   * In-memory Set is sufficient because NestJS runs in a single event loop.
+   * On process restart the Set is empty, so the stuck detector (which marks RECONCILING
+   * instances as ERROR after 10 min) handles the crash-recovery case.
+   */
+  private readonly reconcileInProgress = new Set<string>();
+
   constructor(
     @Inject(BOT_INSTANCE_REPOSITORY) private readonly botInstanceRepo: IBotInstanceRepository,
     @Inject(PRISMA_CLIENT) private readonly prisma: PrismaClient,
@@ -84,6 +92,18 @@ export class ReconcilerService {
   // ------------------------------------------------------------------
 
   async reconcile(instanceId: string): Promise<ReconcileResult> {
+    // Guard: prevent concurrent reconciliation of the same instance
+    if (this.reconcileInProgress.has(instanceId)) {
+      this.logger.log(`Skipping reconciliation for ${instanceId} — already in progress`);
+      return {
+        success: true,
+        message: "Reconciliation already in progress for this instance",
+        changes: [],
+        durationMs: 0,
+      };
+    }
+
+    this.reconcileInProgress.add(instanceId);
     const startTime = Date.now();
     const changes: string[] = [];
 
@@ -269,6 +289,8 @@ export class ReconcilerService {
         changes,
         durationMs,
       };
+    } finally {
+      this.reconcileInProgress.delete(instanceId);
     }
   }
 

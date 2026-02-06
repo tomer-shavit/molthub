@@ -48,8 +48,13 @@ export interface ICloudFormationService {
 
   /**
    * Delete a CloudFormation stack.
+   * When retainResources is provided, those logical IDs are skipped during deletion
+   * (useful for recovering from DELETE_FAILED state).
    */
-  deleteStack(stackName: string): Promise<void>;
+  deleteStack(
+    stackName: string,
+    options?: { retainResources?: string[] }
+  ): Promise<void>;
 
   /**
    * Describe a CloudFormation stack.
@@ -104,6 +109,21 @@ export interface IECSService {
     cluster: string,
     service: string
   ): Promise<EcsServiceDescription | undefined>;
+
+  /**
+   * List container instance ARNs in an ECS cluster.
+   */
+  listContainerInstances(cluster: string): Promise<string[]>;
+
+  /**
+   * Deregister a container instance from an ECS cluster.
+   * Use force=true to deregister even if tasks are running.
+   */
+  deregisterContainerInstance(
+    cluster: string,
+    containerInstanceArn: string,
+    force?: boolean
+  ): Promise<void>;
 }
 
 /**
@@ -202,6 +222,18 @@ export interface LogEventInfo {
 }
 
 /**
+ * Interface for Auto Scaling operations used by EcsEc2Target.
+ * Used during stack cleanup to remove orphaned scale-in protection.
+ */
+export interface IAutoScalingService {
+  /**
+   * Remove scale-in protection from all protected instances in an ASG.
+   * No-op if the ASG doesn't exist or has no protected instances.
+   */
+  removeScaleInProtection(asgName: string): Promise<void>;
+}
+
+/**
  * Collection of AWS services required by EcsEc2Target.
  */
 export interface EcsEc2Services {
@@ -209,6 +241,8 @@ export interface EcsEc2Services {
   ecs: IECSService;
   secretsManager: ISecretsManagerService;
   cloudWatchLogs: ICloudWatchLogsService;
+  /** Optional — only needed for DELETE_FAILED stack recovery. Created internally if not provided. */
+  autoScaling?: IAutoScalingService;
 }
 
 /**
