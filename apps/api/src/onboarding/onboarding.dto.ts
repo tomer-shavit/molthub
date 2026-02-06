@@ -47,7 +47,7 @@ class DeploymentTargetDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(["simple", "production"])
+  @IsIn(["light", "standard", "performance"])
   tier?: string;
 
   @IsOptional()

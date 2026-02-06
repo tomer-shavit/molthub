@@ -32,7 +32,7 @@ export class BotInstancesLifecycleClient extends BaseHttpClient {
    * Get provisioning status for an instance.
    */
   getProvisioningStatus(instanceId: string): Promise<ProvisioningStatus> {
-    return this.get(`/bot-instances/${instanceId}/provisioning/status`);
+    return this.get(`/instances/${instanceId}/provisioning/status`);
   }
 }
 

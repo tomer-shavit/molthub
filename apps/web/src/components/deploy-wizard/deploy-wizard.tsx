@@ -38,6 +38,8 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
+  const [awsSavedCredentialId, setAwsSavedCredentialId] = useState<string | null>(null);
+  const [awsSaveForFuture, setAwsSaveForFuture] = useState<{ save: boolean; name: string }>({ save: false, name: "" });
   const [botName, setBotName] = useState("");
   const [channelConfigs] = useState<ChannelConfig[]>(DEFAULT_CHANNEL_CONFIGS);
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
@@ -75,6 +77,9 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
         const selectedAdapter = adapters.find((a) => a.type === selectedPlatform);
         if (!selectedAdapter) return false;
 
+        // If a saved credential is selected, manual fields aren't needed
+        if (awsSavedCredentialId) return true;
+
         // Check all required credentials have values
         const requiredCredentials = selectedAdapter.credentials.filter((c) => c.required);
         const allRequiredFilled = requiredCredentials.every((c) => {
@@ -87,7 +92,7 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
       case 1: return true; // model is optional
       default: return false;
     }
-  }, [currentStep, selectedPlatform, adapters, credentials]);
+  }, [currentStep, selectedPlatform, adapters, credentials, awsSavedCredentialId]);
 
   const handleNext = () => {
     if (currentStep < 3) {
@@ -112,9 +117,7 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
     setDeploying(true);
     setError(null);
     try {
-      // Save credentials for future use if requested (for future enhancement)
-      // Currently not implemented - placeholder for credential saving logic
-
+      // Save model API key for future use if requested
       if (modelConfig?.saveForFuture?.save && modelConfig.saveForFuture.name && modelConfig.apiKey) {
         try {
           await api.saveCredential({
@@ -130,10 +133,28 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
         }
       }
 
+      // Save AWS credentials for future use if requested
+      if (awsSaveForFuture.save && awsSaveForFuture.name && !awsSavedCredentialId) {
+        try {
+          await api.saveCredential({
+            name: awsSaveForFuture.name,
+            type: "aws-account",
+            credentials: {
+              accessKeyId: credentials.accessKeyId,
+              secretAccessKey: credentials.secretAccessKey,
+              region: credentials.region,
+            },
+          });
+        } catch {
+          // Save failure should not block deployment
+        }
+      }
+
       // Build deploymentTarget from selectedPlatform and credentials
       const deploymentTarget: { type: string; [key: string]: unknown } = {
         type: selectedPlatform,
-        ...credentials,
+        // Only spread manual credentials if not using a saved credential
+        ...(!awsSavedCredentialId ? credentials : {}),
       };
 
       // Include tier if selected
@@ -144,6 +165,7 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
       const result = await api.deployOnboarding({
         botName: botName.trim(),
         deploymentTarget,
+        ...(awsSavedCredentialId ? { awsCredentialId: awsSavedCredentialId } : {}),
         ...(modelConfig?.savedCredentialId ? { modelCredentialId: modelConfig.savedCredentialId } : {}),
         channels: channelConfigs.filter((ch) => ch.config.enabled !== false).length > 0
           ? channelConfigs
@@ -263,6 +285,10 @@ export function DeployWizard({ isFirstTime }: DeployWizardProps) {
             onCredentialsChange={handleCredentialsChange}
             selectedTier={selectedTier}
             onTierSelect={handleTierSelect}
+            savedCredentialId={awsSavedCredentialId}
+            onSavedCredentialSelect={setAwsSavedCredentialId}
+            saveForFuture={awsSaveForFuture}
+            onSaveForFutureChange={setAwsSaveForFuture}
           />
         )}
 

@@ -28,3 +28,6 @@ export {
   getSysboxInstallCommand,
   getSysboxRecommendedVersion,
 } from "./detect";
+
+// Installation
+export { attemptSysboxInstall, type SysboxInstallResult } from "./installer";

@@ -148,7 +148,7 @@ This step is automatic — the implementing agent triggers it as part of the nor
    - Test with realistic inputs, not just edge cases
    - If the feature has multiple steps, test the full flow
 
-4. **Test idempotent/re-run scenarios if applicable:**
+4. **Test idempotent/re-run scenarios if applicable:* then clean them up manually *
    - Can the command be run twice without errors?
    - Does it handle "already exists" cases gracefully?
 

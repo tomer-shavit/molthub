@@ -4,10 +4,7 @@
 import { NotFoundException } from "@nestjs/common";
 import { CredentialVaultService } from "../credential-vault.service";
 import { CredentialEncryptionService } from "../credential-encryption.service";
-import {
-  IConnectorRepository,
-  IAuditRepository,
-} from "@clawster/database";
+import { IConnectorRepository } from "@clawster/database";
 
 const mockConnectorRepo = {
   createConnector: jest.fn(),
@@ -27,20 +24,6 @@ const mockConnectorRepo = {
   updateBinding: jest.fn(),
   deleteBinding: jest.fn(),
   updateBindingHealth: jest.fn(),
-};
-
-const mockAuditRepo = {
-  create: jest.fn().mockResolvedValue({}),
-  findById: jest.fn(),
-  findMany: jest.fn(),
-  findByWorkspace: jest.fn(),
-  findByResource: jest.fn(),
-  findByActor: jest.fn(),
-  count: jest.fn(),
-  createMany: jest.fn(),
-  deleteOlderThan: jest.fn(),
-  groupByAction: jest.fn(),
-  groupByResourceType: jest.fn(),
 };
 
 const mockEncryption = {
@@ -68,7 +51,6 @@ describe("CredentialVaultService", () => {
   beforeEach(() => {
     service = new CredentialVaultService(
       mockConnectorRepo as unknown as IConnectorRepository,
-      mockAuditRepo as unknown as IAuditRepository,
       mockEncryption,
     );
     jest.clearAllMocks();
@@ -106,14 +88,6 @@ describe("CredentialVaultService", () => {
           name: "My AWS Creds",
           type: "aws-account",
           createdBy: "user-1",
-        }),
-      );
-      expect(mockAuditRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workspace: { connect: { id: "ws-1" } },
-          user: { connect: { id: "user-1" } },
-          action: "credential.save",
-          resourceId: "cred-1",
         }),
       );
       expect(result).toHaveProperty("id", "cred-1");
@@ -176,25 +150,17 @@ describe("CredentialVaultService", () => {
       });
       mockConnectorRepo.incrementUsageCount.mockResolvedValue({});
 
-      const result = await service.resolve("cred-1", "user-1", "ws-1");
+      const result = await service.resolve("cred-1", "ws-1");
 
       expect(mockEncryption.decrypt).toHaveBeenCalledWith(encryptedConfig);
       expect(mockConnectorRepo.incrementUsageCount).toHaveBeenCalledWith("cred-1");
-      expect(mockAuditRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workspace: { connect: { id: "ws-1" } },
-          user: { connect: { id: "user-1" } },
-          action: "credential.access",
-          resourceId: "cred-1",
-        }),
-      );
       expect(result).toEqual(credentials);
     });
 
     it("throws NotFoundException for missing credential", async () => {
       mockConnectorRepo.findConnectorById.mockResolvedValue(null);
 
-      await expect(service.resolve("non-existent", "user-1", "ws-1")).rejects.toThrow(
+      await expect(service.resolve("non-existent", "ws-1")).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -208,14 +174,14 @@ describe("CredentialVaultService", () => {
         workspaceId: "ws-OTHER",
       });
 
-      await expect(service.resolve("cred-1", "user-1", "ws-1")).rejects.toThrow(
+      await expect(service.resolve("cred-1", "ws-1")).rejects.toThrow(
         NotFoundException,
       );
     });
   });
 
   describe("delete", () => {
-    it("removes credential and creates audit event", async () => {
+    it("removes credential", async () => {
       mockConnectorRepo.findConnectorById.mockResolvedValue({
         id: "cred-1",
         name: "My Cred",
@@ -224,17 +190,9 @@ describe("CredentialVaultService", () => {
       });
       mockConnectorRepo.deleteConnector.mockResolvedValue(undefined);
 
-      await service.delete("cred-1", "user-1", "ws-1");
+      await service.delete("cred-1", "ws-1");
 
       expect(mockConnectorRepo.deleteConnector).toHaveBeenCalledWith("cred-1");
-      expect(mockAuditRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workspace: { connect: { id: "ws-1" } },
-          user: { connect: { id: "user-1" } },
-          action: "credential.delete",
-          resourceId: "cred-1",
-        }),
-      );
     });
   });
 });

@@ -2,8 +2,6 @@ import { Injectable, Inject, Logger, NotFoundException, BadRequestException } fr
 import {
   CONNECTOR_REPOSITORY,
   IConnectorRepository,
-  AUDIT_REPOSITORY,
-  IAuditRepository,
 } from "@clawster/database";
 import { CredentialEncryptionService } from "./credential-encryption.service";
 import { SaveCredentialDto, ListSavedCredentialsQueryDto } from "./credential-vault.dto";
@@ -14,7 +12,6 @@ export class CredentialVaultService {
 
   constructor(
     @Inject(CONNECTOR_REPOSITORY) private readonly connectorRepo: IConnectorRepository,
-    @Inject(AUDIT_REPOSITORY) private readonly auditRepo: IAuditRepository,
     private readonly encryption: CredentialEncryptionService,
   ) {}
 
@@ -35,16 +32,6 @@ export class CredentialVaultService {
       isShared: true,
       tags: JSON.stringify({ credentialVault: true }),
       createdBy: userId,
-    });
-
-    // Create audit event
-    await this.auditRepo.create({
-      workspace: { connect: { id: dto.workspaceId } },
-      user: { connect: { id: userId } },
-      action: "credential.save",
-      resourceType: "IntegrationConnector",
-      resourceId: connector.id,
-      metadata: JSON.stringify({ type: dto.type, name: dto.name }),
     });
 
     this.logger.debug(`Saved ${dto.type} credential "${dto.name}" (${connector.id})`);
@@ -92,7 +79,7 @@ export class CredentialVaultService {
   }
 
   /** Resolve credentials for internal use only (returns plaintext). Never expose via HTTP. */
-  async resolve(id: string, userId: string, workspaceId: string): Promise<Record<string, unknown>> {
+  async resolve(id: string, workspaceId: string): Promise<Record<string, unknown>> {
     const connector = await this.connectorRepo.findConnectorById(id);
 
     if (!connector || connector.workspaceId !== workspaceId) {
@@ -102,21 +89,11 @@ export class CredentialVaultService {
     // Increment usage
     await this.connectorRepo.incrementUsageCount(id);
 
-    // Audit the access
-    await this.auditRepo.create({
-      workspace: { connect: { id: connector.workspaceId } },
-      user: { connect: { id: userId } },
-      action: "credential.access",
-      resourceType: "IntegrationConnector",
-      resourceId: id,
-      metadata: JSON.stringify({ type: connector.type, name: connector.name }),
-    });
-
     return this.encryption.decrypt(connector.config);
   }
 
   /** Delete a saved credential */
-  async delete(id: string, userId: string, workspaceId: string): Promise<void> {
+  async delete(id: string, workspaceId: string): Promise<void> {
     const connector = await this.connectorRepo.findConnectorById(id);
 
     if (!connector || connector.workspaceId !== workspaceId) {
@@ -124,15 +101,6 @@ export class CredentialVaultService {
     }
 
     await this.connectorRepo.deleteConnector(id);
-
-    await this.auditRepo.create({
-      workspace: { connect: { id: connector.workspaceId } },
-      user: { connect: { id: userId } },
-      action: "credential.delete",
-      resourceType: "IntegrationConnector",
-      resourceId: id,
-      metadata: JSON.stringify({ type: connector.type, name: connector.name }),
-    });
 
     this.logger.debug(`Deleted saved credential "${connector.name}" (${id})`);
   }

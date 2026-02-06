@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useProvisioningEvents } from "@/hooks/use-provisioning-events";
 import { ProvisioningScreen } from "@/components/provisioning/provisioning-screen";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,7 +24,6 @@ interface StepDeployingProps {
 }
 
 export function StepDeploying({ instanceId, botName, onRetryDeploy }: StepDeployingProps) {
-  const { progress } = useProvisioningEvents(instanceId);
   const [pollError, setPollError] = useState<string | null>(null);
   const [pollStatus, setPollStatus] = useState<string | null>(null);
   const [isSlow, setIsSlow] = useState(false);
@@ -67,9 +65,9 @@ export function StepDeploying({ instanceId, botName, onRetryDeploy }: StepDeploy
     return () => clearInterval(interval);
   }, [instanceId]);
 
-  const isComplete = progress?.status === "completed";
-  const isError = progress?.status === "error" || pollStatus === "ERROR";
-  const isTimeout = progress?.status === "timeout";
+  const isComplete = pollStatus === "RUNNING";
+  const isError = pollStatus === "ERROR";
+  const isTimeout = pollStatus === "TIMEOUT";
 
   if (isComplete) {
     return (

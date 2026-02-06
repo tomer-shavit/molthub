@@ -1,12 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Monitor, Cloud, Terminal, Server } from "lucide-react";
+import { Monitor, Cloud, Terminal, Server, CheckCircle } from "lucide-react";
 import type { AdapterMetadata } from "@/lib/api";
 import { GenericCredentialForm } from "./generic-credential-form";
 import { TierSelector } from "./tier-selector";
 import { CapabilityBadges } from "./capability-badges";
+import { SavedCredentialSelector } from "./saved-credential-selector";
+import { SaveCredentialCheckbox } from "./save-credential-checkbox";
+
+/** Map adapter types to their credential vault type. */
+const ADAPTER_VAULT_TYPE: Record<string, "aws-account"> = {
+  "ecs-ec2": "aws-account",
+};
 
 export interface StepPlatformProps {
   adapters: AdapterMetadata[];
@@ -16,6 +24,10 @@ export interface StepPlatformProps {
   onCredentialsChange: (credentials: Record<string, string>) => void;
   selectedTier: string | null;
   onTierSelect: (tier: string) => void;
+  savedCredentialId: string | null;
+  onSavedCredentialSelect: (id: string | null) => void;
+  saveForFuture: { save: boolean; name: string };
+  onSaveForFutureChange: (value: { save: boolean; name: string }) => void;
 }
 
 function getIconForAdapter(icon: string): React.ReactNode {
@@ -41,8 +53,14 @@ export function StepPlatform({
   onCredentialsChange,
   selectedTier,
   onTierSelect,
+  savedCredentialId,
+  onSavedCredentialSelect,
+  saveForFuture,
+  onSaveForFutureChange,
 }: StepPlatformProps) {
   const selectedAdapter = adapters.find((a) => a.type === selectedPlatform);
+  const vaultType = selectedPlatform ? ADAPTER_VAULT_TYPE[selectedPlatform] : undefined;
+  const [useManual, setUseManual] = useState(!savedCredentialId);
 
   return (
     <div className="space-y-6">
@@ -100,7 +118,43 @@ export function StepPlatform({
         <div className="space-y-6">
           <CapabilityBadges capabilities={selectedAdapter.capabilities} />
 
-          {selectedAdapter.credentials.length > 0 && (
+          {selectedAdapter.credentials.length > 0 && vaultType && (
+            <>
+              <SavedCredentialSelector
+                type={vaultType}
+                selectedId={savedCredentialId}
+                onSelect={(id) => {
+                  onSavedCredentialSelect(id);
+                  setUseManual(false);
+                }}
+                onManual={() => {
+                  onSavedCredentialSelect(null);
+                  setUseManual(true);
+                }}
+              />
+
+              {useManual ? (
+                <>
+                  <GenericCredentialForm
+                    credentials={selectedAdapter.credentials}
+                    values={credentials}
+                    onChange={onCredentialsChange}
+                  />
+                  <SaveCredentialCheckbox
+                    value={saveForFuture}
+                    onChange={onSaveForFutureChange}
+                  />
+                </>
+              ) : savedCredentialId ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-md p-3">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span>Using saved AWS credentials.</span>
+                </div>
+              ) : null}
+            </>
+          )}
+
+          {selectedAdapter.credentials.length > 0 && !vaultType && (
             <GenericCredentialForm
               credentials={selectedAdapter.credentials}
               values={credentials}

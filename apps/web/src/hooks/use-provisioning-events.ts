@@ -67,6 +67,9 @@ export function useProvisioningEvents(
   const mountedRef = useRef(true);
 
   // ---- Polling fallback ----
+  const pollFailCountRef = useRef(0);
+  const MAX_POLL_FAILURES = 10;
+
   const startPolling = useCallback(() => {
     if (!instanceId || pollIntervalRef.current) return;
 
@@ -74,9 +77,9 @@ export function useProvisioningEvents(
       try {
         const res = await api.getProvisioningStatus(instanceId);
         if (!mountedRef.current) return;
+        pollFailCountRef.current = 0;
         if (res && res.status !== "unknown") {
           setProgress(res as unknown as ProvisioningProgress);
-          // Stop polling once terminal
           if (
             res.status === "completed" ||
             res.status === "error" ||
@@ -89,7 +92,21 @@ export function useProvisioningEvents(
           }
         }
       } catch {
-        // Polling error — continue silently
+        pollFailCountRef.current++;
+        if (pollFailCountRef.current >= MAX_POLL_FAILURES && mountedRef.current) {
+          setProgress({
+            instanceId: instanceId,
+            status: "error",
+            currentStep: "",
+            steps: [],
+            startedAt: new Date().toISOString(),
+            error: "Lost connection to provisioning service. Check API logs and try again.",
+          });
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+        }
       }
     };
 

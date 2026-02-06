@@ -78,12 +78,15 @@ export class ProvisioningEventsGateway
       this.socketSubscriptions.set(client.id, subs);
     }
     subs.add(instanceId);
-    client.join(`provisioning:${instanceId}`);
 
+    // Send buffer BEFORE joining the room to avoid duplicates:
+    // joining first would cause real-time room emissions to race with the buffer.
     const recentLogs = this.recentLogsProvider?.(instanceId) ?? [];
     if (recentLogs.length > 0) {
       client.emit("provisioning-logs-buffer", recentLogs);
     }
+
+    client.join(`provisioning:${instanceId}`);
 
     return { success: true };
   }

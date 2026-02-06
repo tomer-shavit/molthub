@@ -77,9 +77,9 @@ export interface SandboxConfig {
      */
     memory?: string;
     /**
-     * CPU limit for sandbox containers (e.g., "1")
+     * CPU limit for sandbox containers (e.g., 1)
      */
-    cpus?: string;
+    cpus?: number;
     /**
      * Mount root filesystem as read-only.
      * Prevents persistence of malicious payloads.
@@ -197,7 +197,7 @@ export function getDreamSandboxConfig(
       network: "none",
       runtime,
       memory: "512m",
-      cpus: "1",
+      cpus: 1,
       readOnlyRootfs: true,
       noNewPrivileges: true,
       dropCapabilities: ["ALL"],

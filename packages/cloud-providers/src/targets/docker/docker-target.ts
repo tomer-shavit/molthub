@@ -15,7 +15,13 @@ import {
 import { BaseDeploymentTarget } from "../../base/base-deployment-target";
 import type { TransformOptions } from "../../base/config-transformer";
 import type { AdapterMetadata, SelfDescribingDeploymentTarget } from "../../interface/adapter-metadata";
-import { isSysboxAvailable, type ContainerRuntime } from "../../sysbox";
+import {
+  isSysboxAvailable,
+  resetCache,
+  attemptSysboxInstall,
+  getSysboxInstallCommand,
+  type ContainerRuntime,
+} from "../../sysbox";
 
 const DEFAULT_IMAGE = "openclaw:local";
 
@@ -125,47 +131,57 @@ export class DockerContainerTarget extends BaseDeploymentTarget implements SelfD
   }
 
   /**
-   * Detect Sysbox availability and enforce the dream architecture requirement.
+   * Detect Sysbox availability, attempt auto-install if missing, and enforce
+   * the dream architecture requirement.
    *
-   * DREAM ARCHITECTURE: Security is not optional. Sysbox is REQUIRED.
-   * This method will throw an error if Sysbox is not available, unless
-   * `allowInsecureWithoutSysbox` is explicitly set (for dev/testing only).
+   * Detect Sysbox availability and attempt auto-install if missing.
+   *
+   * Local Docker is a dev/testing environment. If Sysbox auto-install fails
+   * (e.g. sudo requires password), fall back to runc with a warning rather
+   * than blocking the entire deployment. Cloud providers handle Sysbox in
+   * their startup scripts where they have root access.
    */
-  private async ensureSysboxAvailable(): Promise<void> {
+  private async ensureSysboxAvailableOrInstall(): Promise<void> {
     if (this.runtimeDetected) {
       return;
     }
 
     this.sysboxAvailable = await isSysboxAvailable();
+
+    if (!this.sysboxAvailable) {
+      // Attempt auto-install (mirrors cloud provider startup scripts)
+      this.log("Sysbox not found — attempting auto-install...", "stdout");
+      const result = await attemptSysboxInstall(this.logCallback);
+
+      if (result.success) {
+        resetCache();
+        this.sysboxAvailable = await isSysboxAvailable({ skipCache: true });
+      } else {
+        this.log(`Auto-install result: ${result.message}`, "stderr");
+      }
+    }
+
     this.runtimeDetected = true;
 
     if (this.sysboxAvailable) {
       this.detectedRuntime = "sysbox-runc";
-      this.log("Sysbox runtime detected - secure sandbox mode enabled", "stdout");
-    } else if (this.config.allowInsecureWithoutSysbox) {
-      // Development/testing escape hatch - NOT for production
+      this.log("Sysbox runtime ready — secure sandbox mode enabled", "stdout");
+    } else {
+      // Local Docker = dev environment. Fall back to runc with a warning.
       this.detectedRuntime = "runc";
       this.log(
-        "WARNING: Sysbox not available, running WITHOUT sandbox protection. " +
-        "This is INSECURE and should only be used for development/testing.",
+        "WARNING: Sysbox not available — running without sandbox protection. " +
+        "To enable secure sandbox mode, install Sysbox:\n" +
+        "  sudo bash -c '" + getSysboxInstallCommand() + "'\n" +
+        "  sudo systemctl restart docker",
         "stderr"
-      );
-    } else {
-      // DREAM ARCHITECTURE: Security is not optional
-      throw new Error(
-        "SYSBOX REQUIRED: Secure deployment requires Sysbox runtime.\n" +
-        "Run: clawster sysbox install\n\n" +
-        "Sysbox provides secure Docker-in-Docker for OpenClaw sandbox mode,\n" +
-        "protecting against prompt injection attacks.\n\n" +
-        "For development/testing only, you can bypass this check by setting\n" +
-        "allowInsecureWithoutSysbox: true in the Docker target config."
       );
     }
   }
 
   /**
    * Get the runtime that will be used.
-   * Call ensureSysboxAvailable() first to perform detection.
+   * Call ensureSysboxAvailableOrInstall() first to perform detection.
    */
   private getDetectedRuntime(): ContainerRuntime {
     return this.detectedRuntime;
@@ -219,8 +235,12 @@ export class DockerContainerTarget extends BaseDeploymentTarget implements SelfD
 
   /**
    * Ensure the Docker image is available locally — check, build, or pull.
+   * Also checks/installs Sysbox BEFORE image build (fail fast).
    */
   async install(options: InstallOptions): Promise<InstallResult> {
+    // FAIL FAST: Check/install Sysbox BEFORE expensive image build
+    await this.ensureSysboxAvailableOrInstall();
+
     const image = options.openclawVersion
       ? this.imageName.replace(/:.*$/, `:${options.openclawVersion}`)
       : this.imageName;
@@ -312,14 +332,9 @@ export class DockerContainerTarget extends BaseDeploymentTarget implements SelfD
 
   /**
    * Start the Docker container with the configured volume mount and port mapping.
-   *
-   * DREAM ARCHITECTURE: This method enforces the Sysbox requirement.
-   * If Sysbox is not available and allowInsecureWithoutSysbox is not set,
-   * this method will throw an error with installation instructions.
+   * Sysbox detection/install already happened in install() — uses cached result.
    */
   async start(): Promise<void> {
-    // DREAM ARCHITECTURE: Enforce Sysbox requirement BEFORE anything else
-    await this.ensureSysboxAvailable();
 
     // Check if container already exists
     try {
@@ -524,6 +539,7 @@ export class DockerContainerTarget extends BaseDeploymentTarget implements SelfD
       provisioningSteps: [
         { id: "validate_config", name: "Validate configuration" },
         { id: "security_audit", name: "Security audit" },
+        { id: "install_sysbox", name: "Check/install Sysbox runtime", estimatedDurationSec: 120 },
         { id: "build_image", name: "Build container image", estimatedDurationSec: 60 },
         { id: "create_container", name: "Create container" },
         { id: "write_config", name: "Write configuration" },

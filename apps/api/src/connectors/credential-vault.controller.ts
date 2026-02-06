@@ -56,9 +56,8 @@ export class CredentialVaultController {
 
   @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param("id") id: string, @Request() req: any) {
-    const userId = this.getUserId(req);
+  async remove(@Param("id") id: string) {
     const workspaceId = await this.resolveWorkspaceId();
-    await this.vaultService.delete(id, userId, workspaceId);
+    await this.vaultService.delete(id, workspaceId);
   }
 }

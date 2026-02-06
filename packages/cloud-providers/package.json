@@ -12,22 +12,20 @@
     "test:integration": "jest --config jest.integration.config.js --no-cache --runInBand"
   },
   "dependencies": {
+    "@aws-sdk/client-auto-scaling": "^3.984.0",
     "@clawster/core": "workspace:*"
   },
   "peerDependencies": {
-    "@clawster/adapters-aws": "workspace:*",
-    "@clawster/adapters-azure": "workspace:*",
-    "@clawster/adapters-gcp": "workspace:*",
     "@aws-sdk/client-cloudformation": "^3.490.0",
-    "@aws-sdk/client-ecr": "^3.490.0",
-    "@aws-sdk/client-ecs": "^3.490.0",
-    "@aws-sdk/client-secrets-manager": "^3.490.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.490.0",
     "@aws-sdk/client-ec2": "^3.490.0",
-    "@aws-sdk/client-iam": "^3.490.0",
+    "@aws-sdk/client-ecr": "^3.490.0",
+    "@aws-sdk/client-ecs": "^3.490.0",
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.490.0",
-    "@aws-sdk/client-sts": "^3.490.0",
+    "@aws-sdk/client-iam": "^3.490.0",
     "@aws-sdk/client-resource-groups-tagging-api": "^3.490.0",
+    "@aws-sdk/client-secrets-manager": "^3.490.0",
+    "@aws-sdk/client-sts": "^3.490.0",
     "@azure/arm-compute": "^21.0.0",
     "@azure/arm-containerinstance": "^9.1.0",
     "@azure/arm-network": "^33.0.0",
@@ -35,36 +33,87 @@
     "@azure/identity": "^4.0.0",
     "@azure/keyvault-secrets": "^4.7.0",
     "@azure/monitor-query": "^1.1.0",
+    "@clawster/adapters-aws": "workspace:*",
+    "@clawster/adapters-azure": "workspace:*",
+    "@clawster/adapters-gcp": "workspace:*",
     "@google-cloud/compute": "^4.0.0",
     "@google-cloud/logging": "^11.0.0",
     "@google-cloud/run": "^1.2.0",
     "@google-cloud/secret-manager": "^5.0.0"
   },
   "peerDependenciesMeta": {
-    "@clawster/adapters-aws": { "optional": true },
-    "@clawster/adapters-azure": { "optional": true },
-    "@clawster/adapters-gcp": { "optional": true },
-    "@aws-sdk/client-cloudformation": { "optional": true },
-    "@aws-sdk/client-ecr": { "optional": true },
-    "@aws-sdk/client-ecs": { "optional": true },
-    "@aws-sdk/client-secrets-manager": { "optional": true },
-    "@aws-sdk/client-cloudwatch-logs": { "optional": true },
-    "@aws-sdk/client-ec2": { "optional": true },
-    "@aws-sdk/client-iam": { "optional": true },
-    "@aws-sdk/client-elastic-load-balancing-v2": { "optional": true },
-    "@aws-sdk/client-sts": { "optional": true },
-    "@aws-sdk/client-resource-groups-tagging-api": { "optional": true },
-    "@azure/arm-compute": { "optional": true },
-    "@azure/arm-containerinstance": { "optional": true },
-    "@azure/arm-network": { "optional": true },
-    "@azure/arm-resources": { "optional": true },
-    "@azure/identity": { "optional": true },
-    "@azure/keyvault-secrets": { "optional": true },
-    "@azure/monitor-query": { "optional": true },
-    "@google-cloud/compute": { "optional": true },
-    "@google-cloud/logging": { "optional": true },
-    "@google-cloud/run": { "optional": true },
-    "@google-cloud/secret-manager": { "optional": true }
+    "@clawster/adapters-aws": {
+      "optional": true
+    },
+    "@clawster/adapters-azure": {
+      "optional": true
+    },
+    "@clawster/adapters-gcp": {
+      "optional": true
+    },
+    "@aws-sdk/client-cloudformation": {
+      "optional": true
+    },
+    "@aws-sdk/client-ecr": {
+      "optional": true
+    },
+    "@aws-sdk/client-ecs": {
+      "optional": true
+    },
+    "@aws-sdk/client-secrets-manager": {
+      "optional": true
+    },
+    "@aws-sdk/client-cloudwatch-logs": {
+      "optional": true
+    },
+    "@aws-sdk/client-ec2": {
+      "optional": true
+    },
+    "@aws-sdk/client-iam": {
+      "optional": true
+    },
+    "@aws-sdk/client-elastic-load-balancing-v2": {
+      "optional": true
+    },
+    "@aws-sdk/client-sts": {
+      "optional": true
+    },
+    "@aws-sdk/client-resource-groups-tagging-api": {
+      "optional": true
+    },
+    "@azure/arm-compute": {
+      "optional": true
+    },
+    "@azure/arm-containerinstance": {
+      "optional": true
+    },
+    "@azure/arm-network": {
+      "optional": true
+    },
+    "@azure/arm-resources": {
+      "optional": true
+    },
+    "@azure/identity": {
+      "optional": true
+    },
+    "@azure/keyvault-secrets": {
+      "optional": true
+    },
+    "@azure/monitor-query": {
+      "optional": true
+    },
+    "@google-cloud/compute": {
+      "optional": true
+    },
+    "@google-cloud/logging": {
+      "optional": true
+    },
+    "@google-cloud/run": {
+      "optional": true
+    },
+    "@google-cloud/secret-manager": {
+      "optional": true
+    }
   },
   "optionalDependencies": {
     "axios": "^1.6.0"

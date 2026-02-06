@@ -172,9 +172,32 @@ export class OnboardingService {
       search: dto.botName,
     });
     if (existing && existing.name === dto.botName) {
-      throw new BadRequestException(
-        `A bot named "${dto.botName}" already exists in this workspace`,
-      );
+      const STALE_THRESHOLD_MS = 15 * 60 * 1000;
+      const isStaleCreating =
+        existing.status === "CREATING" &&
+        Date.now() - new Date(existing.updatedAt).getTime() > STALE_THRESHOLD_MS;
+      const isFailed = existing.status === "ERROR" || isStaleCreating;
+
+      if (isFailed) {
+        this.logger.warn(
+          `Cleaning up stale bot "${dto.botName}" (status: ${existing.status}) before re-creation`,
+        );
+        try {
+          await this.reconciler.delete(existing.id);
+        } catch (err) {
+          this.logger.warn(
+            `Infra cleanup failed for stale bot, falling back to DB-only cleanup: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          await this.cleanupFailedDeployment(
+            existing.id,
+            existing.deploymentTargetId ?? "",
+          );
+        }
+      } else {
+        throw new BadRequestException(
+          `A bot named "${dto.botName}" already exists in this workspace`,
+        );
+      }
     }
 
     // 3. Get or create fleet
