@@ -18,7 +18,6 @@ import {
   Target,
   MessageSquare,
   Plus,
-  Route,
   Bell,
   Sparkles,
 } from "lucide-react";
@@ -38,7 +37,6 @@ const allNavItems: NavItem[] = [
   { label: "Fleets", href: "/fleets", icon: <Layers className="w-4 h-4" /> },
   { label: "Bots", href: "/bots", icon: <Bot className="w-4 h-4" /> },
   { label: "Personas", href: "/persona-templates", icon: <Sparkles className="w-4 h-4" /> },
-  { label: "Routing Rules", href: "/routing", icon: <Route className="w-4 h-4" /> },
   { label: "Channels", href: "/channels", icon: <MessageSquare className="w-4 h-4" /> },
   { label: "Alerts", href: "/alerts", icon: <AlertTriangle className="w-4 h-4" /> },
   { label: "Notifications", href: "/notifications", icon: <Bell className="w-4 h-4" /> },

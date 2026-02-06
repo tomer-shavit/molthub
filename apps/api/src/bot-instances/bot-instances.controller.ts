@@ -26,14 +26,11 @@ import {
 } from "./bot-instances.dto";
 import { CompareBotsDto, BulkActionDto, BulkActionResultItem } from "./bot-compare.dto";
 import { OpenClawHealthService } from "../health/openclaw-health.service";
-import { BotDelegationService } from "../bot-routing/bot-delegation.service";
-
 @Controller("bot-instances")
 export class BotInstancesController {
   constructor(
     private readonly botInstancesService: BotInstancesService,
     private readonly openClawHealthService: OpenClawHealthService,
-    private readonly botDelegationService: BotDelegationService,
   ) {}
 
   @Post()
@@ -121,19 +118,6 @@ export class BotInstancesController {
 
   @Post(":id/chat")
   async chat(@Param("id") id: string, @Body() dto: ChatMessageDto) {
-    // Check routing rules before sending to the source bot.
-    // If a rule matches, delegate to the target bot instead.
-    const delegation = await this.botDelegationService.attemptDelegation(
-      id,
-      dto.message,
-      dto.sessionId,
-    );
-
-    if (delegation) {
-      return delegation;
-    }
-
-    // No delegation — handle normally via the source bot
     return this.botInstancesService.chat(id, dto.message, dto.sessionId);
   }
 

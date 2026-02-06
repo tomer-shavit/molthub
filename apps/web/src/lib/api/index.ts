@@ -49,7 +49,6 @@
  * - `pairingsClient` - Device pairing management
  * - `policiesClient` - Policy packs
  * - `profilesClient` - Profile CRUD
- * - `routingClient` - Bot routing rules, delegation
  * - `slosClient` - SLO management
  * - `teamsClient` - Bot team members
  * - `templatesClient` - Template CRUD
@@ -104,8 +103,6 @@ export {
   PoliciesClient,
   profilesClient,
   ProfilesClient,
-  routingClient,
-  RoutingClient,
   slosClient,
   SlosClient,
   teamsClient,

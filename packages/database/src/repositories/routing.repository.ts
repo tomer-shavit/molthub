@@ -1,14 +1,11 @@
 import {
   PrismaClient,
-  BotRoutingRule,
   BotTeamMember,
   A2aApiKey,
   Prisma,
 } from "@prisma/client";
 import {
   IRoutingRepository,
-  BotRoutingRuleFilters,
-  BotRoutingRuleWithRelations,
   BotTeamMemberFilters,
   BotTeamMemberWithRelations,
   A2aApiKeyFilters,
@@ -31,32 +28,6 @@ export class PrismaRoutingRepository implements IRoutingRepository {
   // ============================================
   // WHERE CLAUSE BUILDERS
   // ============================================
-
-  private buildRoutingRuleWhereClause(
-    filters?: BotRoutingRuleFilters
-  ): Prisma.BotRoutingRuleWhereInput {
-    if (!filters) return {};
-
-    const where: Prisma.BotRoutingRuleWhereInput = {};
-
-    if (filters.workspaceId) {
-      where.workspaceId = filters.workspaceId;
-    }
-
-    if (filters.sourceBotId) {
-      where.sourceBotId = filters.sourceBotId;
-    }
-
-    if (filters.targetBotId) {
-      where.targetBotId = filters.targetBotId;
-    }
-
-    if (filters.enabled !== undefined) {
-      where.enabled = filters.enabled;
-    }
-
-    return where;
-  }
 
   private buildTeamMemberWhereClause(
     filters?: BotTeamMemberFilters
@@ -100,167 +71,6 @@ export class PrismaRoutingRepository implements IRoutingRepository {
     }
 
     return where;
-  }
-
-  // ============================================
-  // BOT ROUTING RULE METHODS
-  // ============================================
-
-  async findRoutingRuleById(
-    id: string,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRuleWithRelations | null> {
-    const client = this.getClient(tx);
-    return client.botRoutingRule.findUnique({
-      where: { id },
-      include: {
-        sourceBot: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        targetBot: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-  }
-
-  async findManyRoutingRules(
-    filters?: BotRoutingRuleFilters,
-    pagination?: PaginationOptions,
-    tx?: TransactionClient
-  ): Promise<PaginatedResult<BotRoutingRule>> {
-    const client = this.getClient(tx);
-    const where = this.buildRoutingRuleWhereClause(filters);
-    const page = pagination?.page ?? 1;
-    const limit = pagination?.limit ?? 20;
-    const skip = (page - 1) * limit;
-
-    const [data, total] = await Promise.all([
-      client.botRoutingRule.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-      }),
-      client.botRoutingRule.count({ where }),
-    ]);
-
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
-  }
-
-  async findRoutingRulesByWorkspace(
-    workspaceId: string,
-    filters?: Omit<BotRoutingRuleFilters, "workspaceId">,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRuleWithRelations[]> {
-    const client = this.getClient(tx);
-    const where = this.buildRoutingRuleWhereClause({ ...filters, workspaceId });
-
-    return client.botRoutingRule.findMany({
-      where,
-      include: {
-        sourceBot: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        targetBot: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-    });
-  }
-
-  async findRoutingRulesBySource(
-    sourceBotId: string,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRuleWithRelations[]> {
-    const client = this.getClient(tx);
-    return client.botRoutingRule.findMany({
-      where: { sourceBotId, enabled: true },
-      include: {
-        sourceBot: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        targetBot: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: { priority: "desc" },
-    });
-  }
-
-  async findRoutingRulesByTarget(
-    targetBotId: string,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRuleWithRelations[]> {
-    const client = this.getClient(tx);
-    return client.botRoutingRule.findMany({
-      where: { targetBotId, enabled: true },
-      include: {
-        sourceBot: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        targetBot: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: { priority: "desc" },
-    });
-  }
-
-  async createRoutingRule(
-    data: Prisma.BotRoutingRuleCreateInput,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRule> {
-    const client = this.getClient(tx);
-    return client.botRoutingRule.create({ data });
-  }
-
-  async updateRoutingRule(
-    id: string,
-    data: Prisma.BotRoutingRuleUpdateInput,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRule> {
-    const client = this.getClient(tx);
-    return client.botRoutingRule.update({
-      where: { id },
-      data,
-    });
-  }
-
-  async deleteRoutingRule(id: string, tx?: TransactionClient): Promise<void> {
-    const client = this.getClient(tx);
-    await client.botRoutingRule.delete({ where: { id } });
   }
 
   // ============================================

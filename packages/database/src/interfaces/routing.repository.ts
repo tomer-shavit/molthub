@@ -1,32 +1,9 @@
 import {
-  BotRoutingRule,
   BotTeamMember,
   A2aApiKey,
   Prisma,
 } from "@prisma/client";
 import { PaginationOptions, PaginatedResult, TransactionClient } from "./base";
-
-// ============================================
-// BOT ROUTING RULE TYPES
-// ============================================
-
-export interface BotRoutingRuleFilters {
-  workspaceId?: string;
-  sourceBotId?: string;
-  targetBotId?: string;
-  enabled?: boolean;
-}
-
-export interface BotRoutingRuleWithRelations extends BotRoutingRule {
-  sourceBot?: {
-    id: string;
-    name: string;
-  } | null;
-  targetBot?: {
-    id: string;
-    name: string;
-  } | null;
-}
 
 // ============================================
 // BOT TEAM MEMBER TYPES
@@ -74,74 +51,6 @@ export interface CreateA2aApiKeyResult {
 }
 
 export interface IRoutingRepository {
-  // ============================================
-  // BOT ROUTING RULE METHODS
-  // ============================================
-
-  /**
-   * Find a routing rule by ID
-   */
-  findRoutingRuleById(
-    id: string,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRuleWithRelations | null>;
-
-  /**
-   * Find multiple routing rules with optional filters and pagination
-   */
-  findManyRoutingRules(
-    filters?: BotRoutingRuleFilters,
-    pagination?: PaginationOptions,
-    tx?: TransactionClient
-  ): Promise<PaginatedResult<BotRoutingRule>>;
-
-  /**
-   * Find routing rules by workspace
-   */
-  findRoutingRulesByWorkspace(
-    workspaceId: string,
-    filters?: Omit<BotRoutingRuleFilters, "workspaceId">,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRuleWithRelations[]>;
-
-  /**
-   * Find routing rules where a bot is the source
-   */
-  findRoutingRulesBySource(
-    sourceBotId: string,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRuleWithRelations[]>;
-
-  /**
-   * Find routing rules where a bot is the target
-   */
-  findRoutingRulesByTarget(
-    targetBotId: string,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRuleWithRelations[]>;
-
-  /**
-   * Create a routing rule
-   */
-  createRoutingRule(
-    data: Prisma.BotRoutingRuleCreateInput,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRule>;
-
-  /**
-   * Update a routing rule
-   */
-  updateRoutingRule(
-    id: string,
-    data: Prisma.BotRoutingRuleUpdateInput,
-    tx?: TransactionClient
-  ): Promise<BotRoutingRule>;
-
-  /**
-   * Delete a routing rule
-   */
-  deleteRoutingRule(id: string, tx?: TransactionClient): Promise<void>;
-
   // ============================================
   // BOT TEAM MEMBER METHODS
   // ============================================

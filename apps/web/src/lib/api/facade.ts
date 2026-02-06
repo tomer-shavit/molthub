@@ -36,7 +36,6 @@ import { overlaysClient } from './clients/overlays.client';
 import { pairingsClient } from './clients/pairings.client';
 import { policiesClient } from './clients/policies.client';
 import { profilesClient } from './clients/profiles.client';
-import { routingClient } from './clients/routing.client';
 import { slosClient } from './clients/slos.client';
 import { teamsClient } from './clients/teams.client';
 import { templatesClient } from './clients/templates.client';
@@ -125,14 +124,6 @@ import type {
   ChangeSetFilters,
 } from './types/change-sets';
 import type { Trace, TraceStats, TraceFilters } from './types/traces';
-import type {
-  BotRoutingRule,
-  CreateBotRoutingRulePayload,
-  UpdateBotRoutingRulePayload,
-  DelegateRequestPayload,
-  DelegationResult,
-  RoutingRuleFilters,
-} from './types/routing';
 import type {
   DebugProcessInfo,
   DebugGatewayProbeResult,
@@ -628,23 +619,6 @@ class ApiClient {
     a2aClient.revokeApiKey(botInstanceId, keyId);
 
   // ============================================
-  // Bot Routing Rules
-  // ============================================
-
-  listRoutingRules = (filters?: RoutingRuleFilters): Promise<BotRoutingRule[]> =>
-    routingClient.list(filters);
-
-  getRoutingRule = (id: string): Promise<BotRoutingRule> => routingClient.getById(id);
-
-  createRoutingRule = (data: CreateBotRoutingRulePayload): Promise<BotRoutingRule> =>
-    routingClient.create(data);
-
-  updateRoutingRule = (id: string, data: UpdateBotRoutingRulePayload): Promise<BotRoutingRule> =>
-    routingClient.update(id, data);
-
-  deleteRoutingRule = (id: string): Promise<void> => routingClient.deleteById(id);
-
-  // ============================================
   // Bot Team Members
   // ============================================
 
@@ -661,9 +635,6 @@ class ApiClient {
     teamsClient.update(id, data);
 
   removeTeamMember = (id: string): Promise<void> => teamsClient.remove(id);
-
-  delegateMessage = (data: DelegateRequestPayload): Promise<DelegationResult> =>
-    routingClient.delegate(data);
 
   // ============================================
   // Notification Channels

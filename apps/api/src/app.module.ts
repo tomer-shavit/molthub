@@ -34,7 +34,6 @@ import { UserContextModule } from "./user-context/user-context.module";
 import { AgentEvolutionModule } from "./agent-evolution/agent-evolution.module";
 import { PairingModule } from "./pairing/pairing.module";
 import { NotificationChannelsModule } from "./notification-channels/notification-channels.module";
-import { BotRoutingModule } from "./bot-routing/bot-routing.module";
 import { BotTeamsModule } from "./bot-teams/bot-teams.module";
 import { A2aModule } from "./a2a/a2a.module";
 import { AdaptersModule } from "./adapters/adapters.module";
@@ -85,7 +84,6 @@ import { AdaptersModule } from "./adapters/adapters.module";
     AgentEvolutionModule,
     PairingModule,
     NotificationChannelsModule,
-    BotRoutingModule,
     BotTeamsModule,
     A2aModule,
     AdaptersModule,

@@ -42,7 +42,6 @@ export { overlaysClient, OverlaysClient } from './overlays.client';
 export { pairingsClient, PairingsClient } from './pairings.client';
 export { policiesClient, PoliciesClient } from './policies.client';
 export { profilesClient, ProfilesClient } from './profiles.client';
-export { routingClient, RoutingClient } from './routing.client';
 export { slosClient, SlosClient } from './slos.client';
 export { teamsClient, TeamsClient } from './teams.client';
 export { templatesClient, TemplatesClient } from './templates.client';

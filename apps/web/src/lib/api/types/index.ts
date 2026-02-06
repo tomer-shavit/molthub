@@ -30,7 +30,6 @@ export * from './overlays';
 export * from './pairings';
 export * from './policies';
 export * from './profiles';
-export * from './routing';
 export * from './slos';
 export * from './teams';
 export * from './templates';

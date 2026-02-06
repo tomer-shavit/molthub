@@ -28,7 +28,6 @@ model Workspace {
   skillPacks            SkillPack[]
   communicationChannels CommunicationChannel[]
   notificationChannels  NotificationChannel[]
-  botRoutingRules       BotRoutingRule[]
   botTeamMembers        BotTeamMember[]
   alertRuleConfigs      AlertRuleConfig[]
   personaTemplates      PersonaTemplate[]
@@ -152,10 +151,6 @@ model BotInstance {
   budgetConfigs  BudgetConfig[]
   costEvents     CostEvent[]
   healthAlerts   HealthAlert[]
-
-  // Routing rules
-  routingRulesAsSource BotRoutingRule[] @relation("SourceBot")
-  routingRulesAsTarget BotRoutingRule[] @relation("TargetBot")
 
   // A2A API keys
   a2aApiKeys A2aApiKey[]
@@ -1062,38 +1057,6 @@ model AlertRuleConfig {
   @@unique([workspaceId, rule], name: "workspaceId_rule")
   @@index([workspaceId])
   @@index([rule])
-}
-
-// ============================================
-// BOT-TO-BOT ROUTING / DELEGATION
-// ============================================
-
-// BotRoutingRule: Defines when one bot should delegate to another
-model BotRoutingRule {
-  id          String    @id @default(cuid())
-  workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  sourceBotId String
-  sourceBot   BotInstance @relation("SourceBot", fields: [sourceBotId], references: [id], onDelete: Cascade)
-
-  targetBotId String
-  targetBot   BotInstance @relation("TargetBot", fields: [targetBotId], references: [id], onDelete: Cascade)
-
-  // Matching criteria
-  triggerPattern String  // Regex or keyword match
-  description    String  // Human-readable, e.g. "infrastructure questions"
-
-  priority Int     @default(0)
-  enabled  Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([workspaceId])
-  @@index([sourceBotId])
-  @@index([targetBotId])
-  @@index([enabled])
 }
 
 // A2A API Key for bot-to-bot authentication
