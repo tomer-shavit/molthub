@@ -95,6 +95,22 @@ export class GceNetworkManager implements IGceNetworkManager {
   }
 
   async ensureFirewall(name: string, vpcName: string, rules: FirewallRule[]): Promise<void> {
+    // SECURITY: Validate that all rules share the same sourceRanges.
+    // GCE firewall resources apply sourceRanges globally to ALL allowed entries (OR logic).
+    // Mixing 0.0.0.0/0 (HTTP) with 35.235.240.0/20 (SSH) in one resource exposes SSH to the internet.
+    if (rules.length > 1) {
+      const firstRanges = JSON.stringify([...rules[0].sourceRanges].sort());
+      for (const rule of rules.slice(1)) {
+        if (JSON.stringify([...rule.sourceRanges].sort()) !== firstRanges) {
+          throw new Error(
+            "Cannot create a single GCE firewall with different sourceRanges per rule. " +
+            "GCE applies sourceRanges globally to all allowed entries. " +
+            "Use separate ensureFirewall() calls for rules with different source ranges."
+          );
+        }
+      }
+    }
+
     try {
       await this.firewallsClient.get({
         project: this.project,

@@ -196,6 +196,8 @@ export interface GceCaddyStartupOptions {
   readonly sysboxVersion?: string;
   /** Custom domain for Caddy auto-HTTPS */
   readonly caddyDomain?: string;
+  /** OpenClaw version to pre-install (default: "latest") */
+  readonly openclawVersion?: string;
   /** Additional environment variables for the container */
   readonly additionalEnv?: Record<string, string>;
 }
@@ -215,6 +217,7 @@ export function buildGceCaddyStartupScript(options: GceCaddyStartupOptions): str
     secretName,
     sysboxVersion = "0.6.7",
     caddyDomain,
+    openclawVersion = "latest",
     additionalEnv,
   } = options;
 
@@ -344,7 +347,20 @@ else
   echo '{}' > "\${CONFIG_DIR}/openclaw.json"
 fi
 
-# ── 7. Run OpenClaw container ─────────────────────────────────────────
+# ── 7. Build pre-built OpenClaw image (cached after first boot) ───────
+OPENCLAW_IMAGE="clawster-openclaw"
+if ! docker image inspect "$OPENCLAW_IMAGE" >/dev/null 2>&1; then
+  echo "Building OpenClaw image (first boot only, ~2 min)..."
+  docker build -t "$OPENCLAW_IMAGE" - <<'DOCKERFILE'
+FROM node:22
+RUN npm install -g openclaw@${openclawVersion}
+DOCKERFILE
+  echo "OpenClaw image built successfully"
+else
+  echo "OpenClaw image already cached"
+fi
+
+# ── 8. Run OpenClaw container ─────────────────────────────────────────
 DOCKER_RUNTIME=""
 if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-runc'; then
   DOCKER_RUNTIME="--runtime=sysbox-runc"
@@ -362,10 +378,10 @@ docker run -d \\
   -v /opt/openclaw-data/.openclaw:/root/.openclaw \\
   -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
   -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envFlags ? ` \\\n${envFlags}` : ""} \\
-  node:22 \\
-  sh -c "npx -y openclaw@latest gateway --port ${gatewayPort} --verbose"
+  $OPENCLAW_IMAGE \\
+  openclaw gateway --port ${gatewayPort} --verbose
 
-# ── 8. Mark as initialized ────────────────────────────────────────────
+# ── 9. Mark as initialized ────────────────────────────────────────────
 touch "$MARKER"
 echo "OpenClaw gateway started on port ${gatewayPort}"
 `;

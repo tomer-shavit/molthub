@@ -120,6 +120,8 @@ describe("GceTarget", () => {
         secretName: string;
         vpcNetworkName: string;
         subnetName: string;
+        firewallHttpName: string;
+        firewallSshName: string;
       };
 
       expect(t.instanceName).toBe("clawster-test-bot");
@@ -129,6 +131,8 @@ describe("GceTarget", () => {
       expect(t.secretName).toBe("clawster-test-bot-config");
       expect(t.vpcNetworkName).toBe("clawster-vpc");
       expect(t.subnetName).toBe("clawster-subnet");
+      expect(t.firewallHttpName).toBe("clawster-fw-http-test-bot");
+      expect(t.firewallSshName).toBe("clawster-fw-ssh-test-bot");
     });
 
     it("should use custom VPC/subnet names from config", () => {
@@ -218,11 +222,20 @@ describe("GceTarget", () => {
         "clawster-subnet",
         "10.0.0.0/24"
       );
+      // SECURITY: HTTP and SSH firewalls MUST be separate GCE resources
+      // to prevent SSH from being exposed to 0.0.0.0/0
+      expect(managers.networkManager.ensureFirewall).toHaveBeenCalledTimes(2);
       expect(managers.networkManager.ensureFirewall).toHaveBeenCalledWith(
-        expect.stringContaining("clawster-fw"),
+        "clawster-fw-http-test-bot",
         "clawster-vpc",
         expect.arrayContaining([
-          expect.objectContaining({ ports: ["80", "443"] }),
+          expect.objectContaining({ ports: ["80", "443"], sourceRanges: ["0.0.0.0/0"] }),
+        ])
+      );
+      expect(managers.networkManager.ensureFirewall).toHaveBeenCalledWith(
+        "clawster-fw-ssh-test-bot",
+        "clawster-vpc",
+        expect.arrayContaining([
           expect.objectContaining({ ports: ["22"], sourceRanges: ["35.235.240.0/20"] }),
         ])
       );
@@ -245,6 +258,22 @@ describe("GceTarget", () => {
         expect.any(String),
         expect.any(String)
       );
+    });
+
+    it("should use pre-built Docker image in startup script", async () => {
+      const managers = createMockManagers();
+      const { target } = createTarget(baseConfig, managers);
+
+      await target.install({ profileName: "test-bot", port: 18789 });
+
+      const templateCall = (managers.computeManager.createInstanceTemplate as jest.Mock).mock.calls[0][0];
+      const script: string = templateCall.startupScript;
+
+      // Must use pre-built image, not raw node:22 + npx
+      expect(script).toContain("docker build");
+      expect(script).toContain("clawster-openclaw");
+      expect(script).toContain("npm install -g openclaw@");
+      expect(script).not.toContain("npx -y openclaw@");
     });
 
     it("should return failure result on error", async () => {
@@ -582,8 +611,8 @@ describe("GceTarget", () => {
         deleteOrder.push("template");
         return Promise.resolve();
       });
-      (managers.networkManager.deleteFirewall as jest.Mock).mockImplementation(() => {
-        deleteOrder.push("firewall");
+      (managers.networkManager.deleteFirewall as jest.Mock).mockImplementation((name: string) => {
+        deleteOrder.push(name.includes("http") ? "firewall-http" : "firewall-ssh");
         return Promise.resolve();
       });
       (managers.secretManager.deleteSecret as jest.Mock).mockImplementation(() => {
@@ -594,12 +623,13 @@ describe("GceTarget", () => {
       const { target } = createTarget(baseConfig, managers);
       await target.destroy();
 
-      // Verify order: MIG → Health Check → Template → Firewall → Secret
+      // Verify order: MIG → Health Check → Template → HTTP FW → SSH FW → Secret
       expect(deleteOrder).toEqual([
         "mig",
         "health-check",
         "template",
-        "firewall",
+        "firewall-http",
+        "firewall-ssh",
         "secret",
       ]);
     });
@@ -665,6 +695,29 @@ describe("GceTarget", () => {
 
       // Should attempt to scale back to 1
       expect(managers.computeManager.scaleMig).toHaveBeenCalledWith("clawster-mig-test-bot", 1);
+    });
+  });
+
+  describe("getResources", () => {
+    it("should return current machine spec", async () => {
+      const { target } = createTarget();
+      const spec = await target.getResources();
+      expect(spec).toEqual({ cpu: 2048, memory: 4096, dataDiskSizeGb: 0 });
+    });
+
+    it("should reflect updated machine type after updateResources", async () => {
+      const { target } = createTarget();
+
+      await target.updateResources({ cpu: 2048, memory: 8192, dataDiskSizeGb: 0 });
+
+      const spec = await target.getResources();
+      expect(spec).toEqual({ cpu: 2048, memory: 8192, dataDiskSizeGb: 0 });
+    });
+
+    it("should return performance spec for e2-standard-2 config", async () => {
+      const { target } = createTarget({ ...baseConfig, machineType: "e2-standard-2" });
+      const spec = await target.getResources();
+      expect(spec).toEqual({ cpu: 2048, memory: 8192, dataDiskSizeGb: 0 });
     });
   });
 

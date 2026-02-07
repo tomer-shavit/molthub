@@ -94,7 +94,7 @@ export class GceTarget extends BaseDeploymentTarget implements SelfDescribingDep
   readonly type = DeploymentTargetType.GCE;
 
   private readonly config: GceConfig;
-  private readonly machineType: string;
+  private machineType: string;
   private readonly bootDiskSizeGb: number;
 
   // Managers
@@ -112,7 +112,8 @@ export class GceTarget extends BaseDeploymentTarget implements SelfDescribingDep
   private secretName = "";
   private vpcNetworkName = "";
   private subnetName = "";
-  private firewallName = "";
+  private firewallHttpName = "";
+  private firewallSshName = "";
   private gatewayPort = 18789;
 
   /** Cached public IP */
@@ -219,7 +220,8 @@ export class GceTarget extends BaseDeploymentTarget implements SelfDescribingDep
     this.secretName = `clawster-${sanitized}-config`;
     this.vpcNetworkName = this.config.vpcNetworkName ?? "clawster-vpc";
     this.subnetName = this.config.subnetName ?? "clawster-subnet";
-    this.firewallName = `clawster-fw-${sanitized}`;
+    this.firewallHttpName = `clawster-fw-http-${sanitized}`;
+    this.firewallSshName = `clawster-fw-ssh-${sanitized}`;
   }
 
   private get region(): string {
@@ -250,9 +252,11 @@ export class GceTarget extends BaseDeploymentTarget implements SelfDescribingDep
       await this.networkManager.ensureSubnet(this.vpcNetworkName, this.subnetName, "10.0.0.0/24");
       this.log(`Subnet ready`);
 
-      // 3. Create Firewall rules (allow HTTP/HTTPS + SSH via IAP)
-      this.log(`[3/7] Ensuring firewall rules: ${this.firewallName}`);
-      const firewallRules: FirewallRule[] = [
+      // 3. Create Firewall rules
+      // SECURITY: These MUST be separate GCE firewall resources.
+      // A single resource with mixed sourceRanges would expose SSH to 0.0.0.0/0.
+      this.log(`[3/7] Ensuring firewall rules`);
+      await this.networkManager.ensureFirewall(this.firewallHttpName, this.vpcNetworkName, [
         {
           protocol: "tcp",
           ports: ["80", "443"],
@@ -260,15 +264,16 @@ export class GceTarget extends BaseDeploymentTarget implements SelfDescribingDep
           targetTags: ["clawster-vm"],
           description: "Allow HTTP/HTTPS traffic to Caddy",
         },
+      ]);
+      await this.networkManager.ensureFirewall(this.firewallSshName, this.vpcNetworkName, [
         {
           protocol: "tcp",
           ports: ["22"],
-          sourceRanges: ["35.235.240.0/20"], // IAP range
+          sourceRanges: ["35.235.240.0/20"], // IAP range only
           targetTags: ["clawster-vm"],
-          description: "Allow SSH via IAP",
+          description: "Allow SSH via IAP only",
         },
-      ];
-      await this.networkManager.ensureFirewall(this.firewallName, this.vpcNetworkName, firewallRules);
+      ]);
       this.log(`Firewall rules ready`);
 
       // 4. Create Secret Manager secret (empty initially, configure() fills it)
@@ -441,27 +446,31 @@ export class GceTarget extends BaseDeploymentTarget implements SelfDescribingDep
     this.log(`Destroying GCE resources for: ${this.instanceName}`);
 
     // 1. Delete MIG (deletes managed instances)
-    this.log(`[1/5] Deleting MIG: ${this.migName}`);
+    this.log(`[1/6] Deleting MIG: ${this.migName}`);
     await this.computeManager.deleteMig(this.migName);
     this.log(`MIG deleted`);
 
     // 2. Delete health check
-    this.log(`[2/5] Deleting health check: ${this.healthCheckName}`);
+    this.log(`[2/6] Deleting health check: ${this.healthCheckName}`);
     await this.computeManager.deleteHealthCheck(this.healthCheckName);
     this.log(`Health check deleted`);
 
     // 3. Delete instance template
-    this.log(`[3/5] Deleting instance template: ${this.templateName}`);
+    this.log(`[3/6] Deleting instance template: ${this.templateName}`);
     await this.computeManager.deleteInstanceTemplate(this.templateName);
     this.log(`Instance template deleted`);
 
-    // 4. Delete firewall
-    this.log(`[4/5] Deleting firewall: ${this.firewallName}`);
-    await this.networkManager.deleteFirewall(this.firewallName);
-    this.log(`Firewall deleted`);
+    // 4. Delete firewalls
+    this.log(`[4/6] Deleting HTTP firewall: ${this.firewallHttpName}`);
+    await this.networkManager.deleteFirewall(this.firewallHttpName);
+    this.log(`HTTP firewall deleted`);
 
-    // 5. Delete secret
-    this.log(`[5/5] Deleting secret: ${this.secretName}`);
+    this.log(`[5/6] Deleting SSH firewall: ${this.firewallSshName}`);
+    await this.networkManager.deleteFirewall(this.firewallSshName);
+    this.log(`SSH firewall deleted`);
+
+    // 6. Delete secret
+    this.log(`[6/6] Deleting secret: ${this.secretName}`);
     try {
       await this.secretManager.deleteSecret(this.secretName);
       this.log(`Secret deleted`);
@@ -539,6 +548,7 @@ export class GceTarget extends BaseDeploymentTarget implements SelfDescribingDep
       this.cachedPublicIp = "";
       this.log(`MIG scaled to 1`);
 
+      this.machineType = targetMachineType;
       this.log(`Resource update complete!`);
 
       return {
@@ -570,12 +580,6 @@ export class GceTarget extends BaseDeploymentTarget implements SelfDescribingDep
   // ── getResources ────────────────────────────────────────────────────
 
   async getResources(): Promise<ResourceSpec> {
-    const templateUrl = await this.computeManager.getMigInstanceTemplate(this.migName);
-    const templateName = templateUrl.split("/").pop() ?? "";
-
-    // Machine type is embedded in the template — extract from URL
-    // Template properties contain machineType as a simple string (not URL)
-    // We'll use tier specs to reverse-map
     return this.machineTypeToSpec(this.machineType);
   }
 
