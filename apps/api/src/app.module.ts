@@ -36,6 +36,7 @@ import { BotTeamsModule } from "./bot-teams/bot-teams.module";
 import { A2aModule } from "./a2a/a2a.module";
 import { AdaptersModule } from "./adapters/adapters.module";
 import { MiddlewaresModule } from "./middlewares/middlewares.module";
+import { VaultModule } from "./vault/vault.module";
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { MiddlewaresModule } from "./middlewares/middlewares.module";
     A2aModule,
     AdaptersModule,
     MiddlewaresModule,
+    VaultModule,
   ],
   providers: [
     {

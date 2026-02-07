@@ -16,6 +16,9 @@
   },
   "dependencies": {
     "@clawster/adapters-aws": "workspace:*",
+    "@clawster/adapters-azure": "workspace:*",
+    "@clawster/adapters-common": "workspace:*",
+    "@clawster/adapters-gcp": "workspace:*",
     "@clawster/cloud-providers": "workspace:*",
     "@clawster/core": "workspace:*",
     "@clawster/database": "workspace:*",

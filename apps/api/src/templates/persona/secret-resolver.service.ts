@@ -1,5 +1,6 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Inject, Logger, Optional } from "@nestjs/common";
 import type { ISecretResolver } from "./interfaces";
+import { VaultService } from "../../vault/vault.service";
 
 // =============================================================================
 // Secret Resolver Service
@@ -9,14 +10,15 @@ import type { ISecretResolver } from "./interfaces";
  * SecretResolverService — resolves and stores secrets based on deployment type.
  *
  * Single Responsibility: Manage secret references and storage across deployment targets.
- *
- * For MVP, supports:
- * - local/docker: Environment variable references (${ENV_VAR})
- * - ecs-ec2/gce/azure-vm: Cloud provider secret references (future)
+ * Delegates actual storage to VaultService which routes to the correct cloud provider.
  */
 @Injectable()
 export class SecretResolverService implements ISecretResolver {
   private readonly logger = new Logger(SecretResolverService.name);
+
+  constructor(
+    @Optional() @Inject(VaultService) private readonly vaultService?: VaultService,
+  ) {}
 
   /**
    * Resolve a secret reference to its value or environment variable reference.
@@ -72,46 +74,16 @@ export class SecretResolverService implements ISecretResolver {
     instanceId: string,
     secretKey: string,
     secretValue: string,
-    deploymentType: string,
+    _deploymentType: string,
   ): Promise<void> {
-    switch (deploymentType) {
-      case "local":
-      case "docker":
-        // For local/docker, secrets are set as env vars by the user
-        // We just log a reminder
-        this.logger.log(
-          `Secret "${secretKey}" for instance ${instanceId} should be set as env var: ${this.toEnvVarName(secretKey)}`,
-        );
-        break;
-
-      case "ecs-ec2":
-        // TODO: Store in AWS Secrets Manager
-        // For now, log a placeholder
-        this.logger.log(
-          `Would store secret "${secretKey}" in AWS Secrets Manager for instance ${instanceId}`,
-        );
-        // Future: await this.awsSecretsAdapter.storeSecret(...)
-        break;
-
-      case "gce":
-        // TODO: Store in GCP Secret Manager
-        this.logger.log(
-          `Would store secret "${secretKey}" in GCP Secret Manager for instance ${instanceId}`,
-        );
-        break;
-
-      case "azure-vm":
-        // TODO: Store in Azure Key Vault
-        this.logger.log(
-          `Would store secret "${secretKey}" in Azure Key Vault for instance ${instanceId}`,
-        );
-        break;
-
-      default:
-        this.logger.warn(
-          `Unknown deployment type "${deploymentType}", secret "${secretKey}" not stored`,
-        );
+    if (!this.vaultService) {
+      this.logger.warn(
+        `VaultService not available — secret "${secretKey}" for instance ${instanceId} not stored`,
+      );
+      return;
     }
+
+    await this.vaultService.storeSecret(instanceId, secretKey, secretValue);
   }
 
   // ---------------------------------------------------------------------------

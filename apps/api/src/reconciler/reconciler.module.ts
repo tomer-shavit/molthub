@@ -11,6 +11,7 @@ import { DelegationSkillGeneratorService } from "../bot-teams/delegation-skill-g
 import { ReconcilerScheduler } from "./reconciler.scheduler";
 import { SecurityAuditModule } from "../security/security-audit.module";
 import { ProvisioningModule } from "../provisioning/provisioning.module";
+import { VaultModule } from "../vault/vault.module";
 import {
   GATEWAY_MANAGER,
   DEPLOYMENT_TARGET_RESOLVER,
@@ -31,7 +32,7 @@ import {
 } from "./preprocessors";
 
 @Module({
-  imports: [DatabaseModule, SecurityAuditModule, ProvisioningModule],
+  imports: [DatabaseModule, SecurityAuditModule, ProvisioningModule, VaultModule],
   controllers: [ReconcilerController],
   providers: [
     // DIP: Inject GatewayManager via factory provider
