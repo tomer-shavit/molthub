@@ -27,6 +27,7 @@ import { QrPairing, type PairingState } from "@/components/openclaw/qr-pairing";
 import { SkillSelector, type SkillItem } from "@/components/openclaw/skill-selector";
 import { SandboxConfig as SandboxConfigComponent, type SandboxConfigData } from "@/components/openclaw/sandbox-config";
 import { cn } from "@/lib/utils";
+import { resolveGatewayEndpoint, buildGatewayUrl } from "@/lib/bot-utils";
 import { ContextualSuggestions } from "@/components/bots/contextual-suggestions";
 import { BotChatPanel } from "@/components/chat/bot-chat-panel";
 import { JustDeployedBanner } from "@/components/dashboard/just-deployed-banner";
@@ -75,6 +76,10 @@ import {
   Filter,
   Users,
   Server,
+  Settings,
+  Terminal,
+  ScrollText,
+  type LucideIcon,
 } from "lucide-react";
 
 interface BotDetailClientProps {
@@ -397,12 +402,13 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
   const uptimeMinutes = Math.floor((uptimeTotal % 3600) / 60);
 
   // Build gateway status from bot metadata
+  const gatewayEndpoint = resolveGatewayEndpoint(bot);
   const gatewayStatus: GatewayStatusData = {
     connected: bot.status === "RUNNING",
     latencyMs: (bot.metadata?.gatewayLatencyMs as number) || undefined,
     lastHeartbeat: (bot.metadata?.lastHeartbeat as string) || bot.lastHealthCheckAt || undefined,
-    port: bot.gatewayPort || 18789,
-    host: (bot.metadata?.gatewayHost as string) || undefined,
+    port: gatewayEndpoint.port,
+    host: gatewayEndpoint.host,
   };
 
   // Build health snapshot from bot data
@@ -934,7 +940,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Gateway Port</span>
-                    <span className="font-mono">{bot.gatewayPort || 18789}</span>
+                    <span className="font-mono">{gatewayEndpoint.port}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Config Hash</span>
@@ -1134,45 +1140,89 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
         {/* Dashboard Tab */}
         <TabsContent active={activeTab === "dashboard"} className="mt-6">
           {bot.status === "RUNNING" && bot.health === "HEALTHY" ? (() => {
-            const gatewayPort = bot.gatewayPort || 18789;
             const gatewayConfig = openclawConfig?.gateway as Record<string, unknown> | undefined;
             const gatewayAuth = gatewayConfig?.auth as Record<string, unknown> | undefined;
             const gatewayToken = (gatewayAuth?.token as string) || "";
-            const gatewayHost = bot.gatewayConnection?.host || (bot.metadata?.gatewayHost as string) || "localhost";
-            const baseUrl = `http://${gatewayHost}:${gatewayPort}`;
-            const dashboardUrl = gatewayToken ? `${baseUrl}?token=${encodeURIComponent(gatewayToken)}` : baseUrl;
+            const baseUrl = buildGatewayUrl(gatewayEndpoint);
+            const withToken = (path: string) => {
+              const url = `${baseUrl}${path}`;
+              return gatewayToken ? `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(gatewayToken)}` : url;
+            };
+
+            const quickLinks: { label: string; description: string; icon: LucideIcon; path: string }[] = [
+              { label: "Chat", description: "Talk to your agent directly", icon: MessageSquare, path: "/chat?session=main" },
+              { label: "Channels", description: "WhatsApp, Telegram, and more", icon: Smartphone, path: "/channels" },
+              { label: "Sessions", description: "Active conversation sessions", icon: Users, path: "/sessions" },
+              { label: "Agents", description: "Agent definitions and routing", icon: Bot, path: "/agents" },
+              { label: "Skills", description: "Installed skills and tools", icon: Puzzle, path: "/skills" },
+              { label: "Config", description: "Gateway configuration", icon: Settings, path: "/config" },
+              { label: "Logs", description: "Real-time gateway logs", icon: ScrollText, path: "/logs" },
+              { label: "Debug", description: "Diagnostics and debugging", icon: Terminal, path: "/debug" },
+            ];
+
             return (
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <LayoutDashboard className="w-4 h-4" />
-                      OpenClaw Dashboard
-                    </CardTitle>
+              <div className="space-y-6">
+                {/* Hero card */}
+                <Card className="overflow-hidden">
+                  <div className="bg-gradient-to-r from-zinc-900 to-zinc-800 dark:from-zinc-800 dark:to-zinc-900 px-6 py-8">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                          <LayoutDashboard className="w-5 h-5" />
+                          OpenClaw Control Panel
+                        </h3>
+                        <p className="text-sm text-zinc-400 max-w-md">
+                          Full management interface for your gateway instance. Configure channels, manage sessions, monitor logs, and debug your agent.
+                        </p>
+                      </div>
+                      <a href={withToken("/")} target="_blank" rel="noopener noreferrer">
+                        <Button size="lg" className="bg-white text-zinc-900 hover:bg-zinc-100">
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Open Dashboard
+                        </Button>
+                      </a>
+                    </div>
+                    <div className="mt-4 flex items-center gap-4 text-xs text-zinc-500">
+                      <span className="flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3 text-emerald-500" />
+                        <span className="text-zinc-400">Gateway healthy</span>
+                      </span>
+                      <span className="text-zinc-600">|</span>
+                      <span className="font-mono text-zinc-400">{gatewayEndpoint.host}</span>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Quick links grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {quickLinks.map((link) => (
                     <a
-                      href={dashboardUrl}
+                      key={link.path}
+                      href={withToken(link.path)}
                       target="_blank"
                       rel="noopener noreferrer"
+                      className="group"
                     >
-                      <Button variant="outline" size="sm">
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        Open in New Tab
-                      </Button>
+                      <Card className="h-full transition-colors hover:bg-muted/50 hover:border-foreground/20">
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="rounded-md bg-muted p-2 group-hover:bg-background transition-colors">
+                              <link.icon className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium flex items-center gap-1">
+                                {link.label}
+                                <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{link.description}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
                     </a>
-                  </div>
-                  <CardDescription>
-                    Native OpenClaw Control UI for this instance. Use Channels &rarr; Show QR to pair WhatsApp.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <iframe
-                    src={dashboardUrl}
-                    className="w-full border-0 rounded-b-lg"
-                    style={{ minHeight: "700px" }}
-                    title="OpenClaw Dashboard"
-                  />
-                </CardContent>
-              </Card>
+                  ))}
+                </div>
+              </div>
             );
           })() : (
             <Card>

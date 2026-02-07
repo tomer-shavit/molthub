@@ -38,3 +38,25 @@ export function formatDeploymentType(
   };
   return labels[type.toUpperCase()] || type;
 }
+
+/**
+ * Resolves the gateway endpoint (host + port) for a bot,
+ * preferring the persisted GatewayConnection (ALB endpoint for cloud bots)
+ * over the raw internal gatewayPort.
+ */
+export function resolveGatewayEndpoint(bot: Pick<BotInstance, 'gatewayConnection' | 'gatewayPort' | 'metadata'>): {
+  host: string;
+  port: number;
+} {
+  return {
+    host: bot.gatewayConnection?.host || (bot.metadata?.gatewayHost as string) || 'localhost',
+    port: bot.gatewayConnection?.port || bot.gatewayPort || 18789,
+  };
+}
+
+/** Builds a full HTTP(S) URL for a gateway endpoint. */
+export function buildGatewayUrl(endpoint: { host: string; port: number }): string {
+  if (endpoint.port === 443) return `https://${endpoint.host}`;
+  if (endpoint.port === 80) return `http://${endpoint.host}`;
+  return `http://${endpoint.host}:${endpoint.port}`;
+}
