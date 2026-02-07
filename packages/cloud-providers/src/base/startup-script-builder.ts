@@ -335,6 +335,9 @@ export interface AzureCloudInitOptions {
   readonly keyVault?: AzureKeyVaultConfig;
   readonly caddyDomain?: string;
   readonly additionalEnv?: Record<string, string>;
+  readonly middlewareConfig?: {
+    middlewares: MiddlewareAssignment[];
+  };
 }
 
 /**
