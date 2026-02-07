@@ -8,12 +8,12 @@ import { StatusBadge, HealthIndicator } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { SetupChecklist } from "@/components/dashboard/setup-checklist";
+import { RefreshButton } from "@/components/dashboard/refresh-button";
 import { api, type DashboardMetrics, type DashboardHealth } from "@/lib/api";
 import {
   Bot,
   Activity,
   AlertTriangle,
-  RefreshCw,
   ArrowRight,
   CheckCircle2,
   XCircle,
@@ -66,10 +66,7 @@ export default async function DashboardPage() {
           <span className="text-sm text-muted-foreground">
             Last updated: {new Date().toLocaleTimeString()}
           </span>
-          <Button variant="outline" size="sm">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
+          <RefreshButton />
         </div>
       </div>
 
