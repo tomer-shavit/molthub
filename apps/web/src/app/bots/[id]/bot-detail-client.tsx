@@ -22,22 +22,14 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { GatewayStatus, type GatewayStatusData } from "@/components/openclaw/gateway-status";
 import { HealthSnapshot, type HealthSnapshotData } from "@/components/openclaw/health-snapshot";
-import { ChannelStatusList, type ChannelStatusData } from "@/components/openclaw/channel-status";
-import { QrPairing, type PairingState } from "@/components/openclaw/qr-pairing";
-import { SkillSelector, type SkillItem } from "@/components/openclaw/skill-selector";
-import { SandboxConfig as SandboxConfigComponent, type SandboxConfigData } from "@/components/openclaw/sandbox-config";
 import { cn } from "@/lib/utils";
 import { resolveGatewayEndpoint, buildGatewayUrl } from "@/lib/bot-utils";
 import { ContextualSuggestions } from "@/components/bots/contextual-suggestions";
 import { BotChatPanel } from "@/components/chat/bot-chat-panel";
 import { JustDeployedBanner } from "@/components/dashboard/just-deployed-banner";
-import { EvolutionBanner, type EvolutionBannerData } from "@/components/openclaw/evolution-banner";
-import { LiveSkills } from "@/components/openclaw/live-skills";
-import { EvolutionDiff } from "@/components/openclaw/evolution-diff";
-import { ResourceManagement } from "@/components/openclaw/resource-management";
+import { EvolutionBanner } from "@/components/openclaw/evolution-banner";
 import { api, type BotInstance, type Trace, type TraceStats, type DeploymentEvent, type AgentEvolutionSnapshot, type TokenUsageSummary, type AgentCard, type A2aJsonRpcResponse, type A2aApiKeyInfo, type A2aTaskInfo, type BotTeamMember } from "@/lib/api";
 import { BotMiddlewaresTab } from "@/components/middlewares/bot-middlewares-tab";
-import { PairingTab } from "@/components/pairing/pairing-tab";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -53,13 +45,10 @@ import {
   XCircle,
   Zap,
   FileText,
-  Wifi,
   MessageSquare,
   Puzzle,
   Stethoscope,
   BarChart3,
-  GitCompare,
-  Smartphone,
   LayoutDashboard,
   ExternalLink,
   Network,
@@ -75,7 +64,7 @@ import {
   ChevronRight,
   Filter,
   Users,
-  Server,
+  Smartphone,
   Settings,
   Terminal,
   ScrollText,
@@ -96,9 +85,6 @@ export function BotDetailClient({ bot, traces = [], metrics = null, events = [],
   const [activeTab, setActiveTab] = useState("overview");
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLifecycleAction, setIsLifecycleAction] = useState(false);
-  const [pairingChannel, setPairingChannel] = useState<string | null>(null);
-  const [pairingState, setPairingState] = useState<PairingState>("loading");
-  const [pairingQr, setPairingQr] = useState<string | undefined>();
   const [evolution, setEvolution] = useState<AgentEvolutionSnapshot | null>(initialEvolution || null);
   const [isSyncingEvolution, setIsSyncingEvolution] = useState(false);
   const [isReconciling, setIsReconciling] = useState(false);
@@ -439,70 +425,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, events = [],
   const manifest = (typeof rawManifest === "string" ? JSON.parse(rawManifest) : rawManifest) as Record<string, unknown>;
   const spec = (manifest?.spec as Record<string, unknown>) || manifest;
   const openclawConfig = (spec?.openclawConfig as Record<string, unknown>) || spec;
-  const channelsConfig = (openclawConfig?.channels as Record<string, unknown>) || {};
-
-  const channels: ChannelStatusData[] = Object.entries(channelsConfig).map(([type, config]) => {
-    const channelConf = config as Record<string, unknown>;
-    return {
-      id: type,
-      type,
-      enabled: channelConf?.enabled !== false,
-      authState: "paired" as const, // Default assumption; real status comes from API
-      dmPolicy: (channelConf?.dmPolicy as string) || "pairing",
-      groupPolicy: (channelConf?.groupPolicy as string) || "disabled",
-    };
-  });
-
-  // Build skills list
-  const skillsConfig = (openclawConfig?.skills as Record<string, unknown>) || {};
-  const skillEntries = (skillsConfig?.entries as Record<string, Record<string, unknown>>) || {};
-  const bundledSkills = (skillsConfig?.allowBundled as string[]) || [];
-
-  const skills: SkillItem[] = [
-    ...Object.entries(skillEntries).map(([id, entry]) => ({
-      id,
-      name: id,
-      description: entry.config ? "Custom configuration" : undefined,
-      enabled: entry.enabled !== false,
-    })),
-    ...bundledSkills.map((id) => ({
-      id,
-      name: id,
-      description: "Bundled skill",
-      enabled: true,
-      category: "bundled",
-    })),
-  ];
-
-  // Build sandbox config
-  const sandboxConf = (openclawConfig?.sandbox as Record<string, unknown>) || {};
-  const sandboxData: SandboxConfigData = {
-    mode: (sandboxConf?.mode as SandboxConfigData["mode"]) || "off",
-    scope: (sandboxConf?.scope as SandboxConfigData["scope"]) || undefined,
-    workspaceAccess: (sandboxConf?.workspaceAccess as SandboxConfigData["workspaceAccess"]) || "rw",
-    docker: sandboxConf?.docker
-      ? {
-          image: (sandboxConf.docker as Record<string, unknown>)?.image as string,
-          memory: (sandboxConf.docker as Record<string, unknown>)?.memory as string,
-          cpus: (sandboxConf.docker as Record<string, unknown>)?.cpus as number,
-        }
-      : undefined,
-  };
-
-
-
-  // Channel auth
-  const handleStartAuth = useCallback(async (channelId: string) => {
-    setPairingChannel(channelId);
-    setPairingState("loading");
-    try {
-      const result = await api.startChannelAuth(bot.id, channelId);
-      setPairingQr(result.qrCodeUrl);
-      setPairingState(result.state === "pending" ? "ready" : (result.state as PairingState));
-    } catch {
-      setPairingState("error");
-    }
-  }, [bot.id]);
+  const channelCount = Object.keys((openclawConfig?.channels as Record<string, unknown>) || {}).length;
 
   // Reconcile
   const handleReconcile = useCallback(async () => {
@@ -810,34 +733,9 @@ export function BotDetailClient({ bot, traces = [], metrics = null, events = [],
             <LayoutDashboard className="w-4 h-4 mr-1.5" />
             Dashboard
           </TabsTrigger>
-          <TabsTrigger active={activeTab === "channels"} onClick={() => setActiveTab("channels")}>
-            <MessageSquare className="w-4 h-4 mr-1.5" />
-            Channels
-          </TabsTrigger>
-          <TabsTrigger active={activeTab === "pairing"} onClick={() => setActiveTab("pairing")}>
-            <Smartphone className="w-4 h-4 mr-1.5" />
-            Pairing
-          </TabsTrigger>
-          <TabsTrigger active={activeTab === "skills"} onClick={() => setActiveTab("skills")}>
-            <Puzzle className="w-4 h-4 mr-1.5" />
-            Skills
-          </TabsTrigger>
-          <TabsTrigger active={activeTab === "evolution"} onClick={() => setActiveTab("evolution")}>
-            <GitCompare className="w-4 h-4 mr-1.5" />
-            Evolution
-            {evolution?.hasEvolved && (
-              <Badge variant="secondary" className="ml-1.5 text-xs px-1.5 py-0">
-                {evolution.totalChanges}
-              </Badge>
-            )}
-          </TabsTrigger>
           <TabsTrigger active={activeTab === "a2a"} onClick={() => setActiveTab("a2a")}>
             <Network className="w-4 h-4 mr-1.5" />
             A2A
-          </TabsTrigger>
-          <TabsTrigger active={activeTab === "resources"} onClick={() => setActiveTab("resources")}>
-            <Server className="w-4 h-4 mr-1.5" />
-            Resources
           </TabsTrigger>
           <TabsTrigger active={activeTab === "middlewares"} onClick={() => setActiveTab("middlewares")}>
             <Puzzle className="w-4 h-4 mr-1.5" />
@@ -1021,7 +919,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, events = [],
                   </div>
                   <div className="flex justify-between items-center p-2 bg-muted rounded">
                     <span className="text-sm">Channels</span>
-                    <span className="font-bold">{channels.length}</span>
+                    <span className="font-bold">{channelCount}</span>
                   </div>
                 </div>
               </CardContent>
@@ -1043,7 +941,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, events = [],
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <MessageSquare className="w-4 h-4 text-cyan-500" />
-                    <span>{channels.length} channels configured</span>
+                    <span>{channelCount} channels configured</span>
                   </div>
                   {bot.lastHealthCheckAt && (
                     <div className="flex items-center gap-2 text-sm">
@@ -1245,60 +1143,6 @@ export function BotDetailClient({ bot, traces = [], metrics = null, events = [],
               </CardContent>
             </Card>
           )}
-        </TabsContent>
-
-        {/* Channels Tab */}
-        <TabsContent active={activeTab === "channels"} className="mt-6">
-          {pairingChannel ? (
-            <QrPairing
-              channelType={pairingChannel}
-              qrCodeUrl={pairingQr}
-              state={pairingState}
-              onRefresh={() => handleStartAuth(pairingChannel)}
-              onClose={() => setPairingChannel(null)}
-            />
-          ) : (
-            <ChannelStatusList
-              channels={channels}
-              onStartAuth={handleStartAuth}
-            />
-          )}
-        </TabsContent>
-
-        {/* Pairing Tab */}
-        <TabsContent active={activeTab === "pairing"} className="mt-6">
-          <PairingTab botId={bot.id} />
-        </TabsContent>
-
-
-
-        {/* Skills Tab */}
-        <TabsContent active={activeTab === "skills"} className="mt-6">
-          {evolution?.hasEvolved && evolution.liveSkills ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <LiveSkills
-                deployedSkills={skills.map((s) => s.name)}
-                liveSkills={evolution.liveSkills}
-                deployedMcpServers={[]}
-                liveMcpServers={evolution.liveMcpServers || []}
-              />
-              <SandboxConfigComponent data={sandboxData} />
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              <SkillSelector skills={skills} />
-              <SandboxConfigComponent data={sandboxData} />
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Evolution Tab */}
-        <TabsContent active={activeTab === "evolution"} className="mt-6">
-          <EvolutionDiff
-            deployedConfig={openclawConfig as Record<string, unknown>}
-            liveConfig={evolution?.diff?.changes ? openclawConfig as Record<string, unknown> : {}}
-            changes={(evolution?.diff?.changes || []) as Array<{ category: string; field: string; changeType: "added" | "removed" | "modified"; deployedValue?: unknown; liveValue?: unknown }>}
-          />
         </TabsContent>
 
         {/* A2A Tab */}
@@ -1942,10 +1786,6 @@ export function BotDetailClient({ bot, traces = [], metrics = null, events = [],
               </Card>
             </div>
           ) : null}
-        </TabsContent>
-        {/* Resources Tab */}
-        <TabsContent active={activeTab === "resources"} className="mt-6">
-          <ResourceManagement bot={bot} />
         </TabsContent>
         {/* Team Tab */}
         <TabsContent active={activeTab === "team"} className="mt-6">
