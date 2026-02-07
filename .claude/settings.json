@@ -35,12 +35,32 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Review ONLY the code just written/edited. Check for: (1) SOLID violations: does a class/function have more than one responsibility? Are dependencies hardcoded instead of injected? Are interfaces too broad? (2) Dead code: unused imports, unreachable branches, commented-out code, unused variables/functions. (3) Unnecessary complexity: over-abstraction, premature generalization. If violations found, list them with file path and line. If clean, say PASS.",
+            "statusMessage": "Checking SOLID principles and dead code..."
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "git diff --name-only 2>/dev/null | grep -E '\\.(ts|tsx)$' | head -5 | while read f; do if grep -l 'console\\.log' \"$f\" 2>/dev/null; then echo \"WARNING: console.log found in $f\" >&2; fi; done; exit 0"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /home/tomer_shavit/clawster && npx knip --no-exit-code --reporter compact 2>&1 | head -80 || echo 'knip not available - run: pnpm add -D knip'"
           }
         ]
       }

@@ -24,12 +24,19 @@ Now review all changed/added files. For each file, evaluate:
 
 1. **Goal alignment** — Does this code directly serve the original goal? Is there anything missing? Is there anything unnecessary?
 2. **Architecture fit** — Does it follow the existing patterns in the codebase (NestJS modules, Zod schemas, Prisma models, Next.js conventions)?
-3. **API design** — Are the interfaces, endpoints, and data shapes clean and consistent with the rest of the project?
-4. **Simplicity** — Is this the simplest solution that works? Could it be done with less code, fewer abstractions, or fewer files?
-5. **Security** — Are there any OWASP top-10 risks? Input validation gaps? Auth bypasses? Exposed secrets?
-6. **OpenClaw-native** — Is this solution OpenClaw-native (not generic/cloud-agnostic when it should be OpenClaw-specific)?
-7. **Edge cases** — What happens when inputs are empty, null, malformed, or at scale?
-8. **Naming** — Are names clear, consistent with the codebase, and self-documenting?
+3. **SOLID compliance** — Check each principle:
+   - Single Responsibility: Does each class/module have exactly one reason to change?
+   - Open/Closed: Is behavior extended via composition/interfaces, not modification?
+   - Liskov Substitution: Are subtypes safely substitutable for base types?
+   - Interface Segregation: Are interfaces small and focused? No unused method implementations?
+   - Dependency Inversion: Are dependencies injected, not hardcoded? Do modules depend on abstractions?
+4. **Dead code** — Flag ALL instances of: unused imports, unused variables/functions, unreachable code, commented-out code, unused type definitions, unused exports. **Dead code is a blocking issue.**
+5. **API design** — Are the interfaces, endpoints, and data shapes clean and consistent with the rest of the project?
+6. **Simplicity** — Is this the simplest solution that works? Could it be done with less code, fewer abstractions, or fewer files?
+7. **Security** — Are there any OWASP top-10 risks? Input validation gaps? Auth bypasses? Exposed secrets?
+8. **OpenClaw-native** — Is this solution OpenClaw-native (not generic/cloud-agnostic when it should be OpenClaw-specific)?
+9. **Edge cases** — What happens when inputs are empty, null, malformed, or at scale?
+10. **Naming** — Are names clear, consistent with the codebase, and self-documenting?
 
 ### Phase 4: Verdict and Suggestions
 

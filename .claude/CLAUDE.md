@@ -40,6 +40,22 @@ Launch **in parallel** using concurrent Task tool calls:
 - Follow existing conventions (NestJS, Next.js, Zod, Prisma). Follow SOLID principles.
 - Do not over-engineer
 
+### SOLID Principles (MANDATORY for every class/module/function)
+
+- **S — Single Responsibility**: One reason to change per module. If a class does two things, split it.
+- **O — Open/Closed**: Extend via composition/interfaces, not by modifying existing code.
+- **L — Liskov Substitution**: Subtypes must be substitutable for their base types without breaking behavior.
+- **I — Interface Segregation**: Small, focused interfaces. No god-interfaces forcing unused method implementations.
+- **D — Dependency Inversion**: Depend on abstractions (interfaces), inject dependencies via constructor/module system.
+
+### Dead Code Policy (ZERO TOLERANCE)
+
+- Remove unused imports immediately after writing code
+- Delete unused functions/variables — never comment them out
+- No `// TODO` stubs without an implementation plan
+- No commented-out code blocks — use git history instead
+- Run `knip` before every PR to catch unused exports
+
 ## Step 4: Tests (MANDATORY)
 
 Not complete until: E2E tests written + all tests pass + build succeeds (`pnpm build`).
