@@ -1,25 +1,28 @@
 /**
  * GCE Compute Manager
  *
- * Manages VM instances, disks, and instance groups.
+ * Manages MIG (Managed Instance Group), Instance Templates, and Health Checks.
+ * Caddy-on-VM architecture: MIG manages a single VM with auto-healing.
  */
 
 import {
   InstancesClient,
-  DisksClient,
-  InstanceGroupsClient,
+  InstanceTemplatesClient,
+  InstanceGroupManagersClient,
+  HealthChecksClient,
 } from "@google-cloud/compute";
-import type { VmInstanceConfig, NamedPort, VmStatus, GceLogCallback } from "../types";
-import type { IGceComputeManager, IGceOperationManager } from "./interfaces";
+import type { VmStatus, GceLogCallback } from "../types";
+import type { IGceComputeManager, IGceOperationManager, InstanceTemplateConfig } from "./interfaces";
 
 /**
- * Manages GCE compute resources (VMs, disks, instance groups).
+ * Manages GCE compute resources using MIG for auto-healing.
  */
 export class GceComputeManager implements IGceComputeManager {
   constructor(
     private readonly instancesClient: InstancesClient,
-    private readonly disksClient: DisksClient,
-    private readonly instanceGroupsClient: InstanceGroupsClient,
+    private readonly templatesClient: InstanceTemplatesClient,
+    private readonly migClient: InstanceGroupManagersClient,
+    private readonly healthChecksClient: HealthChecksClient,
     private readonly operationManager: IGceOperationManager,
     private readonly project: string,
     private readonly zone: string,
@@ -27,222 +30,328 @@ export class GceComputeManager implements IGceComputeManager {
     private readonly log: GceLogCallback
   ) {}
 
-  /**
-   * Create a new VM instance.
-   *
-   * @param config - VM instance configuration
-   * @returns Instance self-link URL
-   */
-  async createVmInstance(config: VmInstanceConfig): Promise<string> {
-    const disks: Array<Record<string, unknown>> = [
-      {
-        boot: true,
-        autoDelete: true,
-        initializeParams: {
-          sourceImage: config.bootDisk.sourceImage,
-          diskSizeGb: String(config.bootDisk.sizeGb),
-          diskType: `zones/${this.zone}/diskTypes/${config.bootDisk.diskType}`,
-        },
-      },
+  // -- Instance Template --
+
+  async createInstanceTemplate(config: InstanceTemplateConfig): Promise<string> {
+    const metadataItems = [
+      { key: "startup-script", value: config.startupScript },
+      ...config.metadata,
     ];
 
-    if (config.dataDiskName) {
-      disks.push({
-        boot: false,
-        autoDelete: false,
-        source: `zones/${this.zone}/disks/${config.dataDiskName}`,
-        deviceName: config.dataDiskName,
-      });
-    }
+    const [operation] = await this.templatesClient.insert({
+      project: this.project,
+      instanceTemplateResource: {
+        name: config.name,
+        description: "Clawster OpenClaw instance template",
+        properties: {
+          machineType: config.machineType,
+          disks: [
+            {
+              boot: true,
+              autoDelete: true,
+              initializeParams: {
+                sourceImage: config.sourceImage,
+                diskSizeGb: String(config.bootDiskSizeGb),
+                diskType: "pd-standard",
+              },
+            },
+          ],
+          networkInterfaces: [
+            {
+              network: `projects/${this.project}/global/networks/${config.networkName}`,
+              subnetwork: `projects/${this.project}/regions/${this.region}/subnetworks/${config.subnetName}`,
+              accessConfigs: [
+                {
+                  name: "External NAT",
+                  type: "ONE_TO_ONE_NAT",
+                  networkTier: "PREMIUM",
+                },
+              ],
+            },
+          ],
+          tags: {
+            items: config.networkTags,
+          },
+          metadata: {
+            items: metadataItems,
+          },
+          labels: config.labels,
+          serviceAccounts: [
+            {
+              scopes: config.scopes ?? [
+                "https://www.googleapis.com/auth/cloud-platform",
+              ],
+            },
+          ],
+        },
+      },
+    });
 
-    const [operation] = await this.instancesClient.insert({
+    await this.operationManager.waitForOperation(operation, "global", {
+      description: "create instance template",
+    });
+
+    const [template] = await this.templatesClient.get({
+      project: this.project,
+      instanceTemplate: config.name,
+    });
+
+    return template.selfLink ?? "";
+  }
+
+  async deleteInstanceTemplate(name: string): Promise<void> {
+    try {
+      const [operation] = await this.templatesClient.delete({
+        project: this.project,
+        instanceTemplate: name,
+      });
+      await this.operationManager.waitForOperation(operation, "global", {
+        description: "delete instance template",
+      });
+    } catch (error: unknown) {
+      if (!this.isNotFoundError(error)) throw error;
+    }
+  }
+
+  // -- Health Check --
+
+  async createHealthCheck(
+    name: string,
+    port: number,
+    path: string
+  ): Promise<string> {
+    const [operation] = await this.healthChecksClient.insert({
+      project: this.project,
+      healthCheckResource: {
+        name,
+        description: "Clawster health check via Caddy",
+        type: "HTTP",
+        httpHealthCheck: {
+          port,
+          requestPath: path,
+        },
+        checkIntervalSec: 30,
+        timeoutSec: 10,
+        healthyThreshold: 2,
+        unhealthyThreshold: 3,
+      },
+    });
+
+    await this.operationManager.waitForOperation(operation, "global", {
+      description: "create health check",
+    });
+
+    const [hc] = await this.healthChecksClient.get({
+      project: this.project,
+      healthCheck: name,
+    });
+
+    return hc.selfLink ?? "";
+  }
+
+  async deleteHealthCheck(name: string): Promise<void> {
+    try {
+      const [operation] = await this.healthChecksClient.delete({
+        project: this.project,
+        healthCheck: name,
+      });
+      await this.operationManager.waitForOperation(operation, "global", {
+        description: "delete health check",
+      });
+    } catch (error: unknown) {
+      if (!this.isNotFoundError(error)) throw error;
+    }
+  }
+
+  // -- Managed Instance Group --
+
+  async createMig(
+    name: string,
+    templateUrl: string,
+    healthCheckUrl: string
+  ): Promise<void> {
+    const [operation] = await this.migClient.insert({
       project: this.project,
       zone: this.zone,
-      instanceResource: {
-        name: config.name,
-        machineType: `zones/${this.zone}/machineTypes/${config.machineType}`,
-        description: `Clawster OpenClaw instance`,
-        tags: {
-          items: config.networkTags,
-        },
-        disks,
-        networkInterfaces: [
+      instanceGroupManagerResource: {
+        name,
+        description: "Clawster MIG — single VM with auto-healing",
+        instanceTemplate: templateUrl,
+        targetSize: 1,
+        autoHealingPolicies: [
           {
-            network: `projects/${this.project}/global/networks/${config.networkName}`,
-            subnetwork: `projects/${this.project}/regions/${this.region}/subnetworks/${config.subnetName}`,
-            accessConfigs: [],
+            healthCheck: healthCheckUrl,
+            initialDelaySec: 600, // 10 min grace for startup script
           },
         ],
-        metadata: {
-          items: config.metadata,
+        updatePolicy: {
+          type: "PROACTIVE",
+          minimalAction: "REPLACE",
+          maxSurge: { fixed: 1 },
+          maxUnavailable: { fixed: 1 },
         },
-        labels: config.labels,
-        serviceAccounts: config.scopes
-          ? [{ scopes: config.scopes }]
-          : [{ scopes: ["https://www.googleapis.com/auth/cloud-platform"] }],
       },
     });
 
     await this.operationManager.waitForOperation(operation, "zone", {
-      description: "create VM instance",
+      description: "create MIG",
     });
-
-    const [instance] = await this.instancesClient.get({
-      project: this.project,
-      zone: this.zone,
-      instance: config.name,
-    });
-
-    return instance.selfLink ?? "";
   }
 
-  /**
-   * Update VM instance metadata.
-   */
-  async updateVmMetadata(
-    instanceName: string,
-    metadata: Record<string, string>
-  ): Promise<void> {
-    const [instance] = await this.instancesClient.get({
+  async scaleMig(name: string, size: number): Promise<void> {
+    const [operation] = await this.migClient.resize({
       project: this.project,
       zone: this.zone,
-      instance: instanceName,
-    });
-
-    const currentItems = instance.metadata?.items ?? [];
-    const metadataKeys = Object.keys(metadata);
-    const newItems = currentItems.filter(
-      (item) => item.key && !metadataKeys.includes(item.key)
-    );
-
-    for (const [key, value] of Object.entries(metadata)) {
-      newItems.push({ key, value });
-    }
-
-    const [operation] = await this.instancesClient.setMetadata({
-      project: this.project,
-      zone: this.zone,
-      instance: instanceName,
-      metadataResource: {
-        fingerprint: instance.metadata?.fingerprint,
-        items: newItems,
-      },
+      instanceGroupManager: name,
+      size,
     });
 
     await this.operationManager.waitForOperation(operation, "zone", {
-      description: "update VM metadata",
+      description: `scale MIG to ${size}`,
     });
   }
 
-  /**
-   * Ensure an unmanaged instance group exists with the specified instance.
-   *
-   * @param name - Instance group name
-   * @param instanceName - VM instance to add to the group
-   * @param namedPort - Named port for load balancing
-   * @param vpcName - VPC network name
-   * @returns Instance group self-link URL
-   */
-  async ensureInstanceGroup(
-    name: string,
-    instanceName: string,
-    namedPort: NamedPort,
-    vpcName: string
-  ): Promise<string> {
+  async deleteMig(name: string): Promise<void> {
     try {
-      const [group] = await this.instanceGroupsClient.get({
+      const [operation] = await this.migClient.delete({
         project: this.project,
         zone: this.zone,
-        instanceGroup: name,
+        instanceGroupManager: name,
       });
-      return group.selfLink ?? "";
+      await this.operationManager.waitForOperation(operation, "zone", {
+        description: "delete MIG",
+      });
     } catch (error: unknown) {
-      if (this.isNotFoundError(error)) {
-        const [operation] = await this.instanceGroupsClient.insert({
+      if (!this.isNotFoundError(error)) throw error;
+    }
+  }
+
+  async getMigInstanceIp(migName: string): Promise<string> {
+    const instances = this.migClient.listManagedInstancesAsync({
+      project: this.project,
+      zone: this.zone,
+      instanceGroupManager: migName,
+    });
+
+    for await (const instance of instances) {
+      const instanceUrl = instance.instance;
+      if (!instanceUrl) continue;
+
+      const instanceName = instanceUrl.split("/").pop();
+      if (!instanceName) continue;
+
+      try {
+        const [vm] = await this.instancesClient.get({
           project: this.project,
           zone: this.zone,
-          instanceGroupResource: {
-            name,
-            description: `Clawster instance group`,
-            network: `projects/${this.project}/global/networks/${vpcName}`,
-            namedPorts: [{ name: namedPort.name, port: namedPort.port }],
-          },
-        });
-        await this.operationManager.waitForOperation(operation, "zone", {
-          description: "create instance group",
+          instance: instanceName,
         });
 
-        const [addOperation] = await this.instanceGroupsClient.addInstances({
-          project: this.project,
-          zone: this.zone,
-          instanceGroup: name,
-          instanceGroupsAddInstancesRequestResource: {
-            instances: [
-              { instance: `zones/${this.zone}/instances/${instanceName}` },
-            ],
-          },
-        });
-        await this.operationManager.waitForOperation(addOperation, "zone", {
-          description: "add instance to group",
-        });
-
-        const [group] = await this.instanceGroupsClient.get({
-          project: this.project,
-          zone: this.zone,
-          instanceGroup: name,
-        });
-        return group.selfLink ?? "";
+        const natIp =
+          vm.networkInterfaces?.[0]?.accessConfigs?.[0]?.natIP;
+        if (natIp) return natIp;
+      } catch {
+        // Instance might not be ready yet
       }
+    }
+
+    return "";
+  }
+
+  async getMigStatus(
+    migName: string
+  ): Promise<"RUNNING" | "STOPPED" | "UNKNOWN"> {
+    try {
+      const [mig] = await this.migClient.get({
+        project: this.project,
+        zone: this.zone,
+        instanceGroupManager: migName,
+      });
+
+      const targetSize =
+        typeof mig.targetSize === "number" ? mig.targetSize : 0;
+
+      if (targetSize === 0) return "STOPPED";
+
+      // Check managed instances
+      const instances = this.migClient.listManagedInstancesAsync({
+        project: this.project,
+        zone: this.zone,
+        instanceGroupManager: migName,
+      });
+
+      for await (const instance of instances) {
+        if (instance.instanceStatus === "RUNNING") return "RUNNING";
+      }
+
+      return "UNKNOWN";
+    } catch (error: unknown) {
+      if (this.isNotFoundError(error)) return "STOPPED";
       throw error;
     }
   }
 
-  /**
-   * Start a VM instance.
-   */
-  async startInstance(name: string): Promise<void> {
-    const [operation] = await this.instancesClient.start({
+  async recreateMigInstances(migName: string): Promise<void> {
+    const instanceUrls: string[] = [];
+
+    const instances = this.migClient.listManagedInstancesAsync({
       project: this.project,
       zone: this.zone,
-      instance: name,
+      instanceGroupManager: migName,
     });
+
+    for await (const instance of instances) {
+      if (instance.instance) {
+        instanceUrls.push(instance.instance);
+      }
+    }
+
+    if (instanceUrls.length === 0) return;
+
+    const [operation] = await this.migClient.recreateInstances({
+      project: this.project,
+      zone: this.zone,
+      instanceGroupManager: migName,
+      instanceGroupManagersRecreateInstancesRequestResource: {
+        instances: instanceUrls,
+      },
+    });
+
     await this.operationManager.waitForOperation(operation, "zone", {
-      description: "start VM",
+      description: "recreate MIG instances",
     });
   }
 
-  /**
-   * Stop a VM instance.
-   */
-  async stopInstance(name: string): Promise<void> {
-    const [operation] = await this.instancesClient.stop({
+  async setMigInstanceTemplate(
+    migName: string,
+    templateUrl: string
+  ): Promise<void> {
+    const [operation] = await this.migClient.setInstanceTemplate({
       project: this.project,
       zone: this.zone,
-      instance: name,
+      instanceGroupManager: migName,
+      instanceGroupManagersSetInstanceTemplateRequestResource: {
+        instanceTemplate: templateUrl,
+      },
     });
+
     await this.operationManager.waitForOperation(operation, "zone", {
-      description: "stop VM",
+      description: "update MIG instance template",
     });
   }
 
-  /**
-   * Reset (restart) a VM instance.
-   */
-  async resetInstance(name: string): Promise<void> {
-    const [operation] = await this.instancesClient.reset({
+  async getMigInstanceTemplate(migName: string): Promise<string> {
+    const [mig] = await this.migClient.get({
       project: this.project,
       zone: this.zone,
-      instance: name,
+      instanceGroupManager: migName,
     });
-    await this.operationManager.waitForOperation(operation, "zone", {
-      description: "reset VM",
-    });
+
+    return mig.instanceTemplate ?? "";
   }
 
-  /**
-   * Get the status of a VM instance.
-   * Throws on NOT_FOUND so caller can detect "not-installed" state.
-   */
+  // -- Direct instance operations --
+
   async getInstanceStatus(name: string): Promise<VmStatus> {
     const [instance] = await this.instancesClient.get({
       project: this.project,
@@ -250,166 +359,6 @@ export class GceComputeManager implements IGceComputeManager {
       instance: name,
     });
     return (instance.status as VmStatus) ?? "UNKNOWN";
-  }
-
-  /**
-   * Get VM instance details.
-   */
-  async getInstance(name: string): Promise<{
-    status?: string | null;
-    machineType?: string | null;
-    metadata?: { items?: Array<{ key?: string | null; value?: string | null }> | null } | null;
-  } | null> {
-    try {
-      const [instance] = await this.instancesClient.get({
-        project: this.project,
-        zone: this.zone,
-        instance: name,
-      });
-      return instance as {
-        status?: string | null;
-        machineType?: string | null;
-        metadata?: { items?: Array<{ key?: string | null; value?: string | null }> | null } | null;
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Resize a VM instance (change machine type).
-   * Note: VM must be stopped first.
-   */
-  async resizeInstance(name: string, machineType: string): Promise<void> {
-    const [operation] = await this.instancesClient.setMachineType({
-      project: this.project,
-      zone: this.zone,
-      instance: name,
-      instancesSetMachineTypeRequestResource: {
-        machineType: `zones/${this.zone}/machineTypes/${machineType}`,
-      },
-    });
-    await this.operationManager.waitForOperation(operation, "zone", {
-      description: "change machine type",
-    });
-  }
-
-  /**
-   * Ensure a data disk exists.
-   */
-  async ensureDataDisk(name: string, sizeGb: number, diskType = "pd-standard"): Promise<void> {
-    try {
-      await this.disksClient.get({
-        project: this.project,
-        zone: this.zone,
-        disk: name,
-      });
-    } catch (error: unknown) {
-      if (this.isNotFoundError(error)) {
-        const [operation] = await this.disksClient.insert({
-          project: this.project,
-          zone: this.zone,
-          diskResource: {
-            name,
-            sizeGb: String(sizeGb),
-            type: `zones/${this.zone}/diskTypes/${diskType}`,
-            description: `Clawster persistent data disk`,
-          },
-        });
-        await this.operationManager.waitForOperation(operation, "zone", {
-          description: "create data disk",
-        });
-        return;
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Resize a disk (can only increase size).
-   */
-  async resizeDisk(name: string, sizeGb: number): Promise<void> {
-    const [operation] = await this.disksClient.resize({
-      project: this.project,
-      zone: this.zone,
-      disk: name,
-      disksResizeRequestResource: {
-        sizeGb: String(sizeGb),
-      },
-    });
-    await this.operationManager.waitForOperation(operation, "zone", {
-      description: "resize disk",
-    });
-  }
-
-  /**
-   * Get disk details.
-   */
-  async getDisk(name: string): Promise<{ sizeGb?: string | number | null } | null> {
-    try {
-      const [disk] = await this.disksClient.get({
-        project: this.project,
-        zone: this.zone,
-        disk: name,
-      });
-      return disk as { sizeGb?: string | number | null };
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Delete a VM instance.
-   */
-  async deleteInstance(name: string): Promise<void> {
-    try {
-      const [operation] = await this.instancesClient.delete({
-        project: this.project,
-        zone: this.zone,
-        instance: name,
-      });
-      await this.operationManager.waitForOperation(operation, "zone", {
-        description: "delete VM",
-      });
-    } catch (error: unknown) {
-      if (!this.isNotFoundError(error)) throw error;
-    }
-  }
-
-  /**
-   * Delete a disk.
-   */
-  async deleteDisk(name: string): Promise<void> {
-    try {
-      const [operation] = await this.disksClient.delete({
-        project: this.project,
-        zone: this.zone,
-        disk: name,
-      });
-      await this.operationManager.waitForOperation(operation, "zone", {
-        description: "delete disk",
-      });
-    } catch (error: unknown) {
-      if (!this.isNotFoundError(error)) throw error;
-    }
-  }
-
-  /**
-   * Delete an instance group.
-   */
-  async deleteInstanceGroup(name: string): Promise<void> {
-    try {
-      const [operation] = await this.instanceGroupsClient.delete({
-        project: this.project,
-        zone: this.zone,
-        instanceGroup: name,
-      });
-      await this.operationManager.waitForOperation(operation, "zone", {
-        description: "delete instance group",
-      });
-    } catch (error: unknown) {
-      if (!this.isNotFoundError(error)) throw error;
-    }
   }
 
   private isNotFoundError(error: unknown): boolean {

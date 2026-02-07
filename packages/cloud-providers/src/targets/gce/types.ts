@@ -2,6 +2,7 @@
  * GCE Target Type Definitions
  *
  * Shared types for GCE deployment target and its managers.
+ * Caddy-on-VM architecture: MIG + Instance Template + Caddy reverse proxy.
  */
 
 /**
@@ -40,71 +41,6 @@ export interface FirewallRule {
   targetTags?: string[];
   /** Rule description */
   description?: string;
-}
-
-/**
- * VM instance configuration.
- */
-export interface VmInstanceConfig {
-  /** Instance name */
-  name: string;
-  /** Machine type (e.g., "e2-small") */
-  machineType: string;
-  /** Boot disk configuration */
-  bootDisk: {
-    /** Source image for the boot disk */
-    sourceImage: string;
-    /** Disk size in GB */
-    sizeGb: number;
-    /** Disk type (e.g., "pd-standard", "pd-ssd") */
-    diskType: string;
-  };
-  /** Data disk name to attach */
-  dataDiskName?: string;
-  /** VPC network name */
-  networkName: string;
-  /** Subnet name */
-  subnetName: string;
-  /** Network tags for firewall rules */
-  networkTags: string[];
-  /** Metadata items for the instance */
-  metadata: Array<{ key: string; value: string }>;
-  /** Labels for organization */
-  labels: Record<string, string>;
-  /** Service account scopes */
-  scopes?: string[];
-}
-
-/**
- * Named port for instance groups.
- */
-export interface NamedPort {
-  /** Port name (e.g., "http") */
-  name: string;
-  /** Port number */
-  port: number;
-}
-
-/**
- * Load balancer resource names.
- */
-export interface LoadBalancerNames {
-  /** Backend service name */
-  backendService: string;
-  /** URL map name */
-  urlMap: string;
-  /** HTTP proxy name */
-  httpProxy: string;
-  /** HTTPS proxy name */
-  httpsProxy: string;
-  /** Forwarding rule name */
-  forwardingRule: string;
-  /** Security policy name */
-  securityPolicy: string;
-  /** Instance group name */
-  instanceGroup: string;
-  /** External IP name */
-  externalIp: string;
 }
 
 /**

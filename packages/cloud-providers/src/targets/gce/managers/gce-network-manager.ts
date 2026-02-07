@@ -1,14 +1,14 @@
 /**
  * GCE Network Manager
  *
- * Manages VPC networks, subnets, firewall rules, and external IP addresses.
+ * Manages VPC networks, subnets, and firewall rules.
+ * Caddy-on-VM architecture: VMs use ephemeral public IPs (no static IP reservation).
  */
 
 import {
   NetworksClient,
   SubnetworksClient,
   FirewallsClient,
-  GlobalAddressesClient,
 } from "@google-cloud/compute";
 import type { VpcOptions, FirewallRule, GceLogCallback } from "../types";
 import type { IGceNetworkManager, IGceOperationManager } from "./interfaces";
@@ -21,20 +21,12 @@ export class GceNetworkManager implements IGceNetworkManager {
     private readonly networksClient: NetworksClient,
     private readonly subnetworksClient: SubnetworksClient,
     private readonly firewallsClient: FirewallsClient,
-    private readonly addressesClient: GlobalAddressesClient,
     private readonly operationManager: IGceOperationManager,
     private readonly project: string,
     private readonly region: string,
     private readonly log: GceLogCallback
   ) {}
 
-  /**
-   * Ensure a VPC network exists, creating it if necessary.
-   *
-   * @param name - Network name
-   * @param options - VPC options
-   * @returns Network self-link URL
-   */
   async ensureVpcNetwork(name: string, options?: VpcOptions): Promise<string> {
     try {
       const [network] = await this.networksClient.get({
@@ -49,7 +41,7 @@ export class GceNetworkManager implements IGceNetworkManager {
           networkResource: {
             name,
             autoCreateSubnetworks: options?.autoCreateSubnetworks ?? false,
-            description: options?.description ?? `Clawster VPC network`,
+            description: options?.description ?? "Clawster VPC network",
           },
         });
         await this.operationManager.waitForOperation(operation, "global", {
@@ -66,14 +58,6 @@ export class GceNetworkManager implements IGceNetworkManager {
     }
   }
 
-  /**
-   * Ensure a subnet exists within a VPC network.
-   *
-   * @param vpcName - VPC network name
-   * @param subnetName - Subnet name
-   * @param cidr - IP CIDR range (e.g., "10.0.0.0/24")
-   * @returns Subnet self-link URL
-   */
   async ensureSubnet(vpcName: string, subnetName: string, cidr: string): Promise<string> {
     try {
       const [subnet] = await this.subnetworksClient.get({
@@ -92,7 +76,7 @@ export class GceNetworkManager implements IGceNetworkManager {
             network: `projects/${this.project}/global/networks/${vpcName}`,
             ipCidrRange: cidr,
             region: this.region,
-            description: `Clawster subnet`,
+            description: "Clawster subnet",
           },
         });
         await this.operationManager.waitForOperation(operation, "region", {
@@ -110,14 +94,23 @@ export class GceNetworkManager implements IGceNetworkManager {
     }
   }
 
-  /**
-   * Ensure firewall rules exist for a VPC network.
-   *
-   * @param name - Firewall rule name
-   * @param vpcName - VPC network name
-   * @param rules - Firewall rules to create
-   */
   async ensureFirewall(name: string, vpcName: string, rules: FirewallRule[]): Promise<void> {
+    // SECURITY: Validate that all rules share the same sourceRanges.
+    // GCE firewall resources apply sourceRanges globally to ALL allowed entries (OR logic).
+    // Mixing 0.0.0.0/0 (HTTP) with 35.235.240.0/20 (SSH) in one resource exposes SSH to the internet.
+    if (rules.length > 1) {
+      const firstRanges = JSON.stringify([...rules[0].sourceRanges].sort());
+      for (const rule of rules.slice(1)) {
+        if (JSON.stringify([...rule.sourceRanges].sort()) !== firstRanges) {
+          throw new Error(
+            "Cannot create a single GCE firewall with different sourceRanges per rule. " +
+            "GCE applies sourceRanges globally to all allowed entries. " +
+            "Use separate ensureFirewall() calls for rules with different source ranges."
+          );
+        }
+      }
+    }
+
     try {
       await this.firewallsClient.get({
         project: this.project,
@@ -138,7 +131,7 @@ export class GceNetworkManager implements IGceNetworkManager {
           firewallResource: {
             name,
             network: `projects/${this.project}/global/networks/${vpcName}`,
-            description: rules[0]?.description ?? `Clawster firewall rules`,
+            description: rules[0]?.description ?? "Clawster firewall rules",
             allowed,
             sourceRanges: [...new Set(sourceRanges)],
             targetTags: targetTags.length > 0 ? [...new Set(targetTags)] : undefined,
@@ -153,46 +146,6 @@ export class GceNetworkManager implements IGceNetworkManager {
     }
   }
 
-  /**
-   * Ensure an external static IP address exists.
-   *
-   * @param name - IP address name
-   * @returns The allocated IP address
-   */
-  async ensureExternalIp(name: string): Promise<string> {
-    try {
-      const [address] = await this.addressesClient.get({
-        project: this.project,
-        address: name,
-      });
-      return address.address ?? "";
-    } catch (error: unknown) {
-      if (this.isNotFoundError(error)) {
-        const [operation] = await this.addressesClient.insert({
-          project: this.project,
-          addressResource: {
-            name,
-            description: `Clawster external IP`,
-            networkTier: "PREMIUM",
-          },
-        });
-        await this.operationManager.waitForOperation(operation, "global", {
-          description: "reserve external IP",
-        });
-
-        const [address] = await this.addressesClient.get({
-          project: this.project,
-          address: name,
-        });
-        return address.address ?? "";
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Delete a VPC network.
-   */
   async deleteNetwork(name: string): Promise<void> {
     try {
       const [operation] = await this.networksClient.delete({
@@ -207,9 +160,6 @@ export class GceNetworkManager implements IGceNetworkManager {
     }
   }
 
-  /**
-   * Delete a subnet.
-   */
   async deleteSubnet(name: string): Promise<void> {
     try {
       const [operation] = await this.subnetworksClient.delete({
@@ -225,9 +175,6 @@ export class GceNetworkManager implements IGceNetworkManager {
     }
   }
 
-  /**
-   * Delete a firewall rule.
-   */
   async deleteFirewall(name: string): Promise<void> {
     try {
       const [operation] = await this.firewallsClient.delete({
@@ -240,34 +187,6 @@ export class GceNetworkManager implements IGceNetworkManager {
     } catch (error: unknown) {
       if (!this.isNotFoundError(error)) throw error;
     }
-  }
-
-  /**
-   * Release an external IP address.
-   */
-  async releaseExternalIp(name: string): Promise<void> {
-    try {
-      const [operation] = await this.addressesClient.delete({
-        project: this.project,
-        address: name,
-      });
-      await this.operationManager.waitForOperation(operation, "global", {
-        description: "delete external IP",
-      });
-    } catch (error: unknown) {
-      if (!this.isNotFoundError(error)) throw error;
-    }
-  }
-
-  /**
-   * Get an external IP address value.
-   */
-  async getExternalIp(name: string): Promise<string> {
-    const [address] = await this.addressesClient.get({
-      project: this.project,
-      address: name,
-    });
-    return address.address ?? "";
   }
 
   private isNotFoundError(error: unknown): boolean {

@@ -1,143 +1,79 @@
 /**
  * GCE Compute Manager Interface
  *
- * Provides abstraction for VM instances, disks, and instance groups.
- * Enables dependency injection for testing and modularity.
+ * Provides abstraction for MIG, Instance Template, and Health Check operations.
+ * Caddy-on-VM architecture: MIG manages a single VM with auto-healing.
  */
 
-import type { VmInstanceConfig, NamedPort, VmStatus } from "../../types";
+import type { VmStatus } from "../../types";
 
 /**
- * Interface for managing GCE compute resources.
+ * Configuration for creating a GCE instance template.
+ */
+export interface InstanceTemplateConfig {
+  /** Template name */
+  name: string;
+  /** Machine type (e.g., "e2-medium") */
+  machineType: string;
+  /** Boot disk size in GB */
+  bootDiskSizeGb: number;
+  /** Source image for boot disk */
+  sourceImage: string;
+  /** VPC network name */
+  networkName: string;
+  /** Subnet name */
+  subnetName: string;
+  /** Network tags for firewall rules */
+  networkTags: string[];
+  /** Startup script (bash) */
+  startupScript: string;
+  /** Instance metadata key-value pairs */
+  metadata: Array<{ key: string; value: string }>;
+  /** Labels for organization */
+  labels: Record<string, string>;
+  /** Service account scopes */
+  scopes?: string[];
+}
+
+/**
+ * Interface for managing GCE compute resources (MIG-based).
  */
 export interface IGceComputeManager {
-  /**
-   * Create a new VM instance.
-   *
-   * @param config - VM instance configuration
-   * @returns Instance self-link URL
-   */
-  createVmInstance(config: VmInstanceConfig): Promise<string>;
+  // -- Instance Template --
 
-  /**
-   * Update VM instance metadata.
-   *
-   * @param instanceName - Instance name
-   * @param metadata - Key-value pairs to update
-   */
-  updateVmMetadata(instanceName: string, metadata: Record<string, string>): Promise<void>;
+  /** Create a global instance template. Returns self-link URL. */
+  createInstanceTemplate(config: InstanceTemplateConfig): Promise<string>;
+  /** Delete an instance template. */
+  deleteInstanceTemplate(name: string): Promise<void>;
 
-  /**
-   * Ensure an unmanaged instance group exists with the specified instance.
-   *
-   * @param name - Instance group name
-   * @param instanceName - VM instance to add to the group
-   * @param namedPort - Named port for load balancing
-   * @param vpcName - VPC network name
-   * @returns Instance group self-link URL
-   */
-  ensureInstanceGroup(
-    name: string,
-    instanceName: string,
-    namedPort: NamedPort,
-    vpcName: string
-  ): Promise<string>;
+  // -- Health Check --
 
-  /**
-   * Start a VM instance.
-   *
-   * @param name - Instance name
-   */
-  startInstance(name: string): Promise<void>;
+  /** Create a global HTTP health check. Returns self-link URL. */
+  createHealthCheck(name: string, port: number, path: string): Promise<string>;
+  /** Delete a health check. */
+  deleteHealthCheck(name: string): Promise<void>;
 
-  /**
-   * Stop a VM instance.
-   *
-   * @param name - Instance name
-   */
-  stopInstance(name: string): Promise<void>;
+  // -- Managed Instance Group --
 
-  /**
-   * Reset (restart) a VM instance.
-   *
-   * @param name - Instance name
-   */
-  resetInstance(name: string): Promise<void>;
+  /** Create a zonal MIG with auto-healing. Target size = 1. */
+  createMig(name: string, templateUrl: string, healthCheckUrl: string): Promise<void>;
+  /** Scale MIG to the given size (0 = stop, 1 = start). */
+  scaleMig(name: string, size: number): Promise<void>;
+  /** Delete a MIG. */
+  deleteMig(name: string): Promise<void>;
+  /** Get the ephemeral public IP of the MIG's managed instance. */
+  getMigInstanceIp(migName: string): Promise<string>;
+  /** Get the MIG status based on target size and instance state. */
+  getMigStatus(migName: string): Promise<"RUNNING" | "STOPPED" | "UNKNOWN">;
+  /** Recreate all instances in the MIG (triggers re-provisioning). */
+  recreateMigInstances(migName: string): Promise<void>;
+  /** Update the MIG to use a different instance template. */
+  setMigInstanceTemplate(migName: string, templateUrl: string): Promise<void>;
+  /** Get the current instance template URL from the MIG. */
+  getMigInstanceTemplate(migName: string): Promise<string>;
 
-  /**
-   * Get the status of a VM instance.
-   *
-   * @param name - Instance name
-   * @returns VM status
-   */
-  getInstanceStatus(name: string): Promise<VmStatus>;
+  // -- Direct instance operations --
 
-  /**
-   * Get VM instance details.
-   *
-   * @param name - Instance name
-   * @returns Instance details or null if not found
-   */
-  getInstance(name: string): Promise<{
-    status?: string | null;
-    machineType?: string | null;
-    metadata?: {
-      items?: Array<{ key?: string | null; value?: string | null }> | null;
-    } | null;
-  } | null>;
-
-  /**
-   * Resize a VM instance (change machine type).
-   * Note: VM must be stopped first.
-   *
-   * @param name - Instance name
-   * @param machineType - New machine type
-   */
-  resizeInstance(name: string, machineType: string): Promise<void>;
-
-  /**
-   * Ensure a data disk exists.
-   *
-   * @param name - Disk name
-   * @param sizeGb - Disk size in GB
-   * @param diskType - Disk type (default: "pd-standard")
-   */
-  ensureDataDisk(name: string, sizeGb: number, diskType?: string): Promise<void>;
-
-  /**
-   * Resize a disk (can only increase size).
-   *
-   * @param name - Disk name
-   * @param sizeGb - New size in GB
-   */
-  resizeDisk(name: string, sizeGb: number): Promise<void>;
-
-  /**
-   * Get disk details.
-   *
-   * @param name - Disk name
-   * @returns Disk details or null if not found
-   */
-  getDisk(name: string): Promise<{ sizeGb?: string | number | null } | null>;
-
-  /**
-   * Delete a VM instance.
-   *
-   * @param name - Instance name
-   */
-  deleteInstance(name: string): Promise<void>;
-
-  /**
-   * Delete a disk.
-   *
-   * @param name - Disk name
-   */
-  deleteDisk(name: string): Promise<void>;
-
-  /**
-   * Delete an instance group.
-   *
-   * @param name - Instance group name
-   */
-  deleteInstanceGroup(name: string): Promise<void>;
+  /** Get VM instance status (used for detailed status checks). */
+  getInstanceStatus(instanceName: string): Promise<VmStatus>;
 }
