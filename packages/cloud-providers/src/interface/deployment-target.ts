@@ -20,6 +20,13 @@ export enum DeploymentTargetType {
 /**
  * Options for installing an OpenClaw gateway instance on a deployment target
  */
+/** Middleware assignment stored in bot instance metadata */
+export interface MiddlewareAssignment {
+  package: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+}
+
 export interface InstallOptions {
   /** Profile name for isolation (scopes config/state/workspace) */
   profileName: string;
@@ -33,6 +40,10 @@ export interface InstallOptions {
   gatewayAuthToken?: string;
   /** Additional container environment variables (e.g., LLM API keys) */
   containerEnv?: Record<string, string>;
+  /** Middleware assignments for proxy sidecar (when present, proxy is deployed alongside) */
+  middlewareConfig?: {
+    middlewares: MiddlewareAssignment[];
+  };
 }
 
 /**
@@ -225,11 +236,11 @@ export interface DockerTargetConfig {
   networkName?: string;
 }
 
-import type { EcsEc2Config } from "../targets/ecs-ec2/ecs-ec2-config";
+import type { AwsEc2Config } from "../targets/ecs-ec2/aws-ec2-config";
 import type { AzureVmConfig } from "../targets/azure-vm/azure-vm-config";
 import type { GceConfig } from "../targets/gce/gce-config";
 import type { ResourceSpec, ResourceUpdateResult } from "./resource-spec";
-export type { EcsEc2Config } from "../targets/ecs-ec2/ecs-ec2-config";
+export type { AwsEc2Config } from "../targets/ecs-ec2/aws-ec2-config";
 export type { AzureVmConfig } from "../targets/azure-vm/azure-vm-config";
 export type { GceConfig } from "../targets/gce/gce-config";
 export type {
@@ -249,7 +260,7 @@ export {
 export type DeploymentTargetConfig =
   | { type: "local" }
   | { type: "docker"; docker: DockerTargetConfig }
-  | { type: "ecs-ec2"; ecs: EcsEc2Config }
+  | { type: "ecs-ec2"; ecs: AwsEc2Config }
   | { type: "gce"; gce: GceConfig }
   | { type: "azure-vm"; azureVm: AzureVmConfig };
 

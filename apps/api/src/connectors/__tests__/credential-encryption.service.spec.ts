@@ -88,6 +88,52 @@ describe("CredentialEncryptionService", () => {
     expect((masked.apiKey as string)).not.toBe(config.apiKey);
   });
 
+  it("masks azure-account credentials correctly", () => {
+    delete process.env.CREDENTIAL_ENCRYPTION_KEY;
+    const service = new CredentialEncryptionService();
+
+    const config = {
+      subscriptionId: "12345678-1234-1234-1234-123456789abc",
+      resourceGroup: "my-rg",
+      region: "eastus",
+      tenantId: "abcdef00-1234-5678-abcd-ef0123456789",
+      clientId: "client-id-long-value-here",
+      clientSecret: "super-secret-value",
+    };
+
+    const masked = service.mask("azure-account", config);
+
+    expect(masked.resourceGroup).toBe("my-rg");
+    expect(masked.region).toBe("eastus");
+    expect(masked.clientSecret).toBe("••••••••");
+    expect(typeof masked.subscriptionId).toBe("string");
+    expect((masked.subscriptionId as string)).toContain("••••");
+    expect((masked.subscriptionId as string)).not.toBe(config.subscriptionId);
+    expect(typeof masked.tenantId).toBe("string");
+    expect((masked.tenantId as string)).toContain("••••");
+    expect(typeof masked.clientId).toBe("string");
+    expect((masked.clientId as string)).toContain("••••");
+  });
+
+  it("masks gce-account credentials correctly", () => {
+    delete process.env.CREDENTIAL_ENCRYPTION_KEY;
+    const service = new CredentialEncryptionService();
+
+    const config = {
+      projectId: "my-gce-project",
+      zone: "us-central1-a",
+      keyFilePath: "/path/to/service-account-key.json",
+    };
+
+    const masked = service.mask("gce-account", config);
+
+    expect(masked.projectId).toBe("my-gce-project");
+    expect(masked.zone).toBe("us-central1-a");
+    expect(typeof masked.keyFilePath).toBe("string");
+    expect((masked.keyFilePath as string)).toContain("••••");
+    expect((masked.keyFilePath as string)).not.toBe(config.keyFilePath);
+  });
+
   it("maskString returns dots for short strings", () => {
     delete process.env.CREDENTIAL_ENCRYPTION_KEY;
     const service = new CredentialEncryptionService();

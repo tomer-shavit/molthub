@@ -1,4 +1,4 @@
-import { EcsEc2Target } from "../ecs-ec2/ecs-ec2-target";
+import { AwsEc2Target } from "../ecs-ec2/aws-ec2-target";
 import type { DeploymentTarget } from "../../interface/deployment-target";
 import {
   generateTestProfile,
@@ -9,14 +9,11 @@ import {
 
 const HAS_AWS_CREDS = !!(
   process.env.AWS_ACCESS_KEY_ID &&
-  process.env.AWS_SECRET_ACCESS_KEY &&
-  process.env.CLAWSTER_TEST_ECS_CLUSTER &&
-  process.env.CLAWSTER_TEST_VPC_SUBNETS &&
-  process.env.CLAWSTER_TEST_SECURITY_GROUP
+  process.env.AWS_SECRET_ACCESS_KEY
 );
 
 (HAS_AWS_CREDS ? describe : describe.skip)(
-  "ECS EC2 Target Integration",
+  "AWS EC2 Target Integration",
   () => {
     let target: DeploymentTarget;
     let profile: string;
@@ -26,15 +23,10 @@ const HAS_AWS_CREDS = !!(
       profile = generateTestProfile();
       port = generateTestPort();
 
-      target = new EcsEc2Target({
+      target = new AwsEc2Target({
         region: process.env.AWS_REGION || "us-east-1",
         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-        clusterName: process.env.CLAWSTER_TEST_ECS_CLUSTER!,
-        subnetIds: process.env.CLAWSTER_TEST_VPC_SUBNETS!.split(","),
-        securityGroupId: process.env.CLAWSTER_TEST_SECURITY_GROUP!,
-        taskRoleArn: process.env.CLAWSTER_TEST_TASK_ROLE_ARN,
-        executionRoleArn: process.env.CLAWSTER_TEST_EXECUTION_ROLE_ARN,
       });
     });
 
@@ -44,7 +36,7 @@ const HAS_AWS_CREDS = !!(
       }
     });
 
-    it("should install (create task definition) successfully", async () => {
+    it("should install (create ASG + launch template) successfully", async () => {
       const result = await target.install({
         profileName: profile,
         port,
@@ -66,7 +58,7 @@ const HAS_AWS_CREDS = !!(
     });
 
     it("should report status", async () => {
-      // ECS tasks take time to start
+      // EC2 instances take time to start
       await new Promise((r) => setTimeout(r, 30_000));
 
       const status = await target.getStatus();

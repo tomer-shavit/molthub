@@ -180,6 +180,92 @@ describe("CredentialVaultService", () => {
     });
   });
 
+  describe("save — validation", () => {
+    it("rejects azure-account missing subscriptionId", async () => {
+      const dto = {
+        workspaceId: "ws-1",
+        name: "Bad Azure",
+        type: "azure-account",
+        credentials: { resourceGroup: "my-rg" },
+      };
+
+      await expect(service.save(dto, "user-1")).rejects.toThrow("subscriptionId");
+    });
+
+    it("rejects azure-account missing resourceGroup", async () => {
+      const dto = {
+        workspaceId: "ws-1",
+        name: "Bad Azure",
+        type: "azure-account",
+        credentials: { subscriptionId: "sub-123" },
+      };
+
+      await expect(service.save(dto, "user-1")).rejects.toThrow("resourceGroup");
+    });
+
+    it("rejects gce-account missing projectId", async () => {
+      const dto = {
+        workspaceId: "ws-1",
+        name: "Bad GCE",
+        type: "gce-account",
+        credentials: { zone: "us-central1-a" },
+      };
+
+      await expect(service.save(dto, "user-1")).rejects.toThrow("projectId");
+    });
+
+    it("accepts valid azure-account credentials", async () => {
+      const now = new Date();
+      mockConnectorRepo.createConnector.mockResolvedValue({
+        id: "cred-az",
+        name: "My Azure",
+        type: "azure-account",
+        config: "encrypted",
+        workspaceId: "ws-1",
+        createdAt: now,
+      });
+
+      const dto = {
+        workspaceId: "ws-1",
+        name: "My Azure",
+        type: "azure-account",
+        credentials: {
+          subscriptionId: "sub-123",
+          resourceGroup: "my-rg",
+          region: "eastus",
+        },
+      };
+
+      const result = await service.save(dto, "user-1");
+      expect(result).toHaveProperty("id", "cred-az");
+    });
+
+    it("accepts valid gce-account credentials", async () => {
+      const now = new Date();
+      mockConnectorRepo.createConnector.mockResolvedValue({
+        id: "cred-gce",
+        name: "My GCE",
+        type: "gce-account",
+        config: "encrypted",
+        workspaceId: "ws-1",
+        createdAt: now,
+      });
+
+      const dto = {
+        workspaceId: "ws-1",
+        name: "My GCE",
+        type: "gce-account",
+        credentials: {
+          projectId: "my-project",
+          zone: "us-central1-a",
+        },
+      };
+
+      const result = await service.save(dto, "user-1");
+      expect(result).toHaveProperty("id", "cred-gce");
+    });
+  });
+
   describe("delete", () => {
     it("removes credential", async () => {
       mockConnectorRepo.findConnectorById.mockResolvedValue({

@@ -100,6 +100,21 @@ export class ConfigGeneratorService {
       config.skills = skillsRest as typeof config.skills;
     }
 
+    // Strip Clawster-internal `unavailableReason` from sandbox config — this is a
+    // Clawster-only field used to indicate Sysbox is required. OpenClaw doesn't
+    // recognize it and strict schema validation would reject it.
+    const sandboxCfg = config.agents?.defaults?.sandbox as Record<string, unknown> | undefined;
+    if (sandboxCfg && "unavailableReason" in sandboxCfg) {
+      const { unavailableReason: _ur, ...sandboxRest } = sandboxCfg;
+      config.agents = {
+        ...config.agents,
+        defaults: {
+          ...config.agents?.defaults,
+          sandbox: sandboxRest as typeof config.agents.defaults.sandbox,
+        },
+      };
+    }
+
     // Strip "enabled" from channel configs — OpenClaw doesn't recognize this key.
     // Channels are enabled by being present in the config.
     if (config.channels && typeof config.channels === "object") {

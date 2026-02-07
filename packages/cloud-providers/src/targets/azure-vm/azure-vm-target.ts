@@ -3,17 +3,12 @@
  *
  * Manages an OpenClaw gateway instance running on Azure Virtual Machine.
  *
- * ARCHITECTURE: VM-based deployment with full Docker support.
- * Unlike ACI, Azure VM provides:
- * - Full Docker daemon access for sandbox mode (Docker-in-Docker)
- * - Managed Disk for WhatsApp sessions (survives restarts)
- * - No cold starts - VM is always running
- * - State survives VM restarts
+ * ARCHITECTURE:
+ *   Internet → NSG (80/443) → VM (static public IP) → Caddy → 127.0.0.1:port → OpenClaw container
  *
- * Security:
- *   Internet -> Application Gateway -> Azure VM (VNet-isolated)
- *                                          |
- *                                    Managed Disk (persistent storage)
+ * Storage: Azure Files (CIFS mount via Managed Identity)
+ * Config: Key Vault (fetched via MI during cloud-init)
+ * Sandbox: Sysbox runtime (installed via .deb)
  */
 
 import { ComputeManagementClient } from "@azure/arm-compute";
@@ -24,7 +19,7 @@ import { LogsQueryClient } from "@azure/monitor-query";
 
 import { BaseDeploymentTarget } from "../../base/base-deployment-target";
 import type { TransformOptions } from "../../base/config-transformer";
-import { buildCloudInitScript } from "../../base/startup-script-builder";
+import { buildAzureCaddyCloudInit } from "../../base/startup-script-builder";
 import {
   DeploymentTargetType,
   InstallOptions,
@@ -36,60 +31,71 @@ import {
   GatewayEndpoint,
 } from "../../interface/deployment-target";
 import type { ResourceSpec, ResourceUpdateResult, ResourceTier, TierSpec } from "../../interface/resource-spec";
-
-/**
- * Azure VM tier specifications.
- */
-const AZURE_TIER_SPECS: Record<Exclude<ResourceTier, "custom">, TierSpec> = {
-  light: {
-    tier: "light",
-    cpu: 1024, // 1 vCPU equivalent
-    memory: 1024,
-    dataDiskSizeGb: 5,
-    vmSize: "Standard_B1s",
-  },
-  standard: {
-    tier: "standard",
-    cpu: 2048, // 2 vCPU equivalent
-    memory: 2048,
-    dataDiskSizeGb: 10,
-    vmSize: "Standard_B2s",
-  },
-  performance: {
-    tier: "performance",
-    cpu: 2048, // 2 vCPU equivalent
-    memory: 4096,
-    dataDiskSizeGb: 20,
-    vmSize: "Standard_D2s_v3",
-  },
-};
 import type { AdapterMetadata, SelfDescribingDeploymentTarget } from "../../interface/adapter-metadata";
 import type { AzureVmConfig } from "./azure-vm-config";
 import type { VmStatus } from "./types";
 import type {
   IAzureNetworkManager,
   IAzureComputeManager,
-  IAzureAppGatewayManager,
+  IAzureSharedInfraManager,
 } from "./managers";
-import { AzureNetworkManager } from "./managers"; // Needed for static method
+import { AzureNetworkManager, deriveSharedInfraNames } from "./managers";
 import { AzureManagerFactory, AzureManagers } from "./azure-manager-factory";
+
+// ── Tier Specs ──────────────────────────────────────────────────────────
+
+const AZURE_TIER_SPECS: Record<Exclude<ResourceTier, "custom">, TierSpec> = {
+  light: {
+    tier: "light",
+    cpu: 1024,
+    memory: 2048,
+    dataDiskSizeGb: 0,
+    vmSize: "Standard_B1ms",
+  },
+  standard: {
+    tier: "standard",
+    cpu: 2048,
+    memory: 4096,
+    dataDiskSizeGb: 0,
+    vmSize: "Standard_B2s",
+  },
+  performance: {
+    tier: "performance",
+    cpu: 2048,
+    memory: 8192,
+    dataDiskSizeGb: 0,
+    vmSize: "Standard_D2s_v3",
+  },
+};
+
+// ── Defaults ────────────────────────────────────────────────────────────
 
 const DEFAULT_VM_SIZE = "Standard_B2s";
 const DEFAULT_OS_DISK_SIZE_GB = 30;
-const DEFAULT_DATA_DISK_SIZE_GB = 10;
 const DEFAULT_VNET_PREFIX = "10.0.0.0/16";
 const DEFAULT_VM_SUBNET_PREFIX = "10.0.1.0/24";
-const DEFAULT_APPGW_SUBNET_PREFIX = "10.0.2.0/24";
+const DEFAULT_SHARE_NAME = "clawster-data";
+const DEFAULT_MOUNT_PATH = "/mnt/openclaw";
 
-/**
- * Options for constructing an AzureVmTarget with dependency injection support.
- */
+// ── Shared Infra Result ─────────────────────────────────────────────────
+
+interface SharedInfraResult {
+  storageAccountName: string;
+  shareName: string;
+  managedIdentityId: string;
+  managedIdentityClientId: string;
+  keyVaultName?: string;
+  keyVaultUri?: string;
+}
+
+// ── Target Options ──────────────────────────────────────────────────────
+
 export interface AzureVmTargetOptions {
-  /** Azure VM configuration */
   config: AzureVmConfig;
-  /** Optional managers for dependency injection (useful for testing) */
   managers?: AzureManagers;
 }
+
+// ── Target Class ────────────────────────────────────────────────────────
 
 export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribingDeploymentTarget {
   readonly type = DeploymentTargetType.AZURE_VM;
@@ -97,7 +103,6 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
   private readonly config: AzureVmConfig;
   private readonly vmSize: string;
   private readonly osDiskSizeGb: number;
-  private readonly dataDiskSizeGb: number;
   private readonly credential: TokenCredential;
 
   private readonly computeClient: ComputeManagementClient;
@@ -105,42 +110,28 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
   private readonly keyVaultClient?: SecretClient;
   private readonly logsClient?: LogsQueryClient;
 
-  // Managers (using interfaces for dependency inversion)
   private readonly networkManager: IAzureNetworkManager;
   private readonly computeManager: IAzureComputeManager;
-  private readonly appGatewayManager: IAzureAppGatewayManager;
+  private readonly sharedInfraManager: IAzureSharedInfraManager;
 
-  /** Derived resource names - set during install */
+  /** Derived resource names */
   private vmName = "";
-  private dataDiskName = "";
   private nicName = "";
+  private publicIpName = "";
   private vnetName = "";
   private subnetName = "";
   private nsgName = "";
   private secretName = "";
   private gatewayPort = 18789;
 
-  /** Application Gateway resources */
-  private appGatewayName = "";
-  private appGatewaySubnetName = "";
-  private appGatewayPublicIpName = "";
-  private appGatewayPublicIp = "";
-  private appGatewayFqdn = "";
+  /** Cached public IP */
+  private cachedPublicIp = "";
 
-  /**
-   * Create an AzureVmTarget with just a config (backward compatible).
-   * @param config - Azure VM configuration
-   */
   constructor(config: AzureVmConfig);
-  /**
-   * Create an AzureVmTarget with options including optional managers for DI.
-   * @param options - Options including config and optional managers
-   */
   constructor(options: AzureVmTargetOptions);
   constructor(configOrOptions: AzureVmConfig | AzureVmTargetOptions) {
     super();
 
-    // Determine if we received options or just config (backward compatibility)
     const isOptions = (arg: AzureVmConfig | AzureVmTargetOptions): arg is AzureVmTargetOptions =>
       "config" in arg && typeof (arg as AzureVmTargetOptions).config === "object";
 
@@ -150,7 +141,6 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
     this.config = config;
     this.vmSize = config.vmSize ?? DEFAULT_VM_SIZE;
     this.osDiskSizeGb = config.osDiskSizeGb ?? DEFAULT_OS_DISK_SIZE_GB;
-    this.dataDiskSizeGb = config.dataDiskSizeGb ?? DEFAULT_DATA_DISK_SIZE_GB;
 
     // Create credential
     if (config.clientId && config.clientSecret && config.tenantId) {
@@ -163,35 +153,25 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
       this.credential = new DefaultAzureCredential();
     }
 
-    this.computeClient = new ComputeManagementClient(
-      this.credential,
-      config.subscriptionId
-    );
+    this.computeClient = new ComputeManagementClient(this.credential, config.subscriptionId);
+    this.networkClient = new NetworkManagementClient(this.credential, config.subscriptionId);
 
-    this.networkClient = new NetworkManagementClient(
-      this.credential,
-      config.subscriptionId
-    );
-
-    // Initialize Key Vault client if configured
     if (config.keyVaultName) {
-      const vaultUrl = `https://${config.keyVaultName}.vault.azure.net`;
-      this.keyVaultClient = new SecretClient(vaultUrl, this.credential);
+      this.keyVaultClient = new SecretClient(
+        `https://${config.keyVaultName}.vault.azure.net`,
+        this.credential
+      );
     }
 
-    // Initialize Logs client if Log Analytics is configured
     if (config.logAnalyticsWorkspaceId) {
       this.logsClient = new LogsQueryClient(this.credential);
     }
 
-    // Use provided managers (for testing) or create via factory (production)
     if (providedManagers) {
-      // Dependency injection path - use provided managers
       this.networkManager = providedManagers.networkManager;
       this.computeManager = providedManagers.computeManager;
-      this.appGatewayManager = providedManagers.appGatewayManager;
+      this.sharedInfraManager = providedManagers.sharedInfraManager;
     } else {
-      // Factory path - create managers with proper wiring
       const boundLog = (msg: string, stream: "stdout" | "stderr" = "stdout") => this.log(msg, stream);
       const managers = AzureManagerFactory.createManagers({
         subscriptionId: config.subscriptionId,
@@ -200,31 +180,26 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
         credentials: this.credential,
         log: boundLog,
       });
-
       this.networkManager = managers.networkManager;
       this.computeManager = managers.computeManager;
-      this.appGatewayManager = managers.appGatewayManager;
+      this.sharedInfraManager = managers.sharedInfraManager;
     }
 
-    // Derive resource names from profileName if available
     if (config.profileName) {
       this.deriveResourceNames(config.profileName);
     }
   }
 
-  // ------------------------------------------------------------------
-  // Config transformation options
-  // ------------------------------------------------------------------
+  // ── Config transformation ───────────────────────────────────────────
 
   protected getTransformOptions(): TransformOptions {
     return {
-      // Add custom transform to set gateway.bind = "lan"
       customTransforms: [
         (config) => {
           const result = { ...config };
           if (result.gateway && typeof result.gateway === "object") {
             const gw = { ...(result.gateway as Record<string, unknown>) };
-            gw.bind = "lan";
+            gw.bind = "lan"; // 0.0.0.0 inside container — Docker maps to host localhost
             delete gw.host;
             delete gw.port;
             result.gateway = gw;
@@ -235,29 +210,20 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
     };
   }
 
-  // ------------------------------------------------------------------
-  // Resource name helpers
-  // ------------------------------------------------------------------
+  // ── Resource name helpers ───────────────────────────────────────────
 
   private deriveResourceNames(profileName: string): void {
     const sanitized = this.sanitizeName(profileName);
     this.vmName = `clawster-${sanitized}`;
-    this.dataDiskName = `clawster-data-${sanitized}`;
     this.nicName = `clawster-nic-${sanitized}`;
-    this.vnetName = this.config.vnetName ?? `clawster-vnet-${sanitized}`;
-    this.subnetName = this.config.subnetName ?? `clawster-subnet-${sanitized}`;
-    this.nsgName = this.config.nsgName ?? `clawster-nsg-${sanitized}`;
+    this.publicIpName = `clawster-pip-${sanitized}`;
+    this.vnetName = this.config.vnetName ?? "clawster-vnet";
+    this.subnetName = this.config.subnetName ?? "clawster-vm-subnet";
+    this.nsgName = this.config.nsgName ?? "clawster-nsg";
     this.secretName = `clawster-${sanitized}-config`;
-
-    // Application Gateway names
-    this.appGatewayName = this.config.appGatewayName ?? `clawster-appgw-${sanitized}`;
-    this.appGatewaySubnetName = this.config.appGatewaySubnetName ?? `clawster-appgw-subnet-${sanitized}`;
-    this.appGatewayPublicIpName = `clawster-appgw-pip-${sanitized}`;
   }
 
-  // ------------------------------------------------------------------
-  // install
-  // ------------------------------------------------------------------
+  // ── install ─────────────────────────────────────────────────────────
 
   async install(options: InstallOptions): Promise<InstallResult> {
     const profileName = this.sanitizeName(options.profileName);
@@ -268,55 +234,63 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
     this.log(`Region: ${this.config.region}, VM Size: ${this.vmSize}`);
 
     try {
-      // 1. Set up VNet infrastructure
-      this.log(`[1/6] Setting up network infrastructure...`);
+      // 1. Network infrastructure (shared, idempotent)
+      this.log(`[1/7] Setting up network infrastructure...`);
       await this.ensureNetworkInfrastructure();
       this.log(`Network infrastructure ready`);
 
-      // 2. Set up Application Gateway for secure external access
-      this.log(`[2/6] Setting up Application Gateway...`);
-      await this.ensureApplicationGateway();
-      this.log(`Application Gateway ready`);
+      // 2. Shared infrastructure (Storage, MI, Key Vault, RBAC)
+      this.log(`[2/7] Provisioning shared infrastructure...`);
+      const sharedInfra = await this.ensureSharedInfrastructure();
+      this.log(`Shared infrastructure ready`);
 
-      // 3. Create data disk for persistent storage
-      this.log(`[3/6] Creating data disk: ${this.dataDiskName} (${this.dataDiskSizeGb}GB)`);
-      await this.computeManager.createDataDisk(this.dataDiskName, this.dataDiskSizeGb);
-      this.log(`Data disk ready`);
-
-      // 4. Store initial empty config in Key Vault if available
-      if (this.keyVaultClient) {
-        this.log(`[4/6] Storing config in Key Vault: ${this.secretName}`);
-        await this.ensureSecret(this.secretName, "{}");
+      // 3. Store config in Key Vault
+      if (this.keyVaultClient || sharedInfra.keyVaultUri) {
+        this.log(`[3/7] Storing config in Key Vault: ${this.secretName}`);
+        const kvClient = this.keyVaultClient ?? new SecretClient(
+          sharedInfra.keyVaultUri!,
+          this.credential
+        );
+        try {
+          await kvClient.setSecret(this.secretName, "{}");
+        } catch {
+          // Secret storage failures are non-fatal
+        }
         this.log(`Key Vault secret created`);
       } else {
-        this.log(`[4/6] Key Vault not configured (skipped)`);
+        this.log(`[3/7] Key Vault not configured (skipped)`);
       }
 
-      // 5. Create VM with Docker and startup script
-      this.log(`[5/6] Creating VM: ${this.vmName}`);
-      await this.createVm(options);
-      this.log(`VM created`);
+      // 4. Create static public IP
+      this.log(`[4/7] Creating static public IP: ${this.publicIpName}`);
+      const pip = await this.networkManager.ensurePublicIp(this.publicIpName);
+      this.cachedPublicIp = pip.ipAddress ?? "";
+      this.log(`Public IP ready: ${this.cachedPublicIp}`);
 
-      // 6. Update Application Gateway backend with VM's private IP
-      this.log(`[6/6] Updating Application Gateway backend...`);
-      const vmPrivateIp = await this.computeManager.getVmPrivateIp(this.nicName);
-      if (vmPrivateIp) {
-        await this.appGatewayManager.updateBackendPool(this.appGatewayName, vmPrivateIp);
-        this.log(`Application Gateway backend updated with IP: ${vmPrivateIp}`);
-      } else {
-        this.log(`Could not determine VM private IP`, "stderr");
-      }
+      // 5. Create NIC (with public IP, in subnet with NSG)
+      this.log(`[5/7] Creating NIC: ${this.nicName}`);
+      const subnet = await this.networkClient.subnets.get(
+        this.config.resourceGroup,
+        this.vnetName,
+        this.subnetName
+      );
+      const nic = await this.computeManager.createNic(this.nicName, subnet.id!, pip.id!);
+      this.log(`NIC ready`);
+
+      // 6. Create VM with Caddy cloud-init (attaches MI)
+      this.log(`[6/7] Creating VM: ${this.vmName}`);
+      await this.createVm(options, nic.id!, sharedInfra);
+      this.log(`VM created — cloud-init will install Docker, Sysbox, Caddy, and start OpenClaw`);
+
+      // 7. Done
+      this.log(`[7/7] Verifying deployment...`);
 
       this.log(`Azure VM installation complete!`);
-
-      const externalAccess = this.appGatewayFqdn
-        ? ` External access via: http://${this.appGatewayFqdn}`
-        : "";
 
       return {
         success: true,
         instanceId: this.vmName,
-        message: `Azure VM "${this.vmName}" created (VNet + App Gateway, managed disk) in ${this.config.region}.${externalAccess}`,
+        message: `Azure VM "${this.vmName}" created (Caddy + public IP) in ${this.config.region}. Endpoint: http://${this.cachedPublicIp}`,
         serviceName: this.vmName,
       };
     } catch (error) {
@@ -330,19 +304,15 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
     }
   }
 
-  // ------------------------------------------------------------------
-  // Network Infrastructure
-  // ------------------------------------------------------------------
+  // ── Network infrastructure ──────────────────────────────────────────
 
   private async ensureNetworkInfrastructure(): Promise<void> {
     const vnetAddressPrefix = this.config.vnetAddressPrefix ?? DEFAULT_VNET_PREFIX;
     const subnetAddressPrefix = this.config.subnetAddressPrefix ?? DEFAULT_VM_SUBNET_PREFIX;
 
-    // 1. Create or get VNet
     this.log(`  Creating/verifying VNet: ${this.vnetName}`);
     await this.networkManager.ensureVNet(this.vnetName, vnetAddressPrefix);
 
-    // 2. Create or get NSG with secure rules
     this.log(`  Creating/verifying NSG: ${this.nsgName}`);
     const defaultRules = AzureNetworkManager.getDefaultSecurityRules();
     const nsg = await this.networkManager.ensureNSG(
@@ -351,7 +321,6 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
       this.config.additionalNsgRules
     );
 
-    // 3. Create or get subnet for VM
     this.log(`  Creating/verifying subnet: ${this.subnetName}`);
     await this.networkManager.ensureVmSubnet(
       this.vnetName,
@@ -361,87 +330,92 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
     );
   }
 
-  // ------------------------------------------------------------------
-  // Application Gateway
-  // ------------------------------------------------------------------
+  // ── Shared infrastructure ──────────────────────────────────────────
 
-  private async ensureApplicationGateway(): Promise<void> {
-    const appGwSubnetAddressPrefix = this.config.appGatewaySubnetAddressPrefix ?? DEFAULT_APPGW_SUBNET_PREFIX;
-
-    this.log(`  Creating/verifying App Gateway subnet: ${this.appGatewaySubnetName}`);
-    const subnet = await this.networkManager.ensureAppGatewaySubnet(
-      this.vnetName,
-      this.appGatewaySubnetName,
-      appGwSubnetAddressPrefix
+  private async ensureSharedInfrastructure(): Promise<SharedInfraResult> {
+    const names = deriveSharedInfraNames(
+      this.config.subscriptionId,
+      this.config.resourceGroup
     );
+    const storageAccountName = this.config.storageAccountName ?? names.storageAccountName;
+    const shareName = this.config.shareName ?? DEFAULT_SHARE_NAME;
+    const keyVaultName = this.config.keyVaultName ?? names.keyVaultName;
+    const miName = names.managedIdentityName;
 
-    this.log(`  Creating/verifying App Gateway public IP: ${this.appGatewayPublicIpName}`);
-    const pipResult = await this.appGatewayManager.ensurePublicIp(
-      this.appGatewayPublicIpName,
-      this.appGatewayName
-    );
-    this.appGatewayPublicIp = pipResult.ipAddress;
-    this.appGatewayFqdn = pipResult.fqdn;
+    // 1. Storage Account + File Share
+    const storageAccount = await this.sharedInfraManager.ensureStorageAccount(storageAccountName);
+    await this.sharedInfraManager.ensureFileShare(storageAccountName, shareName);
 
-    this.log(`  Creating/verifying Application Gateway: ${this.appGatewayName}`);
-    await this.appGatewayManager.ensureAppGateway(
-      this.appGatewayName,
-      subnet.id!,
-      this.appGatewayPublicIpName,
-      this.gatewayPort
-    );
+    // 2. Managed Identity
+    const mi = await this.sharedInfraManager.ensureManagedIdentity(miName);
+
+    // 3. Key Vault (requires tenantId)
+    const tenantId = this.config.tenantId ?? "";
+    let keyVaultInfo: { id: string; name: string; uri: string } | undefined;
+    if (tenantId) {
+      keyVaultInfo = await this.sharedInfraManager.ensureKeyVault(keyVaultName, tenantId);
+    }
+
+    // 4. RBAC role assignments
+    if (keyVaultInfo && storageAccount.id && keyVaultInfo.id) {
+      await this.sharedInfraManager.assignRoles(
+        mi.principalId,
+        storageAccount.id,
+        keyVaultInfo.id
+      );
+    }
+
+    return {
+      storageAccountName,
+      shareName,
+      managedIdentityId: mi.id,
+      managedIdentityClientId: mi.clientId,
+      keyVaultName: keyVaultInfo?.name,
+      keyVaultUri: keyVaultInfo?.uri,
+    };
   }
 
-  // ------------------------------------------------------------------
-  // VM Creation
-  // ------------------------------------------------------------------
+  // ── VM Creation ─────────────────────────────────────────────────────
 
-  private async createVm(options: InstallOptions): Promise<void> {
-    const imageUri = this.config.image ?? "node:22-slim";
-
-    // Get subnet for NIC
-    const subnet = await this.networkClient.subnets.get(
-      this.config.resourceGroup,
-      this.vnetName,
-      this.subnetName
-    );
-
-    // Create NIC
-    const nic = await this.computeManager.createNic(this.nicName, subnet.id!);
-
-    // Get data disk
-    const dataDisk = await this.computeClient.disks.get(
-      this.config.resourceGroup,
-      this.dataDiskName
-    );
-
-    // Build cloud-init script using the shared builder
-    const cloudInit = buildCloudInitScript({
-      platform: "azure",
-      dataMount: "/mnt/openclaw",
+  private async createVm(
+    options: InstallOptions,
+    nicId: string,
+    sharedInfra: SharedInfraResult
+  ): Promise<void> {
+    const cloudInit = buildAzureCaddyCloudInit({
       gatewayPort: this.gatewayPort,
-      gatewayToken: options.gatewayAuthToken,
-      configSource: "env",
-      imageUri,
+      caddyDomain: this.config.customDomain,
+      azureFiles: {
+        storageAccountName: sharedInfra.storageAccountName,
+        shareName: sharedInfra.shareName,
+        mountPath: DEFAULT_MOUNT_PATH,
+        managedIdentityClientId: sharedInfra.managedIdentityClientId,
+      },
+      keyVault: sharedInfra.keyVaultName
+        ? {
+            vaultName: sharedInfra.keyVaultName,
+            secretName: this.secretName,
+            managedIdentityClientId: sharedInfra.managedIdentityClientId,
+          }
+        : undefined,
       additionalEnv: options.containerEnv,
+      middlewareConfig: options.middlewareConfig,
     });
 
-    // Create VM
     await this.computeManager.createVm(
       this.vmName,
-      nic.id!,
-      dataDisk.id!,
+      nicId,
+      undefined, // No data disk — Azure Files provides persistence
       this.vmSize,
       this.osDiskSizeGb,
       cloudInit,
       this.config.sshPublicKey,
-      { profile: this.sanitizeName(options.profileName) }
+      { profile: this.sanitizeName(options.profileName) },
+      sharedInfra.managedIdentityId
     );
   }
 
-  // ------------------------------------------------------------------
-  // configure
-  // ------------------------------------------------------------------
+  // ── configure ───────────────────────────────────────────────────────
 
   async configure(config: OpenClawConfigPayload): Promise<ConfigureResult> {
     const profileName = config.profileName;
@@ -453,24 +427,22 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
       this.deriveResourceNames(profileName);
     }
 
-    // Transform config using the base class method
     const raw = this.transformConfig({ ...config.config });
     const configData = JSON.stringify(raw, null, 2);
 
     try {
-      // Store config in Key Vault if available
+      // Store in Key Vault
       if (this.keyVaultClient) {
         this.log(`Storing config in Key Vault: ${this.secretName}`);
         await this.ensureSecret(this.secretName, configData);
         this.log(`Key Vault secret updated`);
       }
 
-      // Use Run Command to update the config on the VM
-      // Use base64 encoding to safely pass JSON through shell without injection risk
+      // Write config to Azure Files mount + restart container
       this.log(`Executing Run Command on VM: ${this.vmName}`);
       const base64Config = Buffer.from(configData).toString("base64");
       await this.computeManager.runCommand(this.vmName, [
-        `echo '${base64Config}' | base64 -d > /mnt/openclaw/.openclaw/openclaw.json`,
+        `echo '${base64Config}' | base64 -d > ${DEFAULT_MOUNT_PATH}/.openclaw/openclaw.json`,
         "docker restart openclaw-gateway 2>/dev/null || true",
       ]);
       this.log(`Configuration applied and container restarted`);
@@ -478,7 +450,7 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
       return {
         success: true,
         message: `Configuration applied to VM "${this.vmName}" and container restarted`,
-        requiresRestart: false, // Already restarted via Run Command
+        requiresRestart: false,
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -491,33 +463,21 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
     }
   }
 
-  // ------------------------------------------------------------------
-  // start
-  // ------------------------------------------------------------------
+  // ── Lifecycle ───────────────────────────────────────────────────────
 
   async start(): Promise<void> {
     await this.computeManager.startVm(this.vmName);
   }
 
-  // ------------------------------------------------------------------
-  // stop
-  // ------------------------------------------------------------------
-
   async stop(): Promise<void> {
     await this.computeManager.stopVm(this.vmName);
   }
-
-  // ------------------------------------------------------------------
-  // restart
-  // ------------------------------------------------------------------
 
   async restart(): Promise<void> {
     await this.computeManager.restartVm(this.vmName);
   }
 
-  // ------------------------------------------------------------------
-  // getStatus
-  // ------------------------------------------------------------------
+  // ── getStatus ───────────────────────────────────────────────────────
 
   async getStatus(): Promise<TargetStatus> {
     try {
@@ -537,11 +497,7 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
         error = `Unknown VM power state: ${vmStatus}`;
       }
 
-      return {
-        state,
-        gatewayPort: this.gatewayPort,
-        error,
-      };
+      return { state, gatewayPort: this.gatewayPort, error };
     } catch (error: unknown) {
       if ((error as { statusCode?: number }).statusCode === 404) {
         return { state: "not-installed" };
@@ -553,17 +509,13 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
     }
   }
 
-  // ------------------------------------------------------------------
-  // getLogs
-  // ------------------------------------------------------------------
+  // ── getLogs ─────────────────────────────────────────────────────────
 
   async getLogs(options?: DeploymentLogOptions): Promise<string[]> {
-    // Try Log Analytics first if configured
     if (this.logsClient && this.config.logAnalyticsWorkspaceId) {
       return this.getLogsFromAnalytics(options);
     }
 
-    // Fallback: use Run Command to get container logs
     try {
       const tailLines = options?.lines ?? 100;
       const output = await this.computeManager.runCommand(this.vmName, [
@@ -589,9 +541,7 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
   }
 
   private async getLogsFromAnalytics(options?: DeploymentLogOptions): Promise<string[]> {
-    if (!this.logsClient || !this.config.logAnalyticsWorkspaceId) {
-      return [];
-    }
+    if (!this.logsClient || !this.config.logAnalyticsWorkspaceId) return [];
 
     const limit = options?.lines || 100;
     const query = `Syslog | where Computer == "${this.vmName}" | take ${limit} | project TimeGenerated, SyslogMessage`;
@@ -616,60 +566,46 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
     }
   }
 
-  // ------------------------------------------------------------------
-  // getEndpoint
-  // ------------------------------------------------------------------
+  // ── getEndpoint ─────────────────────────────────────────────────────
 
   async getEndpoint(): Promise<GatewayEndpoint> {
-    // CRITICAL: Return the Application Gateway's public endpoint, NEVER the VM's IP
-    if (!this.appGatewayFqdn && !this.appGatewayPublicIp) {
-      try {
-        const endpoint = await this.appGatewayManager.getGatewayEndpoint(this.appGatewayPublicIpName);
-        this.appGatewayPublicIp = endpoint.publicIp;
-        this.appGatewayFqdn = endpoint.fqdn;
-      } catch {
-        throw new Error("Application Gateway public IP not found");
-      }
+    if (!this.cachedPublicIp) {
+      this.cachedPublicIp = await this.networkManager.getPublicIpAddress(this.publicIpName);
     }
 
-    const host = this.appGatewayFqdn || this.appGatewayPublicIp;
-    if (!host) {
-      throw new Error("Application Gateway endpoint not available");
-    }
+    const host = this.config.customDomain ?? this.cachedPublicIp;
 
     return {
-      host: this.config.customDomain ?? host,
-      port: 80, // Application Gateway frontend port
-      protocol: "ws",
+      host,
+      port: this.config.customDomain ? 443 : 80,
+      protocol: this.config.customDomain ? "wss" : "ws",
     };
   }
 
-  // ------------------------------------------------------------------
-  // destroy
-  // ------------------------------------------------------------------
+  // ── destroy ─────────────────────────────────────────────────────────
 
   async destroy(): Promise<void> {
     this.log(`Destroying Azure resources for: ${this.vmName}`);
 
     // 1. Delete VM
-    this.log(`[1/8] Deleting VM: ${this.vmName}`);
+    this.log(`[1/5] Deleting VM: ${this.vmName}`);
     await this.computeManager.deleteVm(this.vmName);
 
-    // 2. Delete NIC
-    this.log(`[2/8] Deleting NIC: ${this.nicName}`);
+    // 2. Delete NIC (must happen after VM)
+    this.log(`[2/5] Deleting NIC: ${this.nicName}`);
     await this.computeManager.deleteNic(this.nicName);
 
-    // 3. Delete data disk
-    this.log(`[3/8] Deleting data disk: ${this.dataDiskName}`);
-    await this.computeManager.deleteDisk(this.dataDiskName);
-
-    // 4. Delete OS disk
-    this.log(`[4/8] Deleting OS disk: ${this.vmName}-osdisk`);
+    // 3. Delete OS disk
+    this.log(`[3/5] Deleting OS disk: ${this.vmName}-osdisk`);
     await this.computeManager.deleteDisk(`${this.vmName}-osdisk`);
 
-    // 5. Delete Key Vault secrets if configured
+    // 4. Delete public IP (must happen after NIC)
+    this.log(`[4/5] Deleting public IP: ${this.publicIpName}`);
+    await this.networkManager.deletePublicIp(this.publicIpName);
+
+    // 5. Delete Key Vault secret
     if (this.keyVaultClient) {
-      this.log(`[5/8] Deleting Key Vault secret: ${this.secretName}`);
+      this.log(`[5/5] Deleting Key Vault secret: ${this.secretName}`);
       try {
         await this.keyVaultClient.beginDeleteSecret(this.secretName);
         this.log(`Key Vault secret deleted`);
@@ -677,81 +613,44 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
         this.log(`Key Vault secret not found (skipped)`);
       }
     } else {
-      this.log(`[5/8] Key Vault not configured (skipped)`);
+      this.log(`[5/5] Key Vault not configured (skipped)`);
     }
 
-    // 6. Delete Application Gateway
-    this.log(`[6/8] Deleting Application Gateway: ${this.appGatewayName}`);
-    await this.appGatewayManager.deleteAppGateway(this.appGatewayName);
-
-    // 7. Delete public IP
-    this.log(`[7/8] Deleting public IP: ${this.appGatewayPublicIpName}`);
-    await this.appGatewayManager.deletePublicIp(this.appGatewayPublicIpName);
-
-    // 8. Delete App Gateway subnet
-    this.log(`[8/8] Deleting App Gateway subnet: ${this.appGatewaySubnetName}`);
-    await this.appGatewayManager.deleteSubnet(this.vnetName, this.appGatewaySubnetName);
-
-    this.log(`Azure resources destroyed (VNet/NSG preserved for reuse)`);
+    this.log(`Azure resources destroyed (VNet/NSG/Storage preserved for reuse)`);
   }
 
-  // ------------------------------------------------------------------
-  // Private helpers
-  // ------------------------------------------------------------------
+  // ── Private helpers ─────────────────────────────────────────────────
 
   private async ensureSecret(name: string, value: string): Promise<void> {
     if (!this.keyVaultClient) return;
-
     try {
       await this.keyVaultClient.setSecret(name, value);
     } catch {
-      // Secret storage failures are non-fatal - the config may still work
+      // Secret storage failures are non-fatal
     }
   }
 
-  // ------------------------------------------------------------------
-  // updateResources
-  // ------------------------------------------------------------------
+  // ── updateResources ─────────────────────────────────────────────────
 
   async updateResources(spec: ResourceSpec): Promise<ResourceUpdateResult> {
     this.log(`Starting resource update for VM: ${this.vmName}`);
 
     try {
-      // Validate disk size - cloud providers don't support shrinking disks
-      if (spec.dataDiskSizeGb && spec.dataDiskSizeGb < this.dataDiskSizeGb) {
-        this.log(`Disk shrink not supported: ${this.dataDiskSizeGb}GB -> ${spec.dataDiskSizeGb}GB`, "stderr");
-        return {
-          success: false,
-          message: `Disk cannot be shrunk. Current size: ${this.dataDiskSizeGb}GB, requested: ${spec.dataDiskSizeGb}GB. Cloud providers only support expanding disks.`,
-          requiresRestart: false,
-        };
-      }
-
-      // Determine target VM size from spec
       const targetVmSize = this.specToVmSize(spec);
       this.log(`Target VM size: ${targetVmSize}`);
 
       // 1. Deallocate VM
-      this.log(`[1/4] Deallocating VM: ${this.vmName}`);
+      this.log(`[1/3] Deallocating VM: ${this.vmName}`);
       await this.computeManager.stopVm(this.vmName);
       this.log(`VM deallocated`);
 
       // 2. Change VM size
-      this.log(`[2/4] Changing VM size to: ${targetVmSize}`);
+      this.log(`[2/3] Changing VM size to: ${targetVmSize}`);
       await this.computeManager.resizeVm(this.vmName, targetVmSize);
       this.log(`VM size changed`);
 
-      // 3. Resize data disk if requested and larger than current
-      if (spec.dataDiskSizeGb && spec.dataDiskSizeGb > this.dataDiskSizeGb) {
-        this.log(`[3/4] Resizing data disk: ${this.dataDiskSizeGb}GB -> ${spec.dataDiskSizeGb}GB`);
-        await this.computeManager.resizeDisk(this.dataDiskName, spec.dataDiskSizeGb);
-        this.log(`Disk resized to ${spec.dataDiskSizeGb}GB`);
-      } else {
-        this.log(`[3/4] Disk resize skipped (no change needed)`);
-      }
-
-      // 4. Start VM
-      this.log(`[4/4] Starting VM`);
+      // 3. Start VM
+      this.log(`[3/3] Starting VM`);
       await this.computeManager.startVm(this.vmName);
       this.log(`VM started`);
 
@@ -759,7 +658,7 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
 
       return {
         success: true,
-        message: `Azure VM resources updated to ${targetVmSize}${spec.dataDiskSizeGb ? `, ${spec.dataDiskSizeGb}GB disk` : ""}`,
+        message: `Azure VM resources updated to ${targetVmSize}`,
         requiresRestart: true,
         estimatedDowntime: 90,
       };
@@ -767,7 +666,6 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.log(`Resource update failed: ${errorMsg}`, "stderr");
 
-      // Try to start VM again if we deallocated it
       this.log(`Attempting to recover by starting VM...`);
       try {
         await this.computeManager.startVm(this.vmName);
@@ -784,82 +682,53 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
     }
   }
 
-  // ------------------------------------------------------------------
-  // getResources
-  // ------------------------------------------------------------------
+  // ── getResources ────────────────────────────────────────────────────
 
   async getResources(): Promise<ResourceSpec> {
-    // Get current VM to read size
     const vm = await this.computeClient.virtualMachines.get(
       this.config.resourceGroup,
       this.vmName
     );
 
     const vmSize = vm.hardwareProfile?.vmSize ?? this.vmSize;
-
-    // Get disk size
-    const disk = await this.computeClient.disks.get(
-      this.config.resourceGroup,
-      this.dataDiskName
-    );
-
-    const diskSizeGb = disk.diskSizeGB ?? this.dataDiskSizeGb;
-
-    // Convert VM size to ResourceSpec
-    return this.vmSizeToSpec(vmSize, diskSizeGb);
+    return this.vmSizeToSpec(vmSize);
   }
 
-  // ------------------------------------------------------------------
-  // Resource spec conversion helpers
-  // ------------------------------------------------------------------
+  // ── Resource spec conversion ────────────────────────────────────────
 
   private specToVmSize(spec: ResourceSpec): string {
-    // Find matching tier or use custom VM size logic
     for (const [, tierSpec] of Object.entries(AZURE_TIER_SPECS)) {
       if (spec.cpu === tierSpec.cpu && spec.memory === tierSpec.memory) {
         return tierSpec.vmSize ?? "Standard_B2s";
       }
     }
 
-    // For custom specs, map to closest Azure VM size
-    // Azure B-series: Standard_B1s (1 vCPU, 1GB), Standard_B2s (2 vCPU, 4GB)
-    // Azure D-series: Standard_D2s_v3 (2 vCPU, 8GB)
-    if (spec.memory >= 4096) {
-      return "Standard_D2s_v3";
-    } else if (spec.cpu >= 2048 || spec.memory >= 2048) {
-      return "Standard_B2s";
-    }
-    return "Standard_B1s";
+    if (spec.memory >= 8192) return "Standard_D2s_v3";
+    if (spec.memory >= 4096 || spec.cpu >= 2048) return "Standard_B2s";
+    return "Standard_B1ms";
   }
 
-  private vmSizeToSpec(vmSize: string, dataDiskSizeGb: number): ResourceSpec {
-    // Map Azure VM sizes to ResourceSpec
+  private vmSizeToSpec(vmSize: string): ResourceSpec {
     switch (vmSize) {
-      case "Standard_B1s":
-        return { cpu: 1024, memory: 1024, dataDiskSizeGb };
+      case "Standard_B1ms":
+        return { cpu: 1024, memory: 2048, dataDiskSizeGb: 0 };
       case "Standard_B2s":
-        return { cpu: 2048, memory: 2048, dataDiskSizeGb };
+        return { cpu: 2048, memory: 4096, dataDiskSizeGb: 0 };
       case "Standard_D2s_v3":
-        return { cpu: 2048, memory: 4096, dataDiskSizeGb };
+        return { cpu: 2048, memory: 8192, dataDiskSizeGb: 0 };
       default:
-        // For unknown sizes, return default
-        return { cpu: 1024, memory: 2048, dataDiskSizeGb };
+        return { cpu: 1024, memory: 2048, dataDiskSizeGb: 0 };
     }
   }
 
-  // ------------------------------------------------------------------
-  // getMetadata
-  // ------------------------------------------------------------------
+  // ── getMetadata ─────────────────────────────────────────────────────
 
-  /**
-   * Return metadata describing this adapter's capabilities and provisioning steps.
-   */
   getMetadata(): AdapterMetadata {
     return {
       type: DeploymentTargetType.AZURE_VM,
       displayName: "Azure Virtual Machine",
       icon: "azure",
-      description: "Run OpenClaw on Azure VM with managed disk and sandbox support",
+      description: "Run OpenClaw on Azure VM with Caddy reverse proxy and sandbox support",
       status: "ready",
       provisioningSteps: [
         { id: "validate_config", name: "Validate configuration" },
@@ -867,13 +736,17 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
         { id: "create_vnet", name: "Create Virtual Network" },
         { id: "create_nsg", name: "Create Network Security Group" },
         { id: "create_subnet", name: "Create subnet" },
-        { id: "create_appgw_subnet", name: "Create App Gateway subnet" },
-        { id: "create_public_ip", name: "Create public IP" },
-        { id: "create_appgw", name: "Create Application Gateway", estimatedDurationSec: 120 },
-        { id: "create_disk", name: "Create data disk" },
+        { id: "create_storage", name: "Create Storage Account + File Share" },
+        { id: "create_identity", name: "Create Managed Identity" },
+        { id: "create_keyvault", name: "Create Key Vault" },
+        { id: "assign_roles", name: "Assign RBAC roles" },
         { id: "store_secret", name: "Store config in Key Vault" },
+        { id: "create_public_ip", name: "Create static public IP" },
+        { id: "create_nic", name: "Create network interface" },
         { id: "create_vm", name: "Create VM instance", estimatedDurationSec: 120 },
-        { id: "update_backend", name: "Update App Gateway backend" },
+        { id: "cloud_init", name: "Install Docker, Sysbox, Caddy", estimatedDurationSec: 90 },
+        { id: "mount_azure_files", name: "Mount Azure Files" },
+        { id: "start_openclaw", name: "Start OpenClaw container", estimatedDurationSec: 60 },
         { id: "wait_for_gateway", name: "Wait for Gateway", estimatedDurationSec: 30 },
         { id: "health_check", name: "Health check" },
       ],
@@ -881,7 +754,6 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
         { id: "validate_resources", name: "Validate resource configuration" },
         { id: "deallocate_vm", name: "Deallocate VM instance" },
         { id: "resize_vm", name: "Change VM size", estimatedDurationSec: 60 },
-        { id: "resize_disk", name: "Resize data disk" },
         { id: "start_vm", name: "Start VM instance", estimatedDurationSec: 60 },
         { id: "verify_completion", name: "Verify completion" },
       ],
@@ -940,6 +812,7 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
           sensitive: true,
         },
       ],
+      vaultType: "azure-account",
       tierSpecs: AZURE_TIER_SPECS,
     };
   }

@@ -9,6 +9,7 @@ export const MiddlewareConfigEntrySchema = z.object({
 export const ProxyConfigSchema = z.object({
   externalPort: z.number().int().min(1).max(65535).default(18789),
   internalPort: z.number().int().min(1).max(65535).default(18790),
+  internalHost: z.string().default("127.0.0.1"),
   middlewares: z.array(MiddlewareConfigEntrySchema).default([]),
 });
 

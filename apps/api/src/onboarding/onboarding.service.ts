@@ -28,6 +28,9 @@ import {
   getSecuritySummary,
 } from "@clawster/cloud-providers";
 
+/** Cloud VM deployment types that use a single container per VM (fixed port 18789). */
+const CLOUD_VM_TYPES = new Set(["ecs-ec2", "gce", "azure-vm"]);
+
 @Injectable()
 export class OnboardingService {
   private readonly logger = new Logger(OnboardingService.name);
@@ -141,16 +144,18 @@ export class OnboardingService {
       });
     }
 
-    // Resolve saved AWS credentials if provided
-    if (dto.awsCredentialId) {
-      const awsCreds = await this.credentialVault.resolve(dto.awsCredentialId, workspace.id);
-      if (!dto.deploymentTarget) {
-        dto.deploymentTarget = { type: "ecs-ec2" } as any;
-      }
-      dto.deploymentTarget.accessKeyId = awsCreds.accessKeyId as string;
-      dto.deploymentTarget.secretAccessKey = awsCreds.secretAccessKey as string;
-      dto.deploymentTarget.region = (awsCreds.region as string) || dto.deploymentTarget.region;
-      this.logger.debug(`Resolved saved AWS credential for deploy`);
+    // Resolve saved credentials if provided (provider-agnostic)
+    let resolvedCredentials: Record<string, string> = { ...(dto.deploymentTarget.credentials ?? {}) };
+    const credentialId = dto.savedCredentialId ?? dto.awsCredentialId;
+    if (credentialId) {
+      const savedCreds = await this.credentialVault.resolve(credentialId, workspace.id);
+      resolvedCredentials = {
+        ...resolvedCredentials,
+        ...(Object.fromEntries(
+          Object.entries(savedCreds).filter(([, v]) => typeof v === "string"),
+        ) as Record<string, string>),
+      };
+      this.logger.debug(`Resolved saved credential ${credentialId} for deploy`);
     }
 
     // Resolve saved model API key if provided
@@ -340,29 +345,23 @@ export class OnboardingService {
 
     // Auto-assign gateway port (spaced 20 apart for OpenClaw derived ports)
     const assignedPort = await this.allocateGatewayPort();
-    // For AWS deployments, always use the default OpenClaw port (single container per task)
-    const effectivePort = targetType === "ecs-ec2" ? 18789 : assignedPort;
+    // Cloud VM types use a single container per VM, so always use the default port
+    const effectivePort = CLOUD_VM_TYPES.has(targetType) ? 18789 : assignedPort;
 
-    const targetConfig =
-      targetType === "ecs-ec2"
-        ? {
-            region: dto.deploymentTarget?.region,
-            accessKeyId: dto.deploymentTarget?.accessKeyId,
-            secretAccessKey: dto.deploymentTarget?.secretAccessKey,
-            tier: dto.deploymentTarget?.tier || "standard",
-            certificateArn: dto.deploymentTarget?.certificateArn,
-            allowedCidr: dto.deploymentTarget?.allowedCidr,
-            useSharedInfra: true,
-          }
-        : {
-            containerName:
-              dto.deploymentTarget?.containerName || `openclaw-${dto.botName}`,
-            imageName: "openclaw:local",
-            dockerfilePath: path.join(__dirname, "../../../../../docker/openclaw"),
-            configPath:
-              dto.deploymentTarget?.configPath || path.join(os.homedir(), `.clawster/gateways/${dto.botName}`),
-            gatewayPort: effectivePort,
-          };
+    const targetConfig = CLOUD_VM_TYPES.has(targetType)
+      ? {
+          ...resolvedCredentials,
+          tier: dto.deploymentTarget?.tier || "standard",
+          gatewayPort: effectivePort,
+          ...(targetType === "ecs-ec2" ? { useSharedInfra: true } : {}),
+        }
+      : {
+          containerName: `openclaw-${dto.botName}`,
+          imageName: "openclaw:local",
+          dockerfilePath: path.join(__dirname, "../../../../../docker/openclaw"),
+          configPath: path.join(os.homedir(), `.clawster/gateways/${dto.botName}`),
+          gatewayPort: effectivePort,
+        };
 
     const deploymentTarget = await this.prisma.deploymentTarget.create({
       data: {

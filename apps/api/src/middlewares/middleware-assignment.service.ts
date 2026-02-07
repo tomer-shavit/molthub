@@ -1,10 +1,17 @@
 import {
   Injectable,
+  Inject,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
+import {
+  BOT_INSTANCE_REPOSITORY,
+  type IBotInstanceRepository,
+} from "@clawster/database";
 import { BotInstancesService } from "../bot-instances/bot-instances.service";
 import { MiddlewareRegistryService } from "./middleware-registry.service";
+import { ReconcilerService } from "../reconciler/reconciler.service";
 import {
   AssignMiddlewareDto,
   UpdateMiddlewareAssignmentDto,
@@ -22,9 +29,14 @@ interface MiddlewareConfig {
 
 @Injectable()
 export class MiddlewareAssignmentService {
+  private readonly logger = new Logger(MiddlewareAssignmentService.name);
+
   constructor(
     private readonly botInstancesService: BotInstancesService,
     private readonly registryService: MiddlewareRegistryService,
+    private readonly reconcilerService: ReconcilerService,
+    @Inject(BOT_INSTANCE_REPOSITORY)
+    private readonly botInstanceRepo: IBotInstanceRepository,
   ) {}
 
   async getAssignments(instanceId: string): Promise<BotMiddlewareAssignment[]> {
@@ -157,8 +169,17 @@ export class MiddlewareAssignmentService {
       ...currentMetadata,
       middlewareConfig: config,
     };
-    await this.botInstancesService.update(instanceId, {
-      metadata: mergedMetadata,
+    // Save middleware config + force re-provision (CREATING status + clear configHash)
+    // Uses repo directly — BotInstancesService.update() DTO doesn't expose status/configHash
+    await this.botInstanceRepo.update(instanceId, {
+      metadata: JSON.stringify(mergedMetadata),
+      status: "CREATING",
+      configHash: null,
+    });
+
+    // Trigger reconcile asynchronously (don't block the API response)
+    this.reconcilerService.reconcile(instanceId).catch((err) => {
+      this.logger.error(`Failed to trigger reconcile for ${instanceId}: ${err}`);
     });
   }
 }

@@ -36,5 +36,6 @@ export interface AdapterMetadata {
   status: "ready" | "beta" | "coming_soon";
   capabilities: AdapterCapabilities;
   credentials: CredentialRequirement[];
+  vaultType?: string;
   tierSpecs?: Record<string, TierSpec>;
 }

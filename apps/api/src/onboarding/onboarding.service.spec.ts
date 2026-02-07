@@ -347,12 +347,11 @@ describe("OnboardingService", () => {
         ...baseDeployDto,
         deploymentTarget: {
           type: "ecs-ec2" as const,
-          region: "us-east-1",
-          accessKeyId: "AKIA...",
-          secretAccessKey: "secret",
-          subnetIds: ["subnet-1"],
-          securityGroupId: "sg-1",
-          executionRoleArn: "arn:aws:iam::role/exec",
+          credentials: {
+            region: "us-east-1",
+            accessKeyId: "AKIA...",
+            secretAccessKey: "secret",
+          },
         },
       };
 
@@ -365,6 +364,88 @@ describe("OnboardingService", () => {
           }),
         }),
       );
+    });
+
+    it("should create an AZURE_VM deployment target when type is azure-vm", async () => {
+      const azureDto = {
+        ...baseDeployDto,
+        deploymentTarget: {
+          type: "azure-vm" as const,
+          credentials: {
+            subscriptionId: "sub-123",
+            resourceGroup: "my-rg",
+            region: "eastus",
+            clientId: "client-id",
+            clientSecret: "client-secret",
+            tenantId: "tenant-id",
+          },
+        },
+      };
+
+      await service.deploy(azureDto, "user-1");
+
+      expect(mockPrisma.deploymentTarget.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: "AZURE_VM",
+          }),
+        }),
+      );
+    });
+
+    it("should create a GCE deployment target when type is gce", async () => {
+      const gceDto = {
+        ...baseDeployDto,
+        deploymentTarget: {
+          type: "gce" as const,
+          credentials: {
+            projectId: "my-project",
+            zone: "us-central1-a",
+          },
+        },
+      };
+
+      await service.deploy(gceDto, "user-1");
+
+      expect(mockPrisma.deploymentTarget.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: "GCE",
+          }),
+        }),
+      );
+    });
+
+    it("should use fixed port 18789 for cloud VM types", async () => {
+      const azureDto = {
+        ...baseDeployDto,
+        deploymentTarget: {
+          type: "azure-vm" as const,
+          credentials: { subscriptionId: "sub-1", resourceGroup: "rg-1" },
+        },
+      };
+
+      await service.deploy(azureDto, "user-1");
+
+      expect(mockBotInstanceRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ gatewayPort: 18789 }),
+      );
+    });
+
+    it("should resolve saved credentials via savedCredentialId", async () => {
+      mockCredentialVault.resolve.mockResolvedValue({
+        subscriptionId: "sub-from-vault",
+        resourceGroup: "rg-from-vault",
+        region: "eastus",
+      });
+
+      await service.deploy({
+        ...baseDeployDto,
+        deploymentTarget: { type: "azure-vm" },
+        savedCredentialId: "saved-cred-1",
+      }, "user-1");
+
+      expect(mockCredentialVault.resolve).toHaveBeenCalledWith("saved-cred-1", mockWorkspace.id);
     });
 
     it("should create a bot instance record", async () => {

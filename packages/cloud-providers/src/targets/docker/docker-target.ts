@@ -11,6 +11,7 @@ import {
   DeploymentLogOptions,
   GatewayEndpoint,
   DockerTargetConfig,
+  type MiddlewareAssignment,
 } from "../../interface/deployment-target";
 import { BaseDeploymentTarget } from "../../base/base-deployment-target";
 import type { TransformOptions } from "../../base/config-transformer";
@@ -22,6 +23,12 @@ import {
   getSysboxInstallCommand,
   type ContainerRuntime,
 } from "../../sysbox";
+import {
+  getProxyContainerName,
+  getNetworkName,
+  buildProxyEnvConfig,
+} from "../../middleware/middleware-config-resolver";
+import { ensureProxyImage } from "../../middleware/proxy-image-builder";
 
 const DEFAULT_IMAGE = "openclaw:local";
 
@@ -124,10 +131,18 @@ export class DockerContainerTarget extends BaseDeploymentTarget implements SelfD
   /** Whether Sysbox is available */
   private sysboxAvailable = false;
 
+  /** Active middleware assignments (set during install) */
+  private middlewareAssignments: MiddlewareAssignment[] = [];
+
   constructor(config: DockerTargetConfigExtended) {
     super();
     this.config = config;
     this.imageName = config.imageName || DEFAULT_IMAGE;
+  }
+
+  /** Whether this instance has active middleware requiring a proxy sidecar */
+  private get hasMiddleware(): boolean {
+    return this.middlewareAssignments.length > 0;
   }
 
   /**
@@ -238,6 +253,10 @@ export class DockerContainerTarget extends BaseDeploymentTarget implements SelfD
    * Also checks/installs Sysbox BEFORE image build (fail fast).
    */
   async install(options: InstallOptions): Promise<InstallResult> {
+    // Store middleware assignments for proxy sidecar deployment
+    this.middlewareAssignments = (options.middlewareConfig?.middlewares ?? [])
+      .filter((m) => m.enabled);
+
     // FAIL FAST: Check/install Sysbox BEFORE expensive image build
     await this.ensureSysboxAvailableOrInstall();
 
@@ -332,11 +351,11 @@ export class DockerContainerTarget extends BaseDeploymentTarget implements SelfD
 
   /**
    * Start the Docker container with the configured volume mount and port mapping.
-   * Sysbox detection/install already happened in install() — uses cached result.
+   * When middleware is active, creates a Docker bridge network, runs OpenClaw
+   * internally, and deploys a middleware proxy container exposed to the host.
    */
   async start(): Promise<void> {
-
-    // Check if container already exists
+    // Check if container already exists and is running
     try {
       const state = await runCommand("docker", [
         "inspect",
@@ -350,25 +369,33 @@ export class DockerContainerTarget extends BaseDeploymentTarget implements SelfD
       }
 
       if (state === "exited" || state === "created") {
-        // Restart existing stopped container
         await runCommand("docker", ["start", this.config.containerName]);
+        if (this.hasMiddleware) {
+          const proxyName = getProxyContainerName(this.config.containerName);
+          try {
+            await runCommand("docker", ["start", proxyName]);
+          } catch { /* proxy may not exist yet */ }
+        }
         return;
       }
     } catch {
       // Container does not exist yet — create and run it
     }
 
+    if (this.hasMiddleware) {
+      await this.startWithMiddleware();
+    } else {
+      await this.startDirect();
+    }
+  }
+
+  /**
+   * Start OpenClaw directly exposed to host (no middleware proxy).
+   */
+  private async startDirect(): Promise<void> {
     const runtime = this.getDetectedRuntime();
+    const args: string[] = ["run", "-d", "--name", this.config.containerName];
 
-    const args: string[] = [
-      "run",
-      "-d",
-      "--name",
-      this.config.containerName,
-    ];
-
-    // Add runtime flag - always sysbox-runc in dream architecture
-    // (unless running in insecure dev mode)
     if (runtime === "sysbox-runc") {
       args.push("--runtime=sysbox-runc");
       this.log("Using Sysbox runtime for secure Docker-in-Docker", "stdout");
@@ -377,13 +404,10 @@ export class DockerContainerTarget extends BaseDeploymentTarget implements SelfD
     }
 
     args.push(
-      "-p",
-      `${this.config.gatewayPort}:18789`,
-      "-v",
-      `${this.config.configPath}:/home/node/.openclaw`,
+      "-p", `${this.config.gatewayPort}:18789`,
+      "-v", `${this.config.configPath}:/home/node/.openclaw`,
     );
 
-    // Pass environment variables (e.g., LLM API keys)
     for (const [key, value] of Object.entries(this.environmentVars)) {
       args.push("-e", `${key}=${value}`);
     }
@@ -392,26 +416,151 @@ export class DockerContainerTarget extends BaseDeploymentTarget implements SelfD
       args.push("--network", this.config.networkName);
     }
 
-    // Restart policy for resilience
     args.push("--restart", "unless-stopped");
-
     args.push(this.imageName);
 
     await runCommandStreaming("docker", args, this.logCallback);
   }
 
   /**
-   * Stop the Docker container gracefully.
+   * Start OpenClaw + middleware proxy on a Docker bridge network.
+   * Traffic flow: Host -> Proxy (gatewayPort) -> OpenClaw (internal on network)
+   */
+  private async startWithMiddleware(): Promise<void> {
+    const runtime = this.getDetectedRuntime();
+    const networkName = getNetworkName(this.config.containerName);
+    const proxyName = getProxyContainerName(this.config.containerName);
+
+    // 1. Build/ensure the generic proxy image
+    this.log("Ensuring middleware proxy image...", "stdout");
+    ensureProxyImage();
+
+    // 2. Create Docker network (ignore if already exists)
+    try {
+      await runCommand("docker", ["network", "create", networkName]);
+      this.log(`Created Docker network: ${networkName}`, "stdout");
+    } catch {
+      this.log(`Docker network ${networkName} already exists`, "stdout");
+    }
+
+    // 3. Run OpenClaw container on the network (NO host port exposure)
+    const openclawArgs: string[] = ["run", "-d", "--name", this.config.containerName];
+
+    if (runtime === "sysbox-runc") {
+      openclawArgs.push("--runtime=sysbox-runc");
+      this.log("Using Sysbox runtime for secure Docker-in-Docker", "stdout");
+    } else {
+      this.log("WARNING: Running without Sysbox - INSECURE MODE", "stderr");
+    }
+
+    openclawArgs.push(
+      "--network", networkName,
+      "-v", `${this.config.configPath}:/home/node/.openclaw`,
+    );
+
+    for (const [key, value] of Object.entries(this.environmentVars)) {
+      openclawArgs.push("-e", `${key}=${value}`);
+    }
+
+    openclawArgs.push("--restart", "unless-stopped");
+    openclawArgs.push(this.imageName);
+
+    await runCommandStreaming("docker", openclawArgs, this.logCallback);
+
+    // 4. Build proxy env config — internalHost is the OpenClaw container name
+    //    (Docker DNS resolves container names on the same bridge network)
+    const proxyEnv = buildProxyEnvConfig({
+      internalHost: this.config.containerName,
+      internalPort: 18789,
+      externalPort: 18789,
+      middlewares: this.middlewareAssignments,
+    });
+
+    // 5. Run proxy container on the same network, exposed to host
+    const proxyArgs: string[] = [
+      "run", "-d",
+      "--name", proxyName,
+      "--network", networkName,
+      "-p", `${this.config.gatewayPort}:18789`,
+      "-e", `CLAWSTER_MIDDLEWARE_CONFIG=${proxyEnv}`,
+      "-e", `BOT_NAME=${this.config.containerName}`,
+      "--restart", "unless-stopped",
+    ];
+
+    // Volume-mount local monorepo middleware packages for dev (if they exist)
+    for (const mw of this.middlewareAssignments) {
+      this.mountLocalMiddleware(proxyArgs, mw.package);
+    }
+
+    proxyArgs.push(ensureProxyImage());
+
+    this.log("Starting middleware proxy...", "stdout");
+    await runCommandStreaming("docker", proxyArgs, this.logCallback);
+    this.log("Middleware proxy started", "stdout");
+  }
+
+  /**
+   * Attempts to volume-mount a local monorepo middleware package into the proxy container.
+   * Falls back silently if the package is not found locally (it will be npm-installed at startup).
+   */
+  private mountLocalMiddleware(args: string[], packageName: string): void {
+    try {
+      const fs = require("fs");
+      const monorepoRoot = this.findMonorepoRoot();
+      if (!monorepoRoot) return;
+
+      // Check packages/middlewares/<name>/dist — convention for monorepo middlewares
+      const shortName = packageName.replace(/^@clawster\/middleware-/, "");
+      const localPath = path.join(monorepoRoot, "packages", "middlewares", shortName);
+
+      if (fs.existsSync(path.join(localPath, "dist")) && fs.existsSync(path.join(localPath, "package.json"))) {
+        args.push(
+          "-v", `${path.join(localPath, "dist")}:/app/node_modules/${packageName}/dist`,
+          "-v", `${path.join(localPath, "package.json")}:/app/node_modules/${packageName}/package.json`,
+        );
+        this.log(`Volume-mounted local middleware: ${packageName}`, "stdout");
+      }
+    } catch {
+      // Not a local package — proxy will npm-install it at startup
+    }
+  }
+
+  /**
+   * Find the monorepo root by walking up from the config path.
+   */
+  private findMonorepoRoot(): string | null {
+    const fs = require("fs");
+    // Start from this file's compiled location (inside the monorepo), not configPath
+    // which may be outside the repo (e.g. ~/.clawster/gateways/...)
+    let dir = __dirname;
+    for (let i = 0; i < 10; i++) {
+      if (fs.existsSync(path.join(dir, "pnpm-workspace.yaml"))) {
+        return dir;
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return null;
+  }
+
+  /**
+   * Stop the Docker container (and proxy if active) gracefully.
    */
   async stop(): Promise<void> {
+    const proxyName = getProxyContainerName(this.config.containerName);
+    // Stop proxy first (it depends on OpenClaw)
+    try { await runCommand("docker", ["stop", proxyName]); } catch { /* may not exist */ }
     await runCommand("docker", ["stop", this.config.containerName]);
   }
 
   /**
-   * Restart the Docker container.
+   * Restart the Docker container (and proxy if active).
    */
   async restart(): Promise<void> {
     await runCommand("docker", ["restart", this.config.containerName]);
+    const proxyName = getProxyContainerName(this.config.containerName);
+    try { await runCommand("docker", ["restart", proxyName]); } catch { /* may not exist */ }
   }
 
   /**
@@ -515,15 +664,18 @@ export class DockerContainerTarget extends BaseDeploymentTarget implements SelfD
   }
 
   /**
-   * Remove the Docker container and clean up.
+   * Remove the Docker container, proxy, and network.
    */
   async destroy(): Promise<void> {
-    // Force stop and remove the container
-    try {
-      await runCommand("docker", ["rm", "-f", this.config.containerName]);
-    } catch {
-      // Container may not exist
-    }
+    const proxyName = getProxyContainerName(this.config.containerName);
+    const networkName = getNetworkName(this.config.containerName);
+
+    // Remove proxy container first
+    try { await runCommand("docker", ["rm", "-f", proxyName]); } catch { /* may not exist */ }
+    // Remove OpenClaw container
+    try { await runCommand("docker", ["rm", "-f", this.config.containerName]); } catch { /* may not exist */ }
+    // Remove the middleware network
+    try { await runCommand("docker", ["network", "rm", networkName]); } catch { /* may not exist */ }
   }
 
   /**

@@ -11,6 +11,7 @@ import { ConfigGeneratorService } from "./config-generator.service";
 import { LifecycleManagerService } from "./lifecycle-manager.service";
 import { DriftDetectionService } from "./drift-detection.service";
 import { DelegationSkillWriterService } from "./delegation-skill-writer.service";
+import { VaultSkillWriterService } from "../vault/vault-skill-writer.service";
 import { OpenClawSecurityAuditService } from "../security/security-audit.service";
 import { ManifestParserService, DoctorService, EventLoggerService } from "./services";
 import { PreprocessorChainService } from "./preprocessors";
@@ -81,6 +82,7 @@ export class ReconcilerService {
     private readonly driftDetection: DriftDetectionService,
     private readonly securityAudit: OpenClawSecurityAuditService,
     private readonly delegationSkillWriter: DelegationSkillWriterService,
+    private readonly vaultSkillWriter: VaultSkillWriterService,
     private readonly manifestParser: ManifestParserService,
     private readonly doctorService: DoctorService,
     private readonly eventLogger: EventLoggerService,
@@ -220,6 +222,21 @@ export class ReconcilerService {
         const msg = err instanceof Error ? err.message : String(err);
         this.logger.warn(`Delegation skill write failed for ${instanceId}: ${msg}`);
         changes.push(`Delegation skill write failed: ${msg}`);
+      }
+
+      // 5d. Write vault skill files (always — every bot gets vault)
+      try {
+        const instanceMeta2 = (typeof instance.metadata === "string"
+          ? JSON.parse(instance.metadata)
+          : instance.metadata) as Record<string, unknown> | null;
+        const vaultConfigPath = (instanceMeta2?.configPath as string) ?? `/var/openclaw/${instance.name}`;
+        const vaultApiUrl = process.env.CLAWSTER_API_URL || "http://172.17.0.1:4000";
+        await this.vaultSkillWriter.writeVaultSkills(instanceId, vaultConfigPath, vaultApiUrl);
+        changes.push("Vault skill written");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Vault skill write failed for ${instanceId}: ${msg}`);
+        changes.push(`Vault skill write failed: ${msg}`);
       }
 
       // 6. Health check via Gateway WS

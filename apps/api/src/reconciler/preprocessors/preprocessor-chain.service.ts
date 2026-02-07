@@ -6,6 +6,7 @@ import type {
   PreprocessorResult,
 } from "../interfaces";
 import { DelegationConfigPreprocessor } from "./delegation-config.preprocessor";
+import { VaultConfigPreprocessor } from "../../vault/vault-config.preprocessor";
 
 /**
  * Result from running the full preprocessor chain.
@@ -37,9 +38,11 @@ export class PreprocessorChainService {
 
   constructor(
     private readonly delegationPreprocessor: DelegationConfigPreprocessor,
+    private readonly vaultPreprocessor: VaultConfigPreprocessor,
   ) {
-    // Register default preprocessors
-    this.registerPreprocessor(delegationPreprocessor);
+    // Register default preprocessors (sorted by priority automatically)
+    this.registerPreprocessor(vaultPreprocessor);       // priority 40
+    this.registerPreprocessor(delegationPreprocessor);   // priority 50
   }
 
   /**

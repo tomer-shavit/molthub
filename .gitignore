@@ -44,6 +44,7 @@ prisma/migrations/*/migration_lock.toml
 # Temporary
 tmp/
 temp/
+.clawster-proxy*
 # Bot personality files (belong in /home/ubuntu/zoro/, not here)
 SOUL.md
 IDENTITY.md

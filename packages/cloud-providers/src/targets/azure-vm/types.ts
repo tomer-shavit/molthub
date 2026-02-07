@@ -16,30 +16,6 @@ export type VmStatus =
   | "unknown";
 
 /**
- * Application Gateway configuration.
- */
-export interface AppGatewayConfig {
-  /** Subnet ID for the Application Gateway */
-  subnetId: string;
-  /** Public IP resource ID */
-  publicIpId: string;
-  /** Backend pool port (gateway port) */
-  gatewayPort: number;
-  /** Optional SSL certificate secret ID from Key Vault */
-  sslCertificateSecretId?: string;
-}
-
-/**
- * Gateway endpoint information.
- */
-export interface GatewayEndpointInfo {
-  /** Public IP address */
-  publicIp: string;
-  /** Fully qualified domain name */
-  fqdn: string;
-}
-
-/**
  * NSG security rule definition.
  */
 export interface SecurityRule {

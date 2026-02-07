@@ -59,14 +59,13 @@ async function main(): Promise<void> {
 
   const config = ProxyConfigSchema.parse(rawConfig);
   console.log(
-    `[MiddlewareProxy] Config: external=${config.externalPort}, internal=${config.internalPort}, middlewares=${config.middlewares.length}`
+    `[MiddlewareProxy] Config: external=${config.externalPort}, internal=${config.internalHost}:${config.internalPort}, middlewares=${config.middlewares.length}`
   );
 
   const middlewares = await loadMiddlewares(config);
   const chain = new MiddlewareChain(middlewares);
 
-  const internalHost = "127.0.0.1";
-  await waitForUpstream(internalHost, config.internalPort);
+  await waitForUpstream(config.internalHost, config.internalPort);
 
   await chain.initializeAll({
     botName: process.env.BOT_NAME ?? "unknown",
@@ -85,7 +84,7 @@ async function main(): Promise<void> {
     chain,
     externalPort: config.externalPort,
     internalPort: config.internalPort,
-    internalHost,
+    internalHost: config.internalHost,
   });
 
   await proxy.start();

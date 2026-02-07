@@ -116,6 +116,20 @@ export class LifecycleManagerService {
       const containerEnv = (instanceMeta?.containerEnv as Record<string, string>) || undefined;
       const gatewayAuthToken = (instanceMeta?.gatewayAuthToken as string) ?? undefined;
 
+      // Destroy existing resources before re-provisioning (safe no-op for non-existent)
+      // Ensures clean slate when middleware topology changes (network + proxy lifecycle)
+      try {
+        await target.destroy();
+      } catch {
+        // Ignore — may not exist yet
+      }
+
+      // Extract middleware config for proxy sidecar deployment
+      const rawMiddlewareConfig = instanceMeta?.middlewareConfig as
+        | { middlewares?: Array<{ package: string; enabled: boolean; config: Record<string, unknown> }> }
+        | undefined;
+      const enabledMiddlewares = (rawMiddlewareConfig?.middlewares ?? []).filter((m) => m.enabled);
+
       const installStepId = this.deploymentTargetResolver.getInstallStepId(deploymentType);
       currentStepId = installStepId;
       this.provisioningEvents.updateStep(instance.id, installStepId, "in_progress");
@@ -125,6 +139,9 @@ export class LifecycleManagerService {
         port: gatewayPort,
         gatewayAuthToken,
         containerEnv,
+        middlewareConfig: enabledMiddlewares.length > 0
+          ? { middlewares: enabledMiddlewares }
+          : undefined,
       });
 
       if (!installResult.success) {
@@ -241,10 +258,18 @@ export class LifecycleManagerService {
       const config = this.configGenerator.generateOpenClawConfig(manifest);
       const desiredHash = this.configGenerator.generateConfigHash(config);
 
-      // Fast-path: nothing to do if hashes match
+      // Fast-path: nothing to do if hashes match — but verify gateway is reachable.
+      // A dead container with a matching hash must fall back to provisioning.
       if (instance.configHash === desiredHash) {
-        this.logger.debug(`Instance ${instance.id} config already up-to-date`);
-        return { success: true, message: "Config already up-to-date", method: "none", configHash: desiredHash };
+        try {
+          const client = await this.gatewayConnection.getGatewayClient(instance);
+          await client.health();
+          this.logger.debug(`Instance ${instance.id} config already up-to-date and gateway healthy`);
+          return { success: true, message: "Config already up-to-date", method: "none", configHash: desiredHash };
+        } catch {
+          this.logger.warn(`Instance ${instance.id} config hash matches but gateway unreachable — needs re-provision`);
+          return { success: false, message: "Gateway unreachable despite matching config hash", method: "none" };
+        }
       }
 
       // Connect (or reuse) to gateway

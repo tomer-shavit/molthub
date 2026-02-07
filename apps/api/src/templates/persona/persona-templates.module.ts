@@ -11,11 +11,13 @@ import {
   SECRET_RESOLVER,
 } from "./interfaces";
 import { ReconcilerModule } from "../../reconciler/reconciler.module";
+import { VaultModule } from "../../vault/vault.module";
 
 @Module({
   imports: [
     DatabaseModule,
     ReconcilerModule, // For GATEWAY_CONNECTION_SERVICE
+    VaultModule, // For VaultService injection into SecretResolverService
   ],
   controllers: [PersonaTemplatesController],
   providers: [

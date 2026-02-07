@@ -49,7 +49,7 @@ export class CredentialVaultService {
   async listSaved(query: ListSavedCredentialsQueryDto) {
     const result = await this.connectorRepo.findManyConnectors({
       workspaceId: query.workspaceId,
-      type: query.type ? query.type : ["aws-account", "api-key"],
+      type: query.type ? query.type : ["aws-account", "azure-account", "gce-account", "api-key"],
     });
 
     // Filter by credentialVault tag
@@ -113,6 +113,17 @@ export class CredentialVaultService {
       }
       if (!credentials.secretAccessKey || typeof credentials.secretAccessKey !== "string") {
         throw new BadRequestException("AWS credentials must include secretAccessKey");
+      }
+    } else if (type === "azure-account") {
+      if (!credentials.subscriptionId || typeof credentials.subscriptionId !== "string") {
+        throw new BadRequestException("Azure credentials must include subscriptionId");
+      }
+      if (!credentials.resourceGroup || typeof credentials.resourceGroup !== "string") {
+        throw new BadRequestException("Azure credentials must include resourceGroup");
+      }
+    } else if (type === "gce-account") {
+      if (!credentials.projectId || typeof credentials.projectId !== "string") {
+        throw new BadRequestException("GCE credentials must include projectId");
       }
     } else if (type === "api-key") {
       if (!credentials.apiKey || typeof credentials.apiKey !== "string") {

@@ -6,5 +6,5 @@
 
 export * from "./azure-network-manager";
 export * from "./azure-compute-manager";
-export * from "./azure-appgateway-manager";
+export * from "./azure-shared-infra-manager";
 export * from "./interfaces";

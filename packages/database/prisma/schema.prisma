@@ -159,6 +159,9 @@ model BotInstance {
   // Persona template injection
   templateInjectionSnapshots TemplateInjectionSnapshot[]
 
+  // Vault secrets (local/docker fallback)
+  vaultSecrets BotVaultSecret[]
+
   @@unique([workspaceId, name])
   @@index([workspaceId])
   @@index([fleetId])
@@ -1109,4 +1112,23 @@ model TemplateInjectionSnapshot {
   @@index([instanceId])
   @@index([templateId])
   @@index([status])
+}
+
+// =============================================================================
+// Vault Secrets (local/docker fallback storage)
+// =============================================================================
+
+model BotVaultSecret {
+  id            String   @id @default(cuid())
+  botInstanceId String
+  botInstance   BotInstance @relation(fields: [botInstanceId], references: [id], onDelete: Cascade)
+
+  key            String   // Secret key name (e.g., "OPENAI_API_KEY")
+  encryptedValue String   // AES-256 encrypted secret value
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([botInstanceId, key])
+  @@index([botInstanceId])
 }

@@ -6,4 +6,8 @@
 
 export type { IAzureNetworkManager } from "./azure-network-manager.interface";
 export type { IAzureComputeManager } from "./azure-compute-manager.interface";
-export type { IAzureAppGatewayManager } from "./azure-appgateway-manager.interface";
+export type {
+  IAzureSharedInfraManager,
+  ManagedIdentityInfo,
+  KeyVaultInfo,
+} from "./azure-shared-infra-manager.interface";

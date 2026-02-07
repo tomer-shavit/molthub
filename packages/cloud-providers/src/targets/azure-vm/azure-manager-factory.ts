@@ -7,18 +7,22 @@
 
 import { ComputeManagementClient } from "@azure/arm-compute";
 import { NetworkManagementClient } from "@azure/arm-network";
+import { StorageManagementClient } from "@azure/arm-storage";
+import { KeyVaultManagementClient } from "@azure/arm-keyvault";
+import { ManagedServiceIdentityClient } from "@azure/arm-msi";
+import { AuthorizationManagementClient } from "@azure/arm-authorization";
 import { DefaultAzureCredential, TokenCredential } from "@azure/identity";
 
 import {
   AzureNetworkManager,
   AzureComputeManager,
-  AzureAppGatewayManager,
+  AzureSharedInfraManager,
 } from "./managers";
 
 import type {
   IAzureNetworkManager,
   IAzureComputeManager,
-  IAzureAppGatewayManager,
+  IAzureSharedInfraManager,
 } from "./managers";
 
 import type { AzureLogCallback } from "./types";
@@ -43,59 +47,33 @@ export interface AzureManagerFactoryConfig {
  * Collection of all Azure VM managers.
  */
 export interface AzureManagers {
-  /** Network manager for VNets, subnets, and NSGs */
+  /** Network manager for VNets, subnets, NSGs, and public IPs */
   networkManager: IAzureNetworkManager;
   /** Compute manager for VMs, disks, and NICs */
   computeManager: IAzureComputeManager;
-  /** Application Gateway manager for load balancing */
-  appGatewayManager: IAzureAppGatewayManager;
+  /** Shared infrastructure manager for Storage, MI, Key Vault, RBAC */
+  sharedInfraManager: IAzureSharedInfraManager;
 }
 
 /**
  * Factory class for creating Azure managers with proper wiring.
- *
- * This class centralizes the creation of all Azure SDK clients and managers,
- * ensuring they are correctly wired together. Using a factory enables:
- *
- * 1. Single place to configure SDK clients (credentials, subscription, region)
- * 2. Correct dependency order (shared clients across managers)
- * 3. Easy testing by allowing mock managers to be passed instead
- *
- * @example
- * ```typescript
- * // Production usage
- * const managers = AzureManagerFactory.createManagers({
- *   subscriptionId: "my-subscription",
- *   resourceGroup: "my-rg",
- *   location: "eastus",
- *   log: (msg, stream) => console.log(msg),
- * });
- *
- * // Testing usage - create with mock managers
- * const target = new AzureVmTarget({
- *   config: testConfig,
- *   managers: { ...mockManagers },
- * });
- * ```
  */
 export class AzureManagerFactory {
   /**
    * Create all Azure managers with proper dependencies wired.
-   *
-   * @param config - Factory configuration
-   * @returns Collection of all managers
    */
   static createManagers(config: AzureManagerFactoryConfig): AzureManagers {
     const { subscriptionId, resourceGroup, location, credentials, log } = config;
 
-    // Use provided credentials or default
     const credential = credentials ?? new DefaultAzureCredential();
 
-    // Initialize Azure SDK clients
     const computeClient = new ComputeManagementClient(credential, subscriptionId);
     const networkClient = new NetworkManagementClient(credential, subscriptionId);
+    const storageClient = new StorageManagementClient(credential, subscriptionId);
+    const kvMgmtClient = new KeyVaultManagementClient(credential, subscriptionId);
+    const msiClient = new ManagedServiceIdentityClient(credential, subscriptionId);
+    const authClient = new AuthorizationManagementClient(credential, subscriptionId);
 
-    // Create network manager
     const networkManager = new AzureNetworkManager(
       networkClient,
       resourceGroup,
@@ -103,7 +81,6 @@ export class AzureManagerFactory {
       log
     );
 
-    // Create compute manager (needs both compute and network clients)
     const computeManager = new AzureComputeManager(
       computeClient,
       networkClient,
@@ -112,9 +89,11 @@ export class AzureManagerFactory {
       log
     );
 
-    // Create Application Gateway manager
-    const appGatewayManager = new AzureAppGatewayManager(
-      networkClient,
+    const sharedInfraManager = new AzureSharedInfraManager(
+      storageClient,
+      kvMgmtClient,
+      msiClient,
+      authClient,
       subscriptionId,
       resourceGroup,
       location,
@@ -124,7 +103,7 @@ export class AzureManagerFactory {
     return {
       networkManager,
       computeManager,
-      appGatewayManager,
+      sharedInfraManager,
     };
   }
 }
