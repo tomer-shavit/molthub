@@ -12,23 +12,20 @@ export * from "./interface/resource-spec";
 // Registry
 export * from "./registry";
 
-// Deployment Targets
-export { LocalMachineTarget } from "./targets/local/local-target";
-export { DockerContainerTarget } from "./targets/docker/docker-target";
-export { EcsEc2Target } from "./targets/ecs-ec2/ecs-ec2-target";
-export type { EcsEc2Config } from "./targets/ecs-ec2/ecs-ec2-config";
-export type { EcsEc2TargetOptions, EcsEc2Services } from "./targets/ecs-ec2/ecs-ec2-target";
+// Deployment Targets — AWS EC2
+export { AwsEc2Target } from "./targets/ecs-ec2/aws-ec2-target";
+export type { AwsEc2Config } from "./targets/ecs-ec2/aws-ec2-config";
+export type { AwsEc2TargetOptions, AwsEc2Services } from "./targets/ecs-ec2/aws-ec2-services.interface";
 export type {
-  ICloudFormationService,
-  IECSService,
-  ISecretsManagerService,
-  ICloudWatchLogsService,
-  EcsServiceDescription,
-  EcsDeployment,
-  EcsServiceEvent,
-  LogEventInfo,
-} from "./targets/ecs-ec2/ecs-ec2-services.interface";
-export { pushImageToEcr } from "./targets/ecs-ec2/ecr-push";
+  ISecretsManagerService as IAwsSecretsManagerService,
+  ICloudWatchLogsService as IAwsCloudWatchLogsService,
+} from "./targets/ecs-ec2/aws-ec2-services.interface";
+export { AwsManagerFactory } from "./targets/ecs-ec2/aws-ec2-manager-factory";
+export type { AwsManagerFactoryConfig, AwsEc2Managers } from "./targets/ecs-ec2/aws-ec2-manager-factory";
+export type { IAwsNetworkManager, IAwsComputeManager } from "./targets/ecs-ec2/managers";
+export type { SharedInfraIds, LaunchTemplateConfig } from "./targets/ecs-ec2/types";
+
+// Deployment Targets — GCE
 export { GceTarget } from "./targets/gce/gce-target";
 export type { GceTargetOptions } from "./targets/gce/gce-target";
 export type { GceConfig } from "./targets/gce/gce-config";
@@ -53,6 +50,8 @@ export type {
   ISecretManagerService,
   ICloudLoggingService,
 } from "./targets/gce/managers";
+
+// Deployment Targets — Azure VM
 export { AzureVmTarget } from "./targets/azure-vm/azure-vm-target";
 export type { AzureVmTargetOptions } from "./targets/azure-vm/azure-vm-target";
 export type { AzureVmConfig } from "./targets/azure-vm/azure-vm-config";
@@ -62,15 +61,6 @@ export type {
   IAzureNetworkManager,
   IAzureComputeManager,
 } from "./targets/azure-vm/managers";
-export type { EcrPushOptions, EcrPushResult } from "./targets/ecs-ec2/ecr-push";
-export { generateProductionTemplate } from "./targets/ecs-ec2/templates/production";
-export type { ProductionTemplateParams } from "./targets/ecs-ec2/templates/production";
-export { generateSharedInfraTemplate } from "./targets/ecs-ec2/shared-infra/templates/shared-production";
-export { generatePerBotTemplate } from "./targets/ecs-ec2/per-bot/per-bot-template";
-export type { PerBotTemplateParams } from "./targets/ecs-ec2/per-bot/per-bot-template";
-export type { SharedInfraOutputs } from "./targets/ecs-ec2/shared-infra/shared-infra-config";
-export { SharedExportNames, getSharedInfraStackName, SHARED_INFRA_STACK_PREFIX } from "./targets/ecs-ec2/shared-infra/shared-infra-config";
-export { ensureSharedInfra, getSharedInfraOutputs, isSharedInfraReady } from "./targets/ecs-ec2/shared-infra/shared-infra-manager";
 
 // Factories
 export { DeploymentTargetFactory } from "./targets/factory";

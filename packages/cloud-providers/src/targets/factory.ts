@@ -6,7 +6,7 @@ import {
 import { AdapterRegistry } from "../registry/adapter-registry";
 import { LocalMachineTarget } from "./local/local-target";
 import { DockerContainerTarget } from "./docker/docker-target";
-import { EcsEc2Target } from "./ecs-ec2/ecs-ec2-target";
+import { AwsEc2Target as EcsEc2Target } from "./ecs-ec2/aws-ec2-target";
 import { GceTarget } from "./gce/gce-target";
 import { AzureVmTarget } from "./azure-vm/azure-vm-target";
 
