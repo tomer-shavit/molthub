@@ -14,7 +14,7 @@ export class SaveCredentialDto {
   name: string;
 
   @IsString()
-  @IsIn(["aws-account", "api-key"])
+  @IsIn(["aws-account", "azure-account", "gce-account", "api-key"])
   type: string;
 
   @IsObject()
@@ -34,6 +34,6 @@ export class ListSavedCredentialsQueryDto {
 
   @IsString()
   @IsOptional()
-  @IsIn(["aws-account", "api-key"])
+  @IsIn(["aws-account", "azure-account", "gce-account", "api-key"])
   type?: string;
 }

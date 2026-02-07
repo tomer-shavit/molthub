@@ -61,7 +61,6 @@ export type { AzureManagerFactoryConfig, AzureManagers } from "./targets/azure-v
 export type {
   IAzureNetworkManager,
   IAzureComputeManager,
-  IAzureAppGatewayManager,
 } from "./targets/azure-vm/managers";
 export type { EcrPushOptions, EcrPushResult } from "./targets/ecs-ec2/ecr-push";
 export { generateProductionTemplate } from "./targets/ecs-ec2/templates/production";

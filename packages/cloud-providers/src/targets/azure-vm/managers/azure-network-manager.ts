@@ -1,10 +1,16 @@
 /**
  * Azure Network Manager
  *
- * Handles VNet, Subnet, and NSG operations for Azure VM deployments.
+ * Handles VNet, Subnet, NSG, and Public IP operations for Azure VM deployments.
  */
 
-import type { NetworkManagementClient, VirtualNetwork, NetworkSecurityGroup, Subnet } from "@azure/arm-network";
+import type {
+  NetworkManagementClient,
+  VirtualNetwork,
+  NetworkSecurityGroup,
+  Subnet,
+  PublicIPAddress,
+} from "@azure/arm-network";
 import type { SecurityRule, AzureLogCallback } from "../types";
 import type { IAzureNetworkManager } from "./interfaces";
 
@@ -63,7 +69,6 @@ export class AzureNetworkManager implements IAzureNetworkManager {
       if ((error as { statusCode?: number }).statusCode === 404) {
         this.log(`  Creating NSG: ${name}`);
 
-        // Build security rules
         const securityRules = rules.map((rule) => ({
           name: rule.name,
           priority: rule.priority,
@@ -76,7 +81,6 @@ export class AzureNetworkManager implements IAzureNetworkManager {
           destinationPortRange: rule.destinationPortRange,
         }));
 
-        // Add additional rules if provided
         if (additionalRules && additionalRules.length > 0) {
           let priority = 400;
           for (const rule of additionalRules) {
@@ -145,31 +149,54 @@ export class AzureNetworkManager implements IAzureNetworkManager {
   }
 
   /**
-   * Ensure an App Gateway subnet exists (no NSG attached).
+   * Ensure a static public IP exists (Standard SKU, static allocation).
+   * Static IP survives VM restarts and deallocations — critical for webhook URLs.
    */
-  async ensureAppGatewaySubnet(
-    vnetName: string,
-    subnetName: string,
-    cidr: string
-  ): Promise<Subnet> {
+  async ensurePublicIp(name: string): Promise<PublicIPAddress> {
     try {
-      const existing = await this.networkClient.subnets.get(this.resourceGroup, vnetName, subnetName);
+      const existing = await this.networkClient.publicIPAddresses.get(this.resourceGroup, name);
       return existing;
     } catch (error: unknown) {
       if ((error as { statusCode?: number }).statusCode === 404) {
-        this.log(`  Creating App Gateway subnet: ${subnetName}`);
-        // Application Gateway subnet must NOT have NSG attached directly
-        const result = await this.networkClient.subnets.beginCreateOrUpdateAndWait(
+        this.log(`  Creating static public IP: ${name}`);
+        const result = await this.networkClient.publicIPAddresses.beginCreateOrUpdateAndWait(
           this.resourceGroup,
-          vnetName,
-          subnetName,
+          name,
           {
-            addressPrefix: cidr,
+            location: this.location,
+            sku: { name: "Standard" },
+            publicIPAllocationMethod: "Static",
+            tags: {
+              managedBy: "clawster",
+            },
           }
         );
         return result;
       }
       throw error;
+    }
+  }
+
+  /**
+   * Get the IP address string from a public IP resource.
+   */
+  async getPublicIpAddress(name: string): Promise<string> {
+    const pip = await this.networkClient.publicIPAddresses.get(this.resourceGroup, name);
+    if (!pip.ipAddress) {
+      throw new Error(`Public IP ${name} has no allocated address`);
+    }
+    return pip.ipAddress;
+  }
+
+  /**
+   * Delete a public IP.
+   */
+  async deletePublicIp(name: string): Promise<void> {
+    try {
+      await this.networkClient.publicIPAddresses.beginDeleteAndWait(this.resourceGroup, name);
+      this.log(`Public IP deleted: ${name}`);
+    } catch {
+      this.log(`Public IP not found (skipped): ${name}`);
     }
   }
 
@@ -198,21 +225,34 @@ export class AzureNetworkManager implements IAzureNetworkManager {
   }
 
   /**
-   * Get default NSG security rules for VM protection.
+   * Get default NSG security rules for Caddy VM architecture.
+   *
+   * Allows HTTP/HTTPS from Internet (Caddy handles TLS + reverse proxy).
+   * All other inbound is denied by Azure's built-in default deny rule.
    */
   static getDefaultSecurityRules(): SecurityRule[] {
     return [
-      // Deny all direct inbound by default (traffic must go through App Gateway)
+      // Allow HTTP from Internet (Caddy listens on :80)
       {
-        name: "DenyAllInbound",
-        priority: 4096,
+        name: "AllowHTTP",
+        priority: 100,
         direction: "Inbound",
-        access: "Deny",
-        protocol: "*",
-        sourceAddressPrefix: "*",
-        destinationPortRange: "*",
+        access: "Allow",
+        protocol: "Tcp",
+        sourceAddressPrefix: "Internet",
+        destinationPortRange: "80",
       },
-      // Allow outbound to internet (for apt, npm, API calls)
+      // Allow HTTPS from Internet (Caddy auto-HTTPS on :443 when domain set)
+      {
+        name: "AllowHTTPS",
+        priority: 110,
+        direction: "Inbound",
+        access: "Allow",
+        protocol: "Tcp",
+        sourceAddressPrefix: "Internet",
+        destinationPortRange: "443",
+      },
+      // Allow outbound to internet (for apt, npm, Docker Hub, API calls)
       {
         name: "AllowInternetOutbound",
         priority: 100,
@@ -221,36 +261,6 @@ export class AzureNetworkManager implements IAzureNetworkManager {
         protocol: "*",
         sourceAddressPrefix: "*",
         destinationPortRange: "*",
-      },
-      // Allow Azure Load Balancer health probes
-      {
-        name: "AllowAzureLoadBalancer",
-        priority: 100,
-        direction: "Inbound",
-        access: "Allow",
-        protocol: "*",
-        sourceAddressPrefix: "AzureLoadBalancer",
-        destinationPortRange: "*",
-      },
-      // Allow VNet internal traffic (for App Gateway -> VM)
-      {
-        name: "AllowVNetInbound",
-        priority: 200,
-        direction: "Inbound",
-        access: "Allow",
-        protocol: "*",
-        sourceAddressPrefix: "VirtualNetwork",
-        destinationPortRange: "*",
-      },
-      // Allow Application Gateway health probes (65503-65534 range)
-      {
-        name: "AllowAppGatewayHealthProbes",
-        priority: 300,
-        direction: "Inbound",
-        access: "Allow",
-        protocol: "*",
-        sourceAddressPrefix: "GatewayManager",
-        destinationPortRange: "65200-65535",
       },
     ];
   }

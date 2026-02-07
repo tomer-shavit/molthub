@@ -79,6 +79,23 @@ export class CredentialEncryptionService {
           accountId: config.accountId,
         };
 
+      case "azure-account":
+        return {
+          subscriptionId: this.maskString(config.subscriptionId as string | undefined, 4, 4),
+          resourceGroup: config.resourceGroup,
+          region: config.region,
+          tenantId: this.maskString(config.tenantId as string | undefined, 4, 4),
+          clientId: this.maskString(config.clientId as string | undefined, 4, 4),
+          clientSecret: "••••••••",
+        };
+
+      case "gce-account":
+        return {
+          projectId: config.projectId,
+          zone: config.zone,
+          keyFilePath: config.keyFilePath ? this.maskString(config.keyFilePath as string | undefined, 6, 6) : undefined,
+        };
+
       case "api-key":
         return {
           provider: config.provider,

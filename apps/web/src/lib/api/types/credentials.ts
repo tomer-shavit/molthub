@@ -2,7 +2,7 @@
  * Credential vault types.
  */
 
-export type CredentialType = 'aws-account' | 'api-key';
+export type CredentialType = 'aws-account' | 'azure-account' | 'gce-account' | 'api-key';
 
 export interface SavedCredential {
   id: string;

@@ -13,7 +13,7 @@ interface SavedCredential {
 }
 
 interface SavedCredentialSelectorProps {
-  type: "aws-account" | "api-key";
+  type: string;
   onSelect: (id: string) => void;
   onManual: () => void;
   selectedId: string | null;
@@ -21,10 +21,18 @@ interface SavedCredentialSelectorProps {
 
 function formatCredentialLabel(credential: SavedCredential): string {
   const { name, maskedConfig, type } = credential;
-  if (type === "aws-account") {
-    return `${name} — ${maskedConfig.accessKeyId} (${maskedConfig.region})`;
+  switch (type) {
+    case "aws-account":
+      return `${name} — ${maskedConfig.accessKeyId} (${maskedConfig.region})`;
+    case "azure-account":
+      return `${name} — ${maskedConfig.subscriptionId} (${maskedConfig.region ?? maskedConfig.resourceGroup})`;
+    case "gce-account":
+      return `${name} — ${maskedConfig.projectId} (${maskedConfig.zone ?? "default"})`;
+    case "api-key":
+      return `${name} — ${maskedConfig.provider} (${maskedConfig.apiKey})`;
+    default:
+      return name;
   }
-  return `${name} — ${maskedConfig.provider} (${maskedConfig.apiKey})`;
 }
 
 export function SavedCredentialSelector({

@@ -100,6 +100,9 @@ export interface AdapterMetadata {
   /** Credentials required to use this target */
   credentials: CredentialRequirement[];
 
+  /** Credential vault type for saving/loading credentials. If undefined, saving is not supported. */
+  vaultType?: string;
+
   /**
    * Resource tier specifications for this provider.
    * Maps tier names to provider-specific resource configs.

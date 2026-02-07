@@ -1026,6 +1026,7 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
           sensitive: false,
         },
       ],
+      vaultType: "aws-account",
       tierSpecs: ECS_TIER_SPECS,
     };
   }

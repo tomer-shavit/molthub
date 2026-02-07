@@ -1078,6 +1078,7 @@ docker run -d \\
           sensitive: true,
         },
       ],
+      vaultType: "gce-account",
       tierSpecs: GCE_TIER_SPECS,
     };
   }

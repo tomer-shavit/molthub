@@ -11,10 +11,6 @@ import { CapabilityBadges } from "./capability-badges";
 import { SavedCredentialSelector } from "./saved-credential-selector";
 import { SaveCredentialCheckbox } from "./save-credential-checkbox";
 
-/** Map adapter types to their credential vault type. */
-const ADAPTER_VAULT_TYPE: Record<string, "aws-account"> = {
-  "ecs-ec2": "aws-account",
-};
 
 export interface StepPlatformProps {
   adapters: AdapterMetadata[];
@@ -59,7 +55,7 @@ export function StepPlatform({
   onSaveForFutureChange,
 }: StepPlatformProps) {
   const selectedAdapter = adapters.find((a) => a.type === selectedPlatform);
-  const vaultType = selectedPlatform ? ADAPTER_VAULT_TYPE[selectedPlatform] : undefined;
+  const vaultType = selectedAdapter?.vaultType;
   const [useManual, setUseManual] = useState(!savedCredentialId);
 
   return (
@@ -148,7 +144,7 @@ export function StepPlatform({
               ) : savedCredentialId ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-md p-3">
                   <CheckCircle className="w-4 h-4 text-green-600" />
-                  <span>Using saved AWS credentials.</span>
+                  <span>Using saved credentials.</span>
                 </div>
               ) : null}
             </>

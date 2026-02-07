@@ -28,12 +28,12 @@ export interface PreviewOnboardingResult {
 export interface DeployOnboardingPayload {
   templateId?: string;
   botName: string;
-  deploymentTarget: { type: string; [key: string]: unknown };
+  deploymentTarget: { type: string; tier?: string; credentials?: Record<string, string> };
   channels?: Array<{ type: string; config?: Record<string, unknown> }>;
   environment?: string;
   modelConfig?: { provider: string; model: string; apiKey: string };
   fleetId?: string;
-  awsCredentialId?: string;
+  savedCredentialId?: string;
   modelCredentialId?: string;
 }
 

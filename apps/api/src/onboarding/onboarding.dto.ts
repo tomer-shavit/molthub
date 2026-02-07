@@ -2,6 +2,7 @@ import {
   IsString,
   IsOptional,
   IsArray,
+  IsObject,
   ValidateNested,
   IsNotEmpty,
   MaxLength,
@@ -35,43 +36,12 @@ class DeploymentTargetDto {
 
   @IsOptional()
   @IsString()
-  region?: string;
-
-  @IsOptional()
-  @IsString()
-  accessKeyId?: string;
-
-  @IsOptional()
-  @IsString()
-  secretAccessKey?: string;
-
-  @IsOptional()
-  @IsString()
   @IsIn(["light", "standard", "performance"])
   tier?: string;
 
   @IsOptional()
-  @IsString()
-  certificateArn?: string;
-
-  @IsOptional()
-  @IsString()
-  @Matches(
-    /^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)\/(3[0-2]|[12]?\d)$/,
-    {
-      message:
-        "allowedCidr must be a valid CIDR block (e.g., 203.0.113.0/24)",
-    },
-  )
-  allowedCidr?: string;
-
-  @IsOptional()
-  @IsString()
-  containerName?: string;
-
-  @IsOptional()
-  @IsString()
-  configPath?: string;
+  @IsObject()
+  credentials?: Record<string, string>;
 }
 
 export class OnboardingPreviewDto {
@@ -139,6 +109,11 @@ export class OnboardingDeployDto {
   @IsString()
   fleetId?: string;
 
+  @IsOptional()
+  @IsString()
+  savedCredentialId?: string;
+
+  /** @deprecated Use savedCredentialId instead */
   @IsOptional()
   @IsString()
   awsCredentialId?: string;

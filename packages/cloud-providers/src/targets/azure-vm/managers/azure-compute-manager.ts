@@ -51,8 +51,9 @@ export class AzureComputeManager implements IAzureComputeManager {
 
   /**
    * Create a network interface.
+   * @param publicIpId - Optional public IP resource ID to attach
    */
-  async createNic(name: string, subnetId: string): Promise<NetworkInterface> {
+  async createNic(name: string, subnetId: string, publicIpId?: string): Promise<NetworkInterface> {
     try {
       const existing = await this.networkClient.networkInterfaces.get(this.resourceGroup, name);
       return existing;
@@ -69,7 +70,7 @@ export class AzureComputeManager implements IAzureComputeManager {
                 name: "ipconfig1",
                 subnet: { id: subnetId },
                 privateIPAllocationMethod: "Dynamic",
-                // No public IP - VM is only accessible via Application Gateway
+                ...(publicIpId ? { publicIPAddress: { id: publicIpId } } : {}),
               },
             ],
             tags: {
@@ -85,11 +86,12 @@ export class AzureComputeManager implements IAzureComputeManager {
 
   /**
    * Create a VM instance.
+   * @param diskId - Data disk resource ID (undefined = no data disk attached)
    */
   async createVm(
     vmName: string,
     nicId: string,
-    diskId: string,
+    diskId: string | undefined,
     vmSize: string,
     osDiskSizeGb: number,
     cloudInit: string,
@@ -97,6 +99,16 @@ export class AzureComputeManager implements IAzureComputeManager {
     tags?: Record<string, string>
   ): Promise<VirtualMachine> {
     this.log(`  Creating VM: ${vmName}`);
+
+    const dataDisks = diskId
+      ? [
+          {
+            lun: 0,
+            createOption: "Attach" as const,
+            managedDisk: { id: diskId },
+          },
+        ]
+      : [];
 
     const result = await this.computeClient.virtualMachines.beginCreateOrUpdateAndWait(
       this.resourceGroup,
@@ -108,7 +120,6 @@ export class AzureComputeManager implements IAzureComputeManager {
         },
         storageProfile: {
           imageReference: {
-            // Ubuntu 24.04 LTS
             publisher: "Canonical",
             offer: "ubuntu-24_04-lts",
             sku: "server",
@@ -122,15 +133,7 @@ export class AzureComputeManager implements IAzureComputeManager {
             },
             name: `${vmName}-osdisk`,
           },
-          dataDisks: [
-            {
-              lun: 0,
-              createOption: "Attach",
-              managedDisk: {
-                id: diskId,
-              },
-            },
-          ],
+          dataDisks,
         },
         osProfile: {
           computerName: vmName,
@@ -168,36 +171,24 @@ export class AzureComputeManager implements IAzureComputeManager {
     return result;
   }
 
-  /**
-   * Start a VM.
-   */
   async startVm(name: string): Promise<void> {
     this.log(`Starting VM: ${name}`);
     await this.computeClient.virtualMachines.beginStartAndWait(this.resourceGroup, name);
     this.log(`VM started`);
   }
 
-  /**
-   * Stop (deallocate) a VM.
-   */
   async stopVm(name: string): Promise<void> {
     this.log(`Deallocating VM: ${name}`);
     await this.computeClient.virtualMachines.beginDeallocateAndWait(this.resourceGroup, name);
     this.log(`VM deallocated`);
   }
 
-  /**
-   * Restart a VM.
-   */
   async restartVm(name: string): Promise<void> {
     this.log(`Restarting VM: ${name}`);
     await this.computeClient.virtualMachines.beginRestartAndWait(this.resourceGroup, name);
     this.log(`VM restarted`);
   }
 
-  /**
-   * Get VM power state.
-   */
   async getVmStatus(name: string): Promise<VmStatus> {
     try {
       const instanceView = await this.computeClient.virtualMachines.instanceView(
@@ -211,26 +202,17 @@ export class AzureComputeManager implements IAzureComputeManager {
 
       const code = powerState?.code ?? "";
 
-      if (code === "PowerState/running") {
-        return "running";
-      } else if (code === "PowerState/stopped") {
-        return "stopped";
-      } else if (code === "PowerState/deallocated") {
-        return "deallocated";
-      } else if (code === "PowerState/starting") {
-        return "starting";
-      } else if (code === "PowerState/stopping") {
-        return "stopping";
-      }
+      if (code === "PowerState/running") return "running";
+      if (code === "PowerState/stopped") return "stopped";
+      if (code === "PowerState/deallocated") return "deallocated";
+      if (code === "PowerState/starting") return "starting";
+      if (code === "PowerState/stopping") return "stopping";
       return "unknown";
     } catch {
       return "unknown";
     }
   }
 
-  /**
-   * Resize a VM.
-   */
   async resizeVm(name: string, size: string): Promise<void> {
     this.log(`Resizing VM to: ${size}`);
     await this.computeClient.virtualMachines.beginUpdateAndWait(
@@ -245,9 +227,6 @@ export class AzureComputeManager implements IAzureComputeManager {
     this.log(`VM resized`);
   }
 
-  /**
-   * Resize a managed disk.
-   */
   async resizeDisk(name: string, sizeGb: number): Promise<void> {
     this.log(`Resizing disk to: ${sizeGb}GB`);
     await this.computeClient.disks.beginUpdateAndWait(
@@ -260,9 +239,6 @@ export class AzureComputeManager implements IAzureComputeManager {
     this.log(`Disk resized`);
   }
 
-  /**
-   * Run a shell script on a VM.
-   */
   async runCommand(vmName: string, script: string[]): Promise<string> {
     const result: RunCommandResult = await this.computeClient.virtualMachines.beginRunCommandAndWait(
       this.resourceGroup,
@@ -276,9 +252,6 @@ export class AzureComputeManager implements IAzureComputeManager {
     return result.value?.[0]?.message ?? "";
   }
 
-  /**
-   * Delete a VM.
-   */
   async deleteVm(name: string): Promise<void> {
     try {
       await this.computeClient.virtualMachines.beginDeleteAndWait(this.resourceGroup, name);
@@ -288,9 +261,6 @@ export class AzureComputeManager implements IAzureComputeManager {
     }
   }
 
-  /**
-   * Delete a NIC.
-   */
   async deleteNic(name: string): Promise<void> {
     try {
       await this.networkClient.networkInterfaces.beginDeleteAndWait(this.resourceGroup, name);
@@ -300,9 +270,6 @@ export class AzureComputeManager implements IAzureComputeManager {
     }
   }
 
-  /**
-   * Delete a disk.
-   */
   async deleteDisk(name: string): Promise<void> {
     try {
       await this.computeClient.disks.beginDeleteAndWait(this.resourceGroup, name);
@@ -312,9 +279,6 @@ export class AzureComputeManager implements IAzureComputeManager {
     }
   }
 
-  /**
-   * Get VM private IP address from NIC.
-   */
   async getVmPrivateIp(nicName: string): Promise<string | undefined> {
     try {
       const nic = await this.networkClient.networkInterfaces.get(this.resourceGroup, nicName);

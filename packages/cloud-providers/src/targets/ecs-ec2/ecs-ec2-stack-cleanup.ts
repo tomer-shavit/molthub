@@ -105,7 +105,7 @@ export class StackCleanupService {
         const reason = stackInfo.statusReason ?? "";
         const match = reason.match(/\[([^\]]+)\]/);
         const stuckResources = match
-          ? match[1].split(",").map((r) => r.trim())
+          ? match[1].split(",").map((r: string) => r.trim())
           : [];
 
         if (stuckResources.length > 0) {
