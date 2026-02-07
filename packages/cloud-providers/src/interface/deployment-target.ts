@@ -225,11 +225,11 @@ export interface DockerTargetConfig {
   networkName?: string;
 }
 
-import type { EcsEc2Config } from "../targets/ecs-ec2/ecs-ec2-config";
+import type { AwsEc2Config } from "../targets/ecs-ec2/aws-ec2-config";
 import type { AzureVmConfig } from "../targets/azure-vm/azure-vm-config";
 import type { GceConfig } from "../targets/gce/gce-config";
 import type { ResourceSpec, ResourceUpdateResult } from "./resource-spec";
-export type { EcsEc2Config } from "../targets/ecs-ec2/ecs-ec2-config";
+export type { AwsEc2Config } from "../targets/ecs-ec2/aws-ec2-config";
 export type { AzureVmConfig } from "../targets/azure-vm/azure-vm-config";
 export type { GceConfig } from "../targets/gce/gce-config";
 export type {
@@ -249,7 +249,7 @@ export {
 export type DeploymentTargetConfig =
   | { type: "local" }
   | { type: "docker"; docker: DockerTargetConfig }
-  | { type: "ecs-ec2"; ecs: EcsEc2Config }
+  | { type: "ecs-ec2"; ecs: AwsEc2Config }
   | { type: "gce"; gce: GceConfig }
   | { type: "azure-vm"; azureVm: AzureVmConfig };
 

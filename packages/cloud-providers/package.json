@@ -16,16 +16,10 @@
     "@clawster/core": "workspace:*"
   },
   "peerDependencies": {
-    "@aws-sdk/client-cloudformation": "^3.490.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.490.0",
     "@aws-sdk/client-ec2": "^3.490.0",
-    "@aws-sdk/client-ecr": "^3.490.0",
-    "@aws-sdk/client-ecs": "^3.490.0",
-    "@aws-sdk/client-elastic-load-balancing-v2": "^3.490.0",
     "@aws-sdk/client-iam": "^3.490.0",
-    "@aws-sdk/client-resource-groups-tagging-api": "^3.490.0",
     "@aws-sdk/client-secrets-manager": "^3.490.0",
-    "@aws-sdk/client-sts": "^3.490.0",
     "@azure/arm-compute": "^21.0.0",
     "@azure/arm-containerinstance": "^9.1.0",
     "@azure/arm-network": "^33.0.0",
@@ -33,7 +27,6 @@
     "@azure/identity": "^4.0.0",
     "@azure/keyvault-secrets": "^4.7.0",
     "@azure/monitor-query": "^1.1.0",
-    "@clawster/adapters-aws": "workspace:*",
     "@clawster/adapters-azure": "workspace:*",
     "@clawster/adapters-gcp": "workspace:*",
     "@google-cloud/compute": "^4.0.0",
@@ -42,22 +35,10 @@
     "@google-cloud/secret-manager": "^5.0.0"
   },
   "peerDependenciesMeta": {
-    "@clawster/adapters-aws": {
-      "optional": true
-    },
     "@clawster/adapters-azure": {
       "optional": true
     },
     "@clawster/adapters-gcp": {
-      "optional": true
-    },
-    "@aws-sdk/client-cloudformation": {
-      "optional": true
-    },
-    "@aws-sdk/client-ecr": {
-      "optional": true
-    },
-    "@aws-sdk/client-ecs": {
       "optional": true
     },
     "@aws-sdk/client-secrets-manager": {
@@ -70,15 +51,6 @@
       "optional": true
     },
     "@aws-sdk/client-iam": {
-      "optional": true
-    },
-    "@aws-sdk/client-elastic-load-balancing-v2": {
-      "optional": true
-    },
-    "@aws-sdk/client-sts": {
-      "optional": true
-    },
-    "@aws-sdk/client-resource-groups-tagging-api": {
       "optional": true
     },
     "@azure/arm-compute": {
@@ -119,7 +91,6 @@
     "axios": "^1.6.0"
   },
   "devDependencies": {
-    "@clawster/adapters-aws": "workspace:*",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.11.0",
     "jest": "^29.7.0",
