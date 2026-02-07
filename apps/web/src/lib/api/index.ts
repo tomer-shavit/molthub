@@ -34,7 +34,6 @@
  * - `auditClient` - Audit event logging
  * - `botInstancesClient` - Bot CRUD, lifecycle, health, drift
  * - `budgetsClient` - Budget configuration
- * - `changeSetsClient` - Change set management, rollback
  * - `channelsClient` - Channel CRUD, bindings
  * - `connectorsClient` - Connector management
  * - `costsClient` - Cost tracking, summaries
@@ -73,8 +72,6 @@ export {
   BotInstancesClient,
   budgetsClient,
   BudgetsClient,
-  changeSetsClient,
-  ChangeSetsClient,
   channelsClient,
   ChannelsClient,
   connectorsClient,

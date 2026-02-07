@@ -33,7 +33,6 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  Play
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -232,20 +231,7 @@ export default async function FleetDashboardPage() {
             <CardDescription>Current activities</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded">
-                    <Play className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">Active Change Sets</p>
-                    <p className="text-xs text-muted-foreground">In progress</p>
-                  </div>
-                </div>
-                <span className="text-lg font-bold">{metrics?.activeChangeSets ?? 0}</span>
-              </div>
-              
+            <div className="space-y-4">              
               <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-red-100 rounded">

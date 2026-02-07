@@ -4,8 +4,6 @@ import {
   IBotInstanceRepository,
   FLEET_REPOSITORY,
   IFleetRepository,
-  CHANGE_SET_REPOSITORY,
-  IChangeSetRepository,
   TRACE_REPOSITORY,
   ITraceRepository,
   AUDIT_REPOSITORY,
@@ -27,7 +25,6 @@ export interface DashboardMetrics {
   latencyP99: number;
   failureRate: number;
   costPerHour: number;
-  activeChangeSets: number;
   failedDeployments: number;
   activeAlerts: number;
 }
@@ -80,7 +77,6 @@ export class DashboardService {
   constructor(
     @Inject(BOT_INSTANCE_REPOSITORY) private readonly botInstanceRepo: IBotInstanceRepository,
     @Inject(FLEET_REPOSITORY) private readonly fleetRepo: IFleetRepository,
-    @Inject(CHANGE_SET_REPOSITORY) private readonly changeSetRepo: IChangeSetRepository,
     @Inject(TRACE_REPOSITORY) private readonly traceRepo: ITraceRepository,
     @Inject(AUDIT_REPOSITORY) private readonly auditRepo: IAuditRepository,
     private readonly healthAggregator: HealthAggregatorService,
@@ -99,8 +95,6 @@ export class DashboardService {
     // Get total fleets
     const totalFleets = await this.fleetRepo.count();
 
-    // Get active change sets (in progress)
-    const activeChangeSets = await this.changeSetRepo.count({ status: "IN_PROGRESS" });
 
     // Get failed deployments in last hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
@@ -157,7 +151,6 @@ export class DashboardService {
       latencyP99: p99 || 0,
       failureRate: Math.round(failureRate * 100) / 100,
       costPerHour: 0,
-      activeChangeSets,
       failedDeployments,
       activeAlerts,
     };

@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Bot,
   Settings,
-  FileText,
   Activity,
   History,
   Layers,
@@ -54,7 +53,6 @@ const allNavItems: NavItem[] = [
     ]
   },
   { label: "Traces", href: "/traces", icon: <Activity className="w-4 h-4" /> },
-  { label: "Change Sets", href: "/changesets", icon: <FileText className="w-4 h-4" /> },
   { label: "Audit Log", href: "/audit", icon: <History className="w-4 h-4" /> },
 ];
 

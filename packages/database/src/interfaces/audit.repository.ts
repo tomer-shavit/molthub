@@ -7,7 +7,6 @@ export interface AuditEventFilters {
   action?: string | string[];
   resourceType?: string | string[];
   resourceId?: string;
-  changeSetId?: string;
   timestampAfter?: Date;
   timestampBefore?: Date;
 }
@@ -17,13 +16,7 @@ export interface AuditEventWithRelations extends AuditEvent {
     id: string;
     name: string;
     email: string;
-  } | null;
-  changeSet?: {
-    id: string;
-    changeType: string;
-    status: string;
-  } | null;
-}
+  } | null;}
 
 export interface AuditActionCount {
   action: string;

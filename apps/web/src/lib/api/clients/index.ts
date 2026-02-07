@@ -27,7 +27,6 @@ export {
   BotInstancesChannelAuthClient,
 } from './bot-instances';
 export { budgetsClient, BudgetsClient } from './budgets.client';
-export { changeSetsClient, ChangeSetsClient } from './change-sets.client';
 export { channelsClient, ChannelsClient } from './channels.client';
 export { connectorsClient, ConnectorsClient } from './connectors.client';
 export { costsClient, CostsClient } from './costs.client';

@@ -17,8 +17,7 @@ export const CONNECTOR_REPOSITORY = "IConnectorRepository";
 export const CHANNEL_REPOSITORY = "IChannelRepository";
 export const SKILL_PACK_REPOSITORY = "ISkillPackRepository";
 
-// Change management & tracing
-export const CHANGE_SET_REPOSITORY = "IChangeSetRepository";
+// Tracing
 export const TRACE_REPOSITORY = "ITraceRepository";
 
 // Observability

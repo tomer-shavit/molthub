@@ -14,8 +14,7 @@ export * from "./connector.repository";
 export * from "./channel.repository";
 export * from "./skill-pack.repository";
 
-// Change management & tracing
-export * from "./change-set.repository";
+// Tracing
 export * from "./trace.repository";
 
 // Observability repositories

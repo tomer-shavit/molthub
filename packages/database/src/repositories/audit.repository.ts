@@ -48,9 +48,6 @@ export class PrismaAuditRepository implements IAuditRepository {
       where.resourceId = filters.resourceId;
     }
 
-    if (filters.changeSetId) {
-      where.changeSetId = filters.changeSetId;
-    }
 
     if (filters.timestampAfter || filters.timestampBefore) {
       where.timestamp = {};
@@ -79,15 +76,7 @@ export class PrismaAuditRepository implements IAuditRepository {
             name: true,
             email: true,
           },
-        },
-        changeSet: {
-          select: {
-            id: true,
-            changeType: true,
-            status: true,
-          },
-        },
-      },
+        },      },
     });
   }
 

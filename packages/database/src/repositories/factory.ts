@@ -6,7 +6,6 @@ import { PrismaConfigLayerRepository } from "./config-layer.repository";
 import { PrismaConnectorRepository } from "./connector.repository";
 import { PrismaChannelRepository } from "./channel.repository";
 import { PrismaSkillPackRepository } from "./skill-pack.repository";
-import { PrismaChangeSetRepository } from "./change-set.repository";
 import { PrismaTraceRepository } from "./trace.repository";
 import { PrismaCostRepository } from "./cost.repository";
 import { PrismaSloRepository } from "./slo.repository";
@@ -21,7 +20,6 @@ import type {
   IConnectorRepository,
   IChannelRepository,
   ISkillPackRepository,
-  IChangeSetRepository,
   ITraceRepository,
   ICostRepository,
   ISloRepository,
@@ -41,7 +39,6 @@ export interface RepositoryFactory {
   connector: IConnectorRepository;
   channel: IChannelRepository;
   skillPack: ISkillPackRepository;
-  changeSet: IChangeSetRepository;
   trace: ITraceRepository;
   cost: ICostRepository;
   slo: ISloRepository;
@@ -74,7 +71,6 @@ export function createRepositories(prisma: PrismaClient): RepositoryFactory {
     connector: new PrismaConnectorRepository(prisma),
     channel: new PrismaChannelRepository(prisma),
     skillPack: new PrismaSkillPackRepository(prisma),
-    changeSet: new PrismaChangeSetRepository(prisma),
     trace: new PrismaTraceRepository(prisma),
     cost: new PrismaCostRepository(prisma),
     slo: new PrismaSloRepository(prisma),

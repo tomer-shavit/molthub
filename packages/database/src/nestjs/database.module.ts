@@ -9,7 +9,6 @@ import {
   CONNECTOR_REPOSITORY,
   CHANNEL_REPOSITORY,
   SKILL_PACK_REPOSITORY,
-  CHANGE_SET_REPOSITORY,
   TRACE_REPOSITORY,
   COST_REPOSITORY,
   SLO_REPOSITORY,
@@ -25,7 +24,6 @@ import {
   PrismaConnectorRepository,
   PrismaChannelRepository,
   PrismaSkillPackRepository,
-  PrismaChangeSetRepository,
   PrismaTraceRepository,
   PrismaCostRepository,
   PrismaSloRepository,
@@ -41,7 +39,6 @@ import type {
   IConnectorRepository,
   IChannelRepository,
   ISkillPackRepository,
-  IChangeSetRepository,
   ITraceRepository,
   ICostRepository,
   ISloRepository,
@@ -63,7 +60,6 @@ export interface MockRepositories {
   connector?: Partial<IConnectorRepository>;
   channel?: Partial<IChannelRepository>;
   skillPack?: Partial<ISkillPackRepository>;
-  changeSet?: Partial<IChangeSetRepository>;
   trace?: Partial<ITraceRepository>;
   cost?: Partial<ICostRepository>;
   slo?: Partial<ISloRepository>;
@@ -139,10 +135,6 @@ export class DatabaseModule {
           useFactory: () => new PrismaSkillPackRepository(client),
         },
         {
-          provide: CHANGE_SET_REPOSITORY,
-          useFactory: () => new PrismaChangeSetRepository(client),
-        },
-        {
           provide: TRACE_REPOSITORY,
           useFactory: () => new PrismaTraceRepository(client),
         },
@@ -176,7 +168,6 @@ export class DatabaseModule {
         CONNECTOR_REPOSITORY,
         CHANNEL_REPOSITORY,
         SKILL_PACK_REPOSITORY,
-        CHANGE_SET_REPOSITORY,
         TRACE_REPOSITORY,
         COST_REPOSITORY,
         SLO_REPOSITORY,
@@ -228,10 +219,6 @@ export class DatabaseModule {
           useValue: mocks.skillPack ?? createMockRepository(),
         },
         {
-          provide: CHANGE_SET_REPOSITORY,
-          useValue: mocks.changeSet ?? createMockRepository(),
-        },
-        {
           provide: TRACE_REPOSITORY,
           useValue: mocks.trace ?? createMockRepository(),
         },
@@ -265,7 +252,6 @@ export class DatabaseModule {
         CONNECTOR_REPOSITORY,
         CHANNEL_REPOSITORY,
         SKILL_PACK_REPOSITORY,
-        CHANGE_SET_REPOSITORY,
         TRACE_REPOSITORY,
         COST_REPOSITORY,
         SLO_REPOSITORY,

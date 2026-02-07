@@ -35,7 +35,7 @@ import { EvolutionBanner, type EvolutionBannerData } from "@/components/openclaw
 import { LiveSkills } from "@/components/openclaw/live-skills";
 import { EvolutionDiff } from "@/components/openclaw/evolution-diff";
 import { ResourceManagement } from "@/components/openclaw/resource-management";
-import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet, type DeploymentEvent, type AgentEvolutionSnapshot, type TokenUsageSummary, type AgentCard, type A2aJsonRpcResponse, type A2aApiKeyInfo, type A2aTaskInfo, type BotTeamMember } from "@/lib/api";
+import { api, type BotInstance, type Trace, type TraceStats, type DeploymentEvent, type AgentEvolutionSnapshot, type TokenUsageSummary, type AgentCard, type A2aJsonRpcResponse, type A2aApiKeyInfo, type A2aTaskInfo, type BotTeamMember } from "@/lib/api";
 import { BotMiddlewaresTab } from "@/components/middlewares/bot-middlewares-tab";
 import { PairingTab } from "@/components/pairing/pairing-tab";
 import Link from "next/link";
@@ -53,7 +53,6 @@ import {
   XCircle,
   Zap,
   FileText,
-  GitBranch,
   Wifi,
   MessageSquare,
   Puzzle,
@@ -87,12 +86,11 @@ interface BotDetailClientProps {
   bot: BotInstance;
   traces?: Trace[];
   metrics?: TraceStats | null;
-  changeSets?: ChangeSet[];
   events?: DeploymentEvent[];
   evolution?: AgentEvolutionSnapshot | null;
 }
 
-export function BotDetailClient({ bot, traces = [], metrics = null, changeSets = [], events = [], evolution: initialEvolution }: BotDetailClientProps) {
+export function BotDetailClient({ bot, traces = [], metrics = null, events = [], evolution: initialEvolution }: BotDetailClientProps) {
   const router = useRouter();
   const { toast, confirm: showConfirm } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
@@ -1039,12 +1037,7 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
                   <div className="flex items-center gap-2 text-sm">
                     <Activity className="w-4 h-4 text-blue-500" />
                     <span>{traces.length} traces in last 24h</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <GitBranch className="w-4 h-4 text-purple-500" />
-                    <span>{changeSets.length} change sets</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
+                  </div>                  <div className="flex items-center gap-2 text-sm">
                     <FileText className="w-4 h-4 text-orange-500" />
                     <span>{events.length} deployment events</span>
                   </div>

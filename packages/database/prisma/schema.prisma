@@ -134,7 +134,6 @@ model BotInstance {
 
   // Relations
   connectorBindings   BotConnectorBinding[]
-  changeSets          ChangeSet[]
   traces              Trace[]
   skillPacks          BotInstanceSkillPack[]
   channelBindings     BotChannelBinding[]
@@ -333,50 +332,6 @@ model BotConnectorBinding {
   @@index([connectorId])
 }
 
-// ChangeSet: Track configuration changes
-model ChangeSet {
-  id            String      @id @default(cuid())
-  botInstanceId String
-  botInstance   BotInstance @relation(fields: [botInstanceId], references: [id], onDelete: Cascade)
-
-  changeType  String // UPDATE, ROLLOUT, ROLLBACK
-  description String
-
-  // Change details
-  fromManifest String?
-  toManifest   String
-
-  // Rollout configuration
-  rolloutStrategy   String @default("ALL") // ALL, PERCENTAGE, CANARY
-  rolloutPercentage Int?
-  canaryInstances   String?
-
-  // Status
-  status String @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, FAILED, ROLLED_BACK
-
-  // Progress tracking
-  totalInstances   Int @default(0)
-  updatedInstances Int @default(0)
-  failedInstances  Int @default(0)
-
-  startedAt   DateTime?
-  completedAt DateTime?
-
-  // Rollback info
-  canRollback  Boolean   @default(false)
-  rolledBackAt DateTime?
-  rolledBackBy String?
-
-  createdAt DateTime @default(now())
-  createdBy String
-
-  // Relations
-  auditEvents AuditEvent[]
-
-  @@index([botInstanceId])
-  @@index([status])
-  @@index([createdAt])
-}
 
 // Trace: Execution traces
 model Trace {
@@ -427,14 +382,10 @@ model AuditEvent {
   workspaceId  String
   workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  // Optional relations
-  changeSetId String?
-  changeSet   ChangeSet? @relation(fields: [changeSetId], references: [id])
 
   @@index([workspaceId])
   @@index([resourceType, resourceId])
   @@index([timestamp])
-  @@index([changeSetId])
 }
 
 model Template {

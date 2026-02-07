@@ -85,7 +85,6 @@ export default async function AuditPage({
                 <option value="all">All Resources</option>
                 <option value="INSTANCE">Instance</option>
                 <option value="FLEET">Fleet</option>
-                <option value="CHANGE_SET">Change Set</option>
                 <option value="PROFILE">Profile</option>
                 <option value="POLICY">Policy</option>
               </Select>

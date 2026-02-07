@@ -21,7 +21,6 @@ import { a2aClient } from './clients/a2a.client';
 import { auditClient } from './clients/audit.client';
 import { botInstancesClient } from './clients/bot-instances/composite.client';
 import { budgetsClient } from './clients/budgets.client';
-import { changeSetsClient } from './clients/change-sets.client';
 import { channelsClient } from './clients/channels.client';
 import { connectorsClient } from './clients/connectors.client';
 import { costsClient } from './clients/costs.client';
@@ -117,12 +116,6 @@ import type {
   CreateTemplatePayload,
   TemplateConfigPreview,
 } from './types/templates';
-import type {
-  ChangeSet,
-  ChangeSetStatus,
-  CreateChangeSetPayload,
-  ChangeSetFilters,
-} from './types/change-sets';
 import type { Trace, TraceStats, TraceFilters } from './types/traces';
 import type {
   DebugProcessInfo,
@@ -307,26 +300,6 @@ class ApiClient {
 
   previewTemplateConfig = (id: string, data: { values?: Record<string, string>; configOverrides?: Record<string, unknown> }): Promise<TemplateConfigPreview> =>
     templatesClient.previewConfig(id, data);
-
-  // ============================================
-  // Change Sets
-  // ============================================
-
-  listChangeSets = (params?: ChangeSetFilters): Promise<ChangeSet[]> =>
-    changeSetsClient.list(params);
-
-  getChangeSet = (id: string): Promise<ChangeSet> => changeSetsClient.getById(id);
-
-  getChangeSetStatus = (id: string): Promise<ChangeSetStatus> =>
-    changeSetsClient.getStatus(id);
-
-  createChangeSet = (data: CreateChangeSetPayload): Promise<ChangeSet> =>
-    changeSetsClient.create(data);
-
-  startRollout = (id: string): Promise<ChangeSet> => changeSetsClient.startRollout(id);
-
-  rollbackChangeSet = (id: string, reason: string): Promise<ChangeSet> =>
-    changeSetsClient.rollback(id, reason);
 
   // ============================================
   // Traces

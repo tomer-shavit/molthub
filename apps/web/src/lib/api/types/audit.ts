@@ -12,7 +12,6 @@ export interface AuditEvent {
   timestamp: string;
   metadata: Record<string, unknown>;
   workspaceId: string;
-  changeSetId?: string;
 }
 
 export interface AuditFilters {

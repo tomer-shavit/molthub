@@ -14,7 +14,6 @@ export interface DashboardMetrics {
   latencyP99: number;
   failureRate: number;
   costPerHour: number;
-  activeChangeSets: number;
   failedDeployments: number;
 }
 

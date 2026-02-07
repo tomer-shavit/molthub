@@ -11,7 +11,6 @@ import { ProfilesModule } from "./profiles/profiles.module";
 import { OverlaysModule } from "./overlays/overlays.module";
 import { PolicyPacksModule } from "./policy-packs/policy-packs.module";
 import { ConnectorsModule } from "./connectors/connectors.module";
-import { ChangeSetsModule } from "./change-sets/change-sets.module";
 import { TracesModule } from "./traces/traces.module";
 import { TemplatesModule } from "./templates/templates.module";
 import { PersonaTemplatesModule } from "./templates/persona/persona-templates.module";
@@ -63,7 +62,6 @@ import { MiddlewaresModule } from "./middlewares/middlewares.module";
     OverlaysModule,
     PolicyPacksModule,
     ConnectorsModule,
-    ChangeSetsModule,
     TracesModule,
     TemplatesModule,
     PersonaTemplatesModule,

@@ -11,8 +11,7 @@ export { PrismaConnectorRepository } from "./connector.repository";
 export { PrismaChannelRepository } from "./channel.repository";
 export { PrismaSkillPackRepository } from "./skill-pack.repository";
 
-// Change management & tracing
-export { PrismaChangeSetRepository } from "./change-set.repository";
+// Tracing
 export { PrismaTraceRepository } from "./trace.repository";
 
 // Observability repositories

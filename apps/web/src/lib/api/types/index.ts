@@ -13,7 +13,6 @@ export * from './a2a';
 export * from './audit';
 export * from './bot-instances';
 export * from './budgets';
-export * from './change-sets';
 export * from './channels';
 export * from './chat';
 export * from './connectors';
