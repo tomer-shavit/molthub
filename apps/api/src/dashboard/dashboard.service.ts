@@ -6,8 +6,6 @@ import {
   IFleetRepository,
   TRACE_REPOSITORY,
   ITraceRepository,
-  AUDIT_REPOSITORY,
-  IAuditRepository,
 } from "@clawster/database";
 import { HealthAggregatorService } from "../health/health-aggregator.service";
 import { AlertingService } from "../health/alerting.service";
@@ -51,15 +49,6 @@ export interface OverallHealth {
 }
 
 export interface RecentActivity {
-  events: Array<{
-    id: string;
-    type: string;
-    message: string;
-    timestamp: Date;
-    actor: string;
-    resourceId?: string;
-    resourceType?: string;
-  }>;
   traces: Array<{
     id: string;
     traceId: string;
@@ -78,7 +67,6 @@ export class DashboardService {
     @Inject(BOT_INSTANCE_REPOSITORY) private readonly botInstanceRepo: IBotInstanceRepository,
     @Inject(FLEET_REPOSITORY) private readonly fleetRepo: IFleetRepository,
     @Inject(TRACE_REPOSITORY) private readonly traceRepo: ITraceRepository,
-    @Inject(AUDIT_REPOSITORY) private readonly auditRepo: IAuditRepository,
     private readonly healthAggregator: HealthAggregatorService,
     private readonly alerting: AlertingService,
   ) {}
@@ -210,27 +198,11 @@ export class DashboardService {
   async getRecentActivity(): Promise<RecentActivity> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
-    // Get recent audit events
-    const auditEventsResult = await this.auditRepo.findMany(
-      { timestampAfter: oneHourAgo },
-      { page: 1, limit: 20 }
-    );
-
     // Get recent traces
     const tracesResult = await this.traceRepo.findMany(
       { startedAfter: oneHourAgo },
       { page: 1, limit: 20 }
     );
-
-    const events = auditEventsResult.data.map((event) => ({
-      id: event.id,
-      type: event.action,
-      message: `${event.action} on ${event.resourceType}`,
-      timestamp: event.timestamp,
-      actor: event.actor,
-      resourceId: event.resourceId,
-      resourceType: event.resourceType,
-    }));
 
     // Note: Trace repository doesn't include botInstance relation by default
     // We'd need to look up bot names separately or add that to the repository
@@ -246,7 +218,6 @@ export class DashboardService {
     }));
 
     return {
-      events,
       traces: traceData,
     };
   }

@@ -24,7 +24,6 @@ model Workspace {
   overlays              Overlay[]
   policyPacks           PolicyPack[]
   integrationConnectors IntegrationConnector[]
-  auditEvents           AuditEvent[]
   skillPacks            SkillPack[]
   communicationChannels CommunicationChannel[]
   notificationChannels  NotificationChannel[]
@@ -45,7 +44,6 @@ model User {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  auditEvents AuditEvent[]
 
   @@unique([email, workspaceId])
 }
@@ -369,24 +367,6 @@ model Trace {
   @@index([status])
 }
 
-model AuditEvent {
-  id           String    @id @default(cuid())
-  actor        String
-  user         User      @relation(fields: [actor], references: [id])
-  action       String
-  resourceType String
-  resourceId   String
-  diffSummary  String?
-  metadata     String      @default("{}")
-  timestamp    DateTime  @default(now())
-  workspaceId  String
-  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-
-  @@index([workspaceId])
-  @@index([resourceType, resourceId])
-  @@index([timestamp])
-}
 
 model Template {
   id               String     @id @default(cuid())

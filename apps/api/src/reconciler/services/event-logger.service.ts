@@ -33,7 +33,7 @@ export class EventLoggerService {
 
     this.logger.debug(logMessage);
 
-    // Future: Write to audit table, emit to message queue, etc.
+    // Future: Emit to message queue, integrate with observability tools, etc.
   }
 
   /**

@@ -24,7 +24,6 @@ export const TRACE_REPOSITORY = "ITraceRepository";
 export const COST_REPOSITORY = "ICostRepository";
 export const SLO_REPOSITORY = "ISloRepository";
 export const ALERT_REPOSITORY = "IAlertRepository";
-export const AUDIT_REPOSITORY = "IAuditRepository";
 
 // Routing & teams
 export const ROUTING_REPOSITORY = "IRoutingRepository";

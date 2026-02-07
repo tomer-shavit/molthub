@@ -21,5 +21,3 @@ export type { ErrorTransformerOptions } from "./error-transformer";
 export { TelemetryInterceptor } from "./telemetry";
 export type { TelemetryInterceptorOptions, MethodMetrics, TelemetryMetrics } from "./telemetry";
 
-export { AuditInterceptor } from "./audit";
-export type { AuditInterceptorOptions, AuditEvent } from "./audit";

@@ -31,7 +31,6 @@
  * - `adaptersClient` - Deployment adapter metadata
  * - `alertsClient` - Health alerts, acknowledgment, remediation
  * - `a2aClient` - Agent-to-agent communication, streaming
- * - `auditClient` - Audit event logging
  * - `botInstancesClient` - Bot CRUD, lifecycle, health, drift
  * - `budgetsClient` - Budget configuration
  * - `channelsClient` - Channel CRUD, bindings
@@ -66,8 +65,6 @@ export {
   AlertsClient,
   a2aClient,
   A2aClient,
-  auditClient,
-  AuditClient,
   botInstancesClient,
   BotInstancesClient,
   budgetsClient,

@@ -18,7 +18,6 @@
 import { adaptersClient } from './clients/adapters.client';
 import { alertsClient } from './clients/alerts.client';
 import { a2aClient } from './clients/a2a.client';
-import { auditClient } from './clients/audit.client';
 import { botInstancesClient } from './clients/bot-instances/composite.client';
 import { budgetsClient } from './clients/budgets.client';
 import { channelsClient } from './clients/channels.client';
@@ -160,7 +159,6 @@ import type { AdapterMetadata } from './types/adapters';
 import type { Overlay } from './types/overlays';
 import type { PolicyPack } from './types/policies';
 import type { Connector } from './types/connectors';
-import type { AuditEvent, AuditFilters } from './types/audit';
 import type { HealthCheckResult } from './types/health';
 import type { UserContextResponse } from './types/user-context';
 import type {
@@ -315,11 +313,6 @@ class ApiClient {
   getTraceTree = (traceId: string): Promise<Trace> => tracesClient.getTree(traceId);
 
   // ============================================
-  // Audit
-  // ============================================
-
-  listAuditEvents = (params?: AuditFilters): Promise<AuditEvent[]> =>
-    auditClient.list(params);
 
   // ============================================
   // Profiles

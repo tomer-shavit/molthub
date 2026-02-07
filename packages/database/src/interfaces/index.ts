@@ -21,7 +21,6 @@ export * from "./trace.repository";
 export * from "./cost.repository";
 export * from "./slo.repository";
 export * from "./alert.repository";
-export * from "./audit.repository";
 
 // Routing & teams
 export * from "./routing.repository";

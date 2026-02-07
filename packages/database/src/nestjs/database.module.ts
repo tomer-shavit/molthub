@@ -13,7 +13,6 @@ import {
   COST_REPOSITORY,
   SLO_REPOSITORY,
   ALERT_REPOSITORY,
-  AUDIT_REPOSITORY,
   ROUTING_REPOSITORY,
 } from "./tokens";
 import {
@@ -28,7 +27,6 @@ import {
   PrismaCostRepository,
   PrismaSloRepository,
   PrismaAlertRepository,
-  PrismaAuditRepository,
   PrismaRoutingRepository,
 } from "../repositories";
 import type {
@@ -43,7 +41,6 @@ import type {
   ICostRepository,
   ISloRepository,
   IAlertRepository,
-  IAuditRepository,
   IRoutingRepository,
 } from "../interfaces";
 
@@ -64,7 +61,6 @@ export interface MockRepositories {
   cost?: Partial<ICostRepository>;
   slo?: Partial<ISloRepository>;
   alert?: Partial<IAlertRepository>;
-  audit?: Partial<IAuditRepository>;
   routing?: Partial<IRoutingRepository>;
 }
 
@@ -151,10 +147,6 @@ export class DatabaseModule {
           useFactory: () => new PrismaAlertRepository(client),
         },
         {
-          provide: AUDIT_REPOSITORY,
-          useFactory: () => new PrismaAuditRepository(client),
-        },
-        {
           provide: ROUTING_REPOSITORY,
           useFactory: () => new PrismaRoutingRepository(client),
         },
@@ -172,7 +164,6 @@ export class DatabaseModule {
         COST_REPOSITORY,
         SLO_REPOSITORY,
         ALERT_REPOSITORY,
-        AUDIT_REPOSITORY,
         ROUTING_REPOSITORY,
       ],
     };
@@ -235,10 +226,6 @@ export class DatabaseModule {
           useValue: mocks.alert ?? createMockRepository(),
         },
         {
-          provide: AUDIT_REPOSITORY,
-          useValue: mocks.audit ?? createMockRepository(),
-        },
-        {
           provide: ROUTING_REPOSITORY,
           useValue: mocks.routing ?? createMockRepository(),
         },
@@ -256,7 +243,6 @@ export class DatabaseModule {
         COST_REPOSITORY,
         SLO_REPOSITORY,
         ALERT_REPOSITORY,
-        AUDIT_REPOSITORY,
         ROUTING_REPOSITORY,
       ],
     };

@@ -7,7 +7,6 @@ import {
   Bot,
   Settings,
   Activity,
-  History,
   Layers,
   ChevronDown,
   Menu,
@@ -53,7 +52,6 @@ const allNavItems: NavItem[] = [
     ]
   },
   { label: "Traces", href: "/traces", icon: <Activity className="w-4 h-4" /> },
-  { label: "Audit Log", href: "/audit", icon: <History className="w-4 h-4" /> },
 ];
 
 

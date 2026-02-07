@@ -5,7 +5,6 @@
 export { adaptersClient, AdaptersClient } from './adapters.client';
 export { alertsClient, AlertsClient } from './alerts.client';
 export { a2aClient, A2aClient } from './a2a.client';
-export { auditClient, AuditClient } from './audit.client';
 // Bot instances - composite client for backward compatibility
 export { botInstancesClient, BotInstancesClient } from './bot-instances/composite.client';
 

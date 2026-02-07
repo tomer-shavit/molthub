@@ -31,16 +31,6 @@ export class MetricsService {
       lines.push(`clawster_instances_total{status="${row.status}"} ${row._count.id}`);
     }
 
-    // Audit events in last hour
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const auditEvents = await this.prisma.auditEvent.count({
-      where: { timestamp: { gte: oneHourAgo } },
-    });
-
-    lines.push("");
-    lines.push("# HELP clawster_audit_events_total Audit events in last hour");
-    lines.push("# TYPE clawster_audit_events_total counter");
-    lines.push(`clawster_audit_events_total ${auditEvents}`);
 
     // Template counts
     const templateCount = await this.prisma.template.count();

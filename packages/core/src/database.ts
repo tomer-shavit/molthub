@@ -43,17 +43,6 @@ export interface ManifestVersion {
   createdAt: Date;
 }
 
-export interface AuditEvent {
-  id: string;
-  actor: string;
-  action: string;
-  resourceType: string;
-  resourceId: string;
-  diffSummary: string | null;
-  metadata: Record<string, unknown>;
-  timestamp: Date;
-}
-
 // Template interface - Note: Use BotTemplate type from template.ts for full type
 export interface BotTemplate {
   id: string;

@@ -18,7 +18,6 @@ export { PrismaTraceRepository } from "./trace.repository";
 export { PrismaCostRepository } from "./cost.repository";
 export { PrismaSloRepository } from "./slo.repository";
 export { PrismaAlertRepository } from "./alert.repository";
-export { PrismaAuditRepository } from "./audit.repository";
 
 // Routing & teams
 export { PrismaRoutingRepository } from "./routing.repository";

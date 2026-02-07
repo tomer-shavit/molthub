@@ -10,7 +10,6 @@ import { PrismaTraceRepository } from "./trace.repository";
 import { PrismaCostRepository } from "./cost.repository";
 import { PrismaSloRepository } from "./slo.repository";
 import { PrismaAlertRepository } from "./alert.repository";
-import { PrismaAuditRepository } from "./audit.repository";
 import { PrismaRoutingRepository } from "./routing.repository";
 import type {
   IWorkspaceRepository,
@@ -24,7 +23,6 @@ import type {
   ICostRepository,
   ISloRepository,
   IAlertRepository,
-  IAuditRepository,
   IRoutingRepository,
 } from "../interfaces";
 
@@ -43,7 +41,6 @@ export interface RepositoryFactory {
   cost: ICostRepository;
   slo: ISloRepository;
   alert: IAlertRepository;
-  audit: IAuditRepository;
   routing: IRoutingRepository;
 }
 
@@ -75,7 +72,6 @@ export function createRepositories(prisma: PrismaClient): RepositoryFactory {
     cost: new PrismaCostRepository(prisma),
     slo: new PrismaSloRepository(prisma),
     alert: new PrismaAlertRepository(prisma),
-    audit: new PrismaAuditRepository(prisma),
     routing: new PrismaRoutingRepository(prisma),
   };
 }

@@ -10,7 +10,6 @@ export * from './common';
 export * from './adapters';
 export * from './alerts';
 export * from './a2a';
-export * from './audit';
 export * from './bot-instances';
 export * from './budgets';
 export * from './channels';

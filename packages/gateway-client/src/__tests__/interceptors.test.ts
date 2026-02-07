@@ -6,7 +6,6 @@ import { InterceptorChain } from "../interceptors/chain";
 import { LoggerInterceptor } from "../interceptors/logger";
 import { ErrorTransformerInterceptor } from "../interceptors/error-transformer";
 import { TelemetryInterceptor } from "../interceptors/telemetry";
-import { AuditInterceptor } from "../interceptors/audit";
 import type {
   GatewayInterceptor,
   OutboundMessage,
@@ -14,7 +13,6 @@ import type {
   GatewayInterceptorEvent,
   ErrorContext,
 } from "../interceptors/interface";
-import type { AuditEvent } from "../interceptors/audit";
 
 // ---- Helpers ----------------------------------------------------------------
 
@@ -611,124 +609,7 @@ describe("TelemetryInterceptor", () => {
   });
 });
 
-// ---- AuditInterceptor -------------------------------------------------------
 
-describe("AuditInterceptor", () => {
-  it("should audit config.apply outbound", async () => {
-    const events: AuditEvent[] = [];
-    const audit = new AuditInterceptor({ onAuditEvent: (e) => events.push(e) });
-
-    await audit.onOutbound!(makeOutbound({ method: "config.apply", id: "r1" }));
-
-    expect(events).toHaveLength(1);
-    expect(events[0].method).toBe("config.apply");
-    expect(events[0].direction).toBe("outbound");
-    expect(events[0].requestId).toBe("r1");
-  });
-
-  it("should audit config.patch outbound", async () => {
-    const events: AuditEvent[] = [];
-    const audit = new AuditInterceptor({ onAuditEvent: (e) => events.push(e) });
-
-    await audit.onOutbound!(makeOutbound({ method: "config.patch", id: "r1" }));
-
-    expect(events).toHaveLength(1);
-    expect(events[0].method).toBe("config.patch");
-  });
-
-  it("should audit send outbound", async () => {
-    const events: AuditEvent[] = [];
-    const audit = new AuditInterceptor({ onAuditEvent: (e) => events.push(e) });
-
-    await audit.onOutbound!(makeOutbound({ method: "send", id: "r1" }));
-
-    expect(events).toHaveLength(1);
-    expect(events[0].method).toBe("send");
-  });
-
-  it("should audit agent outbound", async () => {
-    const events: AuditEvent[] = [];
-    const audit = new AuditInterceptor({ onAuditEvent: (e) => events.push(e) });
-
-    await audit.onOutbound!(makeOutbound({ method: "agent", id: "r1" }));
-
-    expect(events).toHaveLength(1);
-    expect(events[0].method).toBe("agent");
-  });
-
-  it("should NOT audit non-sensitive methods", async () => {
-    const events: AuditEvent[] = [];
-    const audit = new AuditInterceptor({ onAuditEvent: (e) => events.push(e) });
-
-    await audit.onOutbound!(makeOutbound({ method: "health", id: "r1" }));
-    await audit.onOutbound!(makeOutbound({ method: "status", id: "r2" }));
-    await audit.onOutbound!(makeOutbound({ method: "config.get", id: "r3" }));
-
-    expect(events).toHaveLength(0);
-  });
-
-  it("should correlate inbound with outbound using requestId", async () => {
-    const events: AuditEvent[] = [];
-    const audit = new AuditInterceptor({ onAuditEvent: (e) => events.push(e) });
-
-    await audit.onOutbound!(makeOutbound({ method: "config.apply", id: "r1" }));
-    await audit.onInbound!(makeInbound({ id: "r1", result: { success: true } }));
-
-    expect(events).toHaveLength(2);
-    expect(events[1].direction).toBe("inbound");
-    expect(events[1].method).toBe("config.apply");
-    expect(events[1].success).toBe(true);
-  });
-
-  it("should report success=false for error responses", async () => {
-    const events: AuditEvent[] = [];
-    const audit = new AuditInterceptor({ onAuditEvent: (e) => events.push(e) });
-
-    await audit.onOutbound!(makeOutbound({ method: "send", id: "r1" }));
-    await audit.onInbound!(makeInbound({
-      id: "r1",
-      result: undefined,
-      error: { code: -32001, message: "Not linked" },
-    }));
-
-    expect(events).toHaveLength(2);
-    expect(events[1].success).toBe(false);
-    expect(events[1].error).toBe("Not linked");
-  });
-
-  it("should NOT audit inbound for non-audited methods", async () => {
-    const events: AuditEvent[] = [];
-    const audit = new AuditInterceptor({ onAuditEvent: (e) => events.push(e) });
-
-    // No outbound for this id, so inbound should be ignored
-    await audit.onInbound!(makeInbound({ id: "unknown-r1" }));
-
-    expect(events).toHaveLength(0);
-  });
-
-  it("should include timestamp in events", async () => {
-    const events: AuditEvent[] = [];
-    const before = Date.now();
-    const audit = new AuditInterceptor({ onAuditEvent: (e) => events.push(e) });
-
-    await audit.onOutbound!(makeOutbound({ method: "config.apply", id: "r1" }));
-
-    expect(events[0].timestamp).toBeGreaterThanOrEqual(before);
-    expect(events[0].timestamp).toBeLessThanOrEqual(Date.now());
-  });
-
-  it("should return messages unchanged", async () => {
-    const audit = new AuditInterceptor({ onAuditEvent: () => {} });
-    const outbound = makeOutbound({ method: "config.apply", id: "r1" });
-    const inbound = makeInbound({ id: "r1" });
-
-    const outResult = await audit.onOutbound!(outbound);
-    const inResult = await audit.onInbound!(inbound);
-
-    expect(outResult).toEqual(outbound);
-    expect(inResult).toEqual(inbound);
-  });
-});
 
 // ---- Full chain integration -------------------------------------------------
 
@@ -775,32 +656,24 @@ describe("Full chain integration", () => {
     expect(logs.some((l) => l.includes("[GW:IN]"))).toBe(true);
   });
 
-  it("should run all four interceptors together", async () => {
+  it("should run all three interceptors together", async () => {
     const logs: string[] = [];
-    const auditEvents: AuditEvent[] = [];
 
     const chain = new InterceptorChain([
       new LoggerInterceptor({ logFn: (msg) => logs.push(msg) }),
       new ErrorTransformerInterceptor(),
       new TelemetryInterceptor(),
-      new AuditInterceptor({ onAuditEvent: (e) => auditEvents.push(e) }),
     ]);
 
-    // Audited method
     await chain.processOutbound(makeOutbound({ method: "config.apply", id: "r1" }));
     await chain.processInbound(makeInbound({ id: "r1", result: { success: true } }));
 
-    // Non-audited method
     await chain.processOutbound(makeOutbound({ method: "health", id: "r2" }));
     await chain.processInbound(makeInbound({ id: "r2" }));
 
     // Logger: 4 log lines (2 outbound + 2 inbound)
     expect(logs.filter((l) => l.includes("[GW:OUT]"))).toHaveLength(2);
     expect(logs.filter((l) => l.includes("[GW:IN]"))).toHaveLength(2);
-
-    // Audit: only config.apply should be audited (1 outbound + 1 inbound)
-    expect(auditEvents).toHaveLength(2);
-    expect(auditEvents[0].method).toBe("config.apply");
   });
 
   it("should process events through all interceptors", async () => {
