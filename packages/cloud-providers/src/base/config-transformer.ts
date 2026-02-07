@@ -38,6 +38,13 @@ export interface TransformOptions {
   removeDeprecatedFields?: boolean;
 
   /**
+   * Whether to remove Clawster-internal sandbox.docker keys that OpenClaw
+   * doesn't recognize (readOnlyRootfs, noNewPrivileges, dropCapabilities).
+   * Default: true
+   */
+  removeInternalSandboxKeys?: boolean;
+
+  /**
    * Additional custom transformations to apply.
    */
   customTransforms?: Array<(config: Record<string, unknown>) => Record<string, unknown>>;
@@ -48,6 +55,7 @@ const DEFAULT_OPTIONS: Required<Omit<TransformOptions, "customTransforms">> = {
   relocateSandbox: true,
   removeChannelEnabledFlags: true,
   removeDeprecatedFields: true,
+  removeInternalSandboxKeys: true,
 };
 
 /**
@@ -78,6 +86,10 @@ export function transformConfig(
 
   if (opts.removeDeprecatedFields) {
     result = removeDeprecatedFields(result);
+  }
+
+  if (opts.removeInternalSandboxKeys) {
+    result = removeInternalSandboxDockerKeys(result);
   }
 
   // Apply custom transforms
@@ -161,6 +173,51 @@ function removeDeprecatedFields(config: Record<string, unknown>): Record<string,
     return { ...config, skills: rest };
   }
   return config;
+}
+
+/**
+ * Keys that Clawster tracks internally for security auditing but that OpenClaw
+ * does not accept (its Zod schema uses .strict()). OpenClaw already applies
+ * equivalent protections by default:
+ *   readOnlyRootfs → OpenClaw key is "readOnlyRoot" (default: true)
+ *   noNewPrivileges → hardcoded always-on, no config key
+ *   dropCapabilities → OpenClaw key is "capDrop" (default: ["ALL"])
+ */
+const INTERNAL_SANDBOX_DOCKER_KEYS = ["readOnlyRootfs", "noNewPrivileges", "dropCapabilities"];
+
+function removeInternalSandboxDockerKeys(config: Record<string, unknown>): Record<string, unknown> {
+  const agents = config.agents as Record<string, unknown> | undefined;
+  if (!agents) return config;
+
+  const defaults = agents.defaults as Record<string, unknown> | undefined;
+  if (!defaults) return config;
+
+  const sandbox = defaults.sandbox as Record<string, unknown> | undefined;
+  if (!sandbox) return config;
+
+  const docker = sandbox.docker as Record<string, unknown> | undefined;
+  if (!docker) return config;
+
+  const hasInternalKeys = INTERNAL_SANDBOX_DOCKER_KEYS.some((key) => key in docker);
+  if (!hasInternalKeys) return config;
+
+  const cleaned = Object.fromEntries(
+    Object.entries(docker).filter(([key]) => !INTERNAL_SANDBOX_DOCKER_KEYS.includes(key))
+  );
+
+  return {
+    ...config,
+    agents: {
+      ...agents,
+      defaults: {
+        ...defaults,
+        sandbox: {
+          ...sandbox,
+          docker: cleaned,
+        },
+      },
+    },
+  };
 }
 
 /**

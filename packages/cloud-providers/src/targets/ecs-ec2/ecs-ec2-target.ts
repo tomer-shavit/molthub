@@ -589,70 +589,77 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
 
   async destroy(): Promise<void> {
     this.log(`Starting destruction of ECS EC2 resources for ${this.stackName}`);
-    const cleanup = this.createStackCleanupService();
 
-    // 1. Clean up resources that block CF deletion (best effort)
-    try {
-      await cleanup.cleanupStuckResources();
-    } catch {
-      // Best effort — proceed with deletion anyway
+    // Fast path: check what actually exists before making destructive API calls
+    const existing = await this.checkResourcesExist();
+
+    if (!existing.stackExists && !existing.secretExists) {
+      this.log("No cloud resources found (stack and secret already gone), skipping teardown");
+      await this.deleteLogGroupBestEffort();
+      await this.cleanupSharedInfraBestEffort();
+      return;
     }
 
-    // 2. Delete CloudFormation stack (handles all CF-managed resources)
-    try {
-      this.log("Deleting CloudFormation stack...");
-      await this.cloudFormationService.deleteStack(this.stackName, { force: true });
-      await this.waitForStack("DELETE_COMPLETE");
-      this.log("CloudFormation stack deleted");
-    } catch {
-      // If delete failed, try the force-delete path.
-      // Entire recovery block is wrapped so a failure here doesn't skip
-      // secret / log-group cleanup in steps 3-4.
+    // Stack exists — full teardown
+    if (existing.stackExists) {
+      const cleanup = this.createStackCleanupService();
+
+      // 1. Clean up resources that block CF deletion (best effort)
       try {
-        const stackInfo = await this.cloudFormationService.describeStack(this.stackName);
-        if (stackInfo && stackInfo.status === "DELETE_FAILED") {
-          this.log("Stack deletion failed, attempting force-delete...");
-          await cleanup.forceDeleteStack();
-          this.log("CloudFormation stack force-deleted");
-        } else if (!stackInfo || stackInfo.status === "DELETE_COMPLETE") {
-          this.log("CloudFormation stack deleted");
-        } else {
-          this.log(`CloudFormation stack in ${stackInfo.status} state after deletion attempt`, "stderr");
-        }
+        await cleanup.cleanupStuckResources();
       } catch {
-        this.log("CloudFormation stack could not be fully deleted", "stderr");
+        // Best effort — proceed with deletion anyway
       }
+
+      // 2. Delete CloudFormation stack (handles all CF-managed resources)
+      try {
+        this.log("Deleting CloudFormation stack...");
+        await this.cloudFormationService.deleteStack(this.stackName, { force: true });
+        await this.waitForStack("DELETE_COMPLETE");
+        this.log("CloudFormation stack deleted");
+      } catch {
+        // If delete failed, try the force-delete path.
+        // Entire recovery block is wrapped so a failure here doesn't skip
+        // secret / log-group cleanup in steps 3-4.
+        try {
+          const stackInfo = await this.cloudFormationService.describeStack(this.stackName);
+          if (stackInfo && stackInfo.status === "DELETE_FAILED") {
+            this.log("Stack deletion failed, attempting force-delete...");
+            await cleanup.forceDeleteStack();
+            this.log("CloudFormation stack force-deleted");
+          } else if (!stackInfo || stackInfo.status === "DELETE_COMPLETE") {
+            this.log("CloudFormation stack deleted");
+          } else {
+            this.log(`CloudFormation stack in ${stackInfo.status} state after deletion attempt`, "stderr");
+          }
+        } catch {
+          this.log("CloudFormation stack could not be fully deleted", "stderr");
+        }
+      }
+    } else {
+      this.log("CloudFormation stack does not exist, skipping stack deletion");
     }
 
     // 3. Delete the Secrets Manager secret
-    try {
-      this.log("Deleting Secrets Manager secret...");
-      await this.secretsManagerService.deleteSecret(this.secretName, true);
-      this.log("Secret deleted");
-    } catch {
-      this.log("Secret not found or already deleted");
+    if (existing.secretExists) {
+      try {
+        this.log("Deleting Secrets Manager secret...");
+        await this.secretsManagerService.deleteSecret(this.secretName, true);
+        this.log("Secret deleted");
+      } catch {
+        this.log("Secret not found or already deleted");
+      }
+    } else {
+      this.log("Secret does not exist, skipping secret deletion");
     }
 
-    // 4. Delete the CloudWatch log group
-    try {
-      this.log("Deleting CloudWatch log group...");
-      await this.cloudWatchLogsService.deleteLogGroup(this.logGroup);
-      this.log("Log group deleted");
-    } catch {
-      this.log("Log group not found or already deleted");
-    }
+    // 4. Delete the CloudWatch log group (always best-effort)
+    await this.deleteLogGroupBestEffort();
 
     this.log("ECS EC2 resource destruction completed");
 
-    // 5. Clean up shared infra if this was the last bot (best-effort, fire-and-forget)
-    if (this.config.useSharedInfra ?? true) {
-      await cleanupSharedInfraIfOrphaned(
-        this.cloudFormationService,
-        this.ec2Service,
-        this.config.region,
-        (msg, stream) => this.log(msg, stream),
-      );
-    }
+    // 5. Clean up shared infra if this was the last bot
+    await this.cleanupSharedInfraBestEffort();
   }
 
   // ------------------------------------------------------------------
@@ -673,6 +680,53 @@ export class EcsEc2Target extends BaseDeploymentTarget implements SelfDescribing
       log: (msg, stream) => this.log(msg, stream),
       waitForStack: (targetStatus) => this.waitForStack(targetStatus),
     });
+  }
+
+  /**
+   * Check whether cloud resources exist for this bot.
+   * The CF stack is the source of truth for all CF-managed resources.
+   * Secret is managed outside the stack, so checked separately.
+   * Falls back to "exists" on API errors to avoid skipping real teardown.
+   */
+  private async checkResourcesExist(): Promise<{
+    stackExists: boolean;
+    secretExists: boolean;
+  }> {
+    try {
+      const [stackExists, secretExists] = await Promise.all([
+        this.cloudFormationService.stackExists(this.stackName),
+        this.secretsManagerService.secretExists(this.secretName),
+      ]);
+      return { stackExists, secretExists };
+    } catch {
+      // If the check itself fails, assume resources exist (safe default)
+      return { stackExists: true, secretExists: true };
+    }
+  }
+
+  private async deleteLogGroupBestEffort(): Promise<void> {
+    try {
+      this.log("Deleting CloudWatch log group...");
+      await this.cloudWatchLogsService.deleteLogGroup(this.logGroup);
+      this.log("Log group deleted");
+    } catch {
+      this.log("Log group not found or already deleted");
+    }
+  }
+
+  private async cleanupSharedInfraBestEffort(): Promise<void> {
+    if (this.config.useSharedInfra ?? true) {
+      try {
+        await cleanupSharedInfraIfOrphaned(
+          this.cloudFormationService,
+          this.ec2Service,
+          this.config.region,
+          (msg, stream) => this.log(msg, stream),
+        );
+      } catch {
+        this.log("Shared infra cleanup check failed (best effort)", "stderr");
+      }
+    }
   }
 
   private async ensureSecret(name: string, value: string): Promise<void> {

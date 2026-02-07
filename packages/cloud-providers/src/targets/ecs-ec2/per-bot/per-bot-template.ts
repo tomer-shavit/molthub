@@ -65,15 +65,15 @@ export function generatePerBotTemplate(
   const tag = { Key: "clawster:bot", Value: botName };
 
   // Build container command — detects if openclaw is pre-installed (prebuild image)
-  // and falls back to runtime install if not. docker.io is NOT needed — OpenClaw
-  // communicates with Docker daemon via REST API over the mounted Unix socket.
+  // and falls back to runtime install if not. docker.io IS needed — OpenClaw
+  // spawns `docker` CLI for sandbox container operations (E2E verified 2026-02-07).
   const ocVersion = params.openclawVersion ?? "latest";
   const command = usePublicImage
     ? [
         "sh",
         "-c",
         [
-          `which openclaw || (apt-get update && apt-get install -y git && npm install -g openclaw@${ocVersion})`,
+          `which openclaw || (apt-get update && apt-get install -y git docker.io && npm install -g openclaw@${ocVersion})`,
           `mkdir -p ~/.openclaw`,
           `if [ -n "$OPENCLAW_CONFIG" ]; then printenv OPENCLAW_CONFIG > ~/.openclaw/openclaw.json; fi`,
           `chmod 660 /var/run/docker.sock 2>/dev/null || true`,

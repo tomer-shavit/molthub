@@ -141,7 +141,9 @@ function buildBackgroundScript(params: {
   return [
     `# ── Background: Docker restart, prebuild, ECS agent start ──`,
     `# MUST be background to avoid systemd deadlock with cloud-init`,
-    `(while ! systemctl is-active --quiet docker; do sleep 2; done`,
+    `# Disable set -e inside subshell — any failure must NOT prevent ECS unmask/start`,
+    `(set +e`,
+    ` while ! systemctl is-active --quiet docker; do sleep 2; done`,
     ` systemctl start sysbox-mgr sysbox-fs 2>/dev/null || true`,
     ` sleep 3`,
     ` systemctl restart docker`,
@@ -152,7 +154,7 @@ function buildBackgroundScript(params: {
     ` OPENCLAW_VERSION="${openclawVersion}"`,
     ` cat > /tmp/Dockerfile.openclaw <<DOCKERFILE`,
     `FROM node:22-slim`,
-    `RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*`,
+    `RUN apt-get update && apt-get install -y git docker.io && rm -rf /var/lib/apt/lists/*`,
     `RUN npm install -g openclaw@\${OPENCLAW_VERSION}`,
     `RUN mkdir -p /root/.openclaw`,
     `DOCKERFILE`,
@@ -170,7 +172,8 @@ function buildBackgroundScript(params: {
     ` systemctl start ecs) &`,
     ``,
     `# Sysbox fallback polling (no-op if services already started)`,
-    `(while ! systemctl is-active --quiet docker; do sleep 2; done`,
+    `(set +e`,
+    ` while ! systemctl is-active --quiet docker; do sleep 2; done`,
     ` systemctl start sysbox-mgr sysbox-fs 2>/dev/null || true) &`,
   ].join("\n");
 }

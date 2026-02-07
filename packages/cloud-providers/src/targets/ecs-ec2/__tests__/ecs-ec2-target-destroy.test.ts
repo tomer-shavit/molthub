@@ -87,6 +87,7 @@ function createTarget(overrides?: {
   cf?: Partial<ICloudFormationService>;
   ecs?: IECSService;
   autoScaling?: IAutoScalingService;
+  secrets?: Partial<ISecretsManagerService>;
 }): {
   target: EcsEc2Target;
   services: EcsEc2Services;
@@ -94,7 +95,7 @@ function createTarget(overrides?: {
   const services: EcsEc2Services = {
     cloudFormation: createMockCfService(overrides?.cf),
     ecs: overrides?.ecs ?? createMockEcsService(),
-    secretsManager: createMockSecretsService(),
+    secretsManager: { ...createMockSecretsService(), ...overrides?.secrets },
     cloudWatchLogs: createMockLogsService(),
     autoScaling: overrides?.autoScaling ?? createMockAutoScalingService(),
   };
@@ -117,7 +118,10 @@ function createTarget(overrides?: {
 
 describe("EcsEc2Target.destroy()", () => {
   it("deletes stack, secret, and log group on clean destroy", async () => {
-    const { target, services } = createTarget();
+    const { target, services } = createTarget({
+      cf: { stackExists: jest.fn().mockResolvedValue(true) },
+      secrets: { secretExists: jest.fn().mockResolvedValue(true) },
+    });
 
     await target.destroy();
 
@@ -132,7 +136,11 @@ describe("EcsEc2Target.destroy()", () => {
       "arn:aws:ecs:us-east-1:123:container-instance/clawster-test-bot/abc123",
     ]);
 
-    const { target } = createTarget({ ecs: ecsMock });
+    const { target } = createTarget({
+      cf: { stackExists: jest.fn().mockResolvedValue(true) },
+      secrets: { secretExists: jest.fn().mockResolvedValue(true) },
+      ecs: ecsMock,
+    });
 
     await target.destroy();
 
@@ -146,7 +154,11 @@ describe("EcsEc2Target.destroy()", () => {
 
   it("calls removeScaleInProtection before deletion", async () => {
     const autoScalingMock = createMockAutoScalingService();
-    const { target } = createTarget({ autoScaling: autoScalingMock });
+    const { target } = createTarget({
+      cf: { stackExists: jest.fn().mockResolvedValue(true) },
+      secrets: { secretExists: jest.fn().mockResolvedValue(true) },
+      autoScaling: autoScalingMock,
+    });
 
     await target.destroy();
 
@@ -156,7 +168,7 @@ describe("EcsEc2Target.destroy()", () => {
   });
 
   it("handles DELETE_FAILED by retrying with forceDeleteStack", async () => {
-    const cfMock = createMockCfService();
+    const cfMock = createMockCfService({ stackExists: jest.fn().mockResolvedValue(true) });
 
     // First deleteStack + waitForStackStatus: fails with DELETE_FAILED
     (cfMock.waitForStackStatus as jest.Mock)
@@ -180,7 +192,10 @@ describe("EcsEc2Target.destroy()", () => {
         outputs: [],
       } satisfies StackInfo);
 
-    const { target, services } = createTarget({ cf: cfMock });
+    const { target, services } = createTarget({
+      cf: cfMock,
+      secrets: { secretExists: jest.fn().mockResolvedValue(true) },
+    });
 
     await target.destroy();
 
@@ -204,7 +219,7 @@ describe("EcsEc2Target.destroy()", () => {
   });
 
   it("still cleans up secret and log group when describeStack throws after deletion failure", async () => {
-    const cfMock = createMockCfService();
+    const cfMock = createMockCfService({ stackExists: jest.fn().mockResolvedValue(true) });
     // deleteStack succeeds but waitForStackStatus fails
     (cfMock.waitForStackStatus as jest.Mock).mockRejectedValue(
       new Error("Stack timed out"),
@@ -214,7 +229,10 @@ describe("EcsEc2Target.destroy()", () => {
       new Error("Network error"),
     );
 
-    const { target, services } = createTarget({ cf: cfMock });
+    const { target, services } = createTarget({
+      cf: cfMock,
+      secrets: { secretExists: jest.fn().mockResolvedValue(true) },
+    });
 
     // Should not throw — recovery failure must not skip remaining cleanup
     await target.destroy();
@@ -222,5 +240,42 @@ describe("EcsEc2Target.destroy()", () => {
     // Secret and log group should still be cleaned up
     expect(services.secretsManager.deleteSecret).toHaveBeenCalled();
     expect(services.cloudWatchLogs.deleteLogGroup).toHaveBeenCalled();
+  });
+
+  // -------------------------------------------------------------------------
+  // Fast path: no resources exist
+  // -------------------------------------------------------------------------
+
+  it("skips stack and secret teardown when no resources exist", async () => {
+    const { target, services } = createTarget();
+
+    await target.destroy();
+
+    expect(services.cloudFormation.deleteStack).not.toHaveBeenCalled();
+    expect(services.secretsManager.deleteSecret).not.toHaveBeenCalled();
+    // Log group cleanup is always attempted (cheap, best-effort)
+    expect(services.cloudWatchLogs.deleteLogGroup).toHaveBeenCalled();
+  });
+
+  it("skips stack but deletes secret when only secret exists", async () => {
+    const { target, services } = createTarget({
+      secrets: { secretExists: jest.fn().mockResolvedValue(true) },
+    });
+
+    await target.destroy();
+
+    expect(services.cloudFormation.deleteStack).not.toHaveBeenCalled();
+    expect(services.secretsManager.deleteSecret).toHaveBeenCalled();
+  });
+
+  it("deletes stack but skips secret when only stack exists", async () => {
+    const { target, services } = createTarget({
+      cf: { stackExists: jest.fn().mockResolvedValue(true) },
+    });
+
+    await target.destroy();
+
+    expect(services.cloudFormation.deleteStack).toHaveBeenCalledWith(BOT_STACK, { force: true });
+    expect(services.secretsManager.deleteSecret).not.toHaveBeenCalled();
   });
 });
