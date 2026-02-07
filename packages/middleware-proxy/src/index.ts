@@ -1,0 +1,10 @@
+export { ProxyServer } from "./proxy-server";
+export type { ProxyServerOptions } from "./proxy-server";
+export { MiddlewareChain } from "./middleware-chain";
+export { loadMiddlewares } from "./middleware-loader";
+export { HttpForwarder } from "./http-forwarder";
+export type { UpstreamTarget } from "./http-forwarder";
+export { processInboundFrame, processOutboundFrame } from "./ws-frame-processor";
+export type { ProcessResult } from "./ws-frame-processor";
+export { ProxyConfigSchema } from "./proxy-config";
+export type { ProxyConfig, MiddlewareConfigEntry } from "./proxy-config";

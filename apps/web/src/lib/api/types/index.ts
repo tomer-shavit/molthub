@@ -36,3 +36,4 @@ export * from './templates';
 export * from './traces';
 export * from './user-context';
 export * from './persona-templates';
+export * from './middlewares';

@@ -125,7 +125,7 @@ export function StepDeploying({ instanceId, botName, onRetryDeploy }: StepDeploy
   }
 
   if (isError || isTimeout) {
-    const errorMessage = pollError || progress?.error || (isTimeout
+    const errorMessage = pollError || (isTimeout
       ? "The deployment is taking longer than expected. Your bot may still be starting up."
       : "Something went wrong while deploying your agent.");
 

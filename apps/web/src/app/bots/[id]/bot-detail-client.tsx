@@ -35,6 +35,7 @@ import { LiveSkills } from "@/components/openclaw/live-skills";
 import { EvolutionDiff } from "@/components/openclaw/evolution-diff";
 import { ResourceManagement } from "@/components/openclaw/resource-management";
 import { api, type BotInstance, type Trace, type TraceStats, type ChangeSet, type DeploymentEvent, type AgentEvolutionSnapshot, type TokenUsageSummary, type AgentCard, type A2aJsonRpcResponse, type A2aApiKeyInfo, type A2aTaskInfo, type BotTeamMember } from "@/lib/api";
+import { BotMiddlewaresTab } from "@/components/middlewares/bot-middlewares-tab";
 import { PairingTab } from "@/components/pairing/pairing-tab";
 import Link from "next/link";
 import {
@@ -833,6 +834,10 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
           <TabsTrigger active={activeTab === "resources"} onClick={() => setActiveTab("resources")}>
             <Server className="w-4 h-4 mr-1.5" />
             Resources
+          </TabsTrigger>
+          <TabsTrigger active={activeTab === "middlewares"} onClick={() => setActiveTab("middlewares")}>
+            <Puzzle className="w-4 h-4 mr-1.5" />
+            Middlewares
           </TabsTrigger>
           <TabsTrigger active={activeTab === "team"} onClick={() => setActiveTab("team")}>
             <Users className="w-4 h-4 mr-1.5" />
@@ -2166,6 +2171,10 @@ export function BotDetailClient({ bot, traces = [], metrics = null, changeSets =
               )}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent active={activeTab === "middlewares"} className="mt-6">
+          <BotMiddlewaresTab bot={bot} />
         </TabsContent>
       </Tabs>
 

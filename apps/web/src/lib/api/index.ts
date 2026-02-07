@@ -115,6 +115,8 @@ export {
   UserContextClient,
   personaTemplatesClient,
   PersonaTemplatesClient,
+  middlewaresClient,
+  MiddlewaresClient,
 } from './clients';
 
 // Backward-compatible facade export

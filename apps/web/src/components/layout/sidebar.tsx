@@ -20,6 +20,7 @@ import {
   Plus,
   Bell,
   Sparkles,
+  Puzzle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ const allNavItems: NavItem[] = [
   { label: "Fleets", href: "/fleets", icon: <Layers className="w-4 h-4" /> },
   { label: "Bots", href: "/bots", icon: <Bot className="w-4 h-4" /> },
   { label: "Personas", href: "/persona-templates", icon: <Sparkles className="w-4 h-4" /> },
+  { label: "Middlewares", href: "/middlewares", icon: <Puzzle className="w-4 h-4" /> },
   { label: "Channels", href: "/channels", icon: <MessageSquare className="w-4 h-4" /> },
   { label: "Alerts", href: "/alerts", icon: <AlertTriangle className="w-4 h-4" /> },
   { label: "Notifications", href: "/notifications", icon: <Bell className="w-4 h-4" /> },
