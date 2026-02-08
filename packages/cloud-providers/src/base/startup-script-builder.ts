@@ -6,7 +6,7 @@
  */
 
 /** Default Sysbox version for installation */
-const DEFAULT_SYSBOX_VERSION = "0.6.4";
+const DEFAULT_SYSBOX_VERSION = "0.6.7";
 
 import type { MiddlewareAssignment } from "../interface/deployment-target";
 import { DEFAULT_OPENCLAW_CLOUD_IMAGE } from "../constants/defaults";
@@ -52,6 +52,7 @@ if ! docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-run
   chmod +x "$SYSBOX_INSTALL_SCRIPT"
   "$SYSBOX_INSTALL_SCRIPT"
   rm -f "$SYSBOX_INSTALL_SCRIPT"
+  systemctl reset-failed docker.service 2>/dev/null || true
   systemctl restart docker
   echo "Sysbox runtime installed successfully"
 else
@@ -101,7 +102,7 @@ docker run -d \\
   -e OPENCLAW_GATEWAY_PORT=${options.gatewayPort} \\
   -e OPENCLAW_GATEWAY_TOKEN="${options.gatewayToken ?? ""}"${envVars ? ` \\\n  ${envVars}` : ""} \\
   ${options.imageUri} \\
-  openclaw gateway --port ${options.gatewayPort} --verbose`;
+  openclaw gateway --port ${options.gatewayPort} --bind lan --allow-unconfigured --verbose`;
 }
 
 /**
@@ -305,7 +306,7 @@ ${sysboxBlock}
       -e OPENCLAW_GATEWAY_PORT=${options.gatewayPort} \\
       -e OPENCLAW_GATEWAY_TOKEN="${options.gatewayToken ?? ""}"${envLines ? ` \\\n      ${envLines}` : ""} \\
       ${options.imageUri} \\
-      openclaw gateway --port ${options.gatewayPort} --verbose
+      openclaw gateway --port ${options.gatewayPort} --bind lan --allow-unconfigured --verbose
 
 final_message: "OpenClaw gateway started on port ${options.gatewayPort}"
 `;
@@ -385,10 +386,7 @@ export function buildAzureFilesMountSection(af: AzureFilesConfig): string {
     fi
 
     mkdir -p /etc/smbcredentials
-    cat > /etc/smbcredentials/${af.storageAccountName}.cred <<CREDEOF
-username=${af.storageAccountName}
-password=$STORAGE_KEY
-CREDEOF
+    printf 'username=%s\\npassword=%s\\n' "${af.storageAccountName}" "$STORAGE_KEY" > /etc/smbcredentials/${af.storageAccountName}.cred
     chmod 600 /etc/smbcredentials/${af.storageAccountName}.cred
 
     mkdir -p ${af.mountPath}
@@ -417,6 +415,7 @@ export function buildSysboxDebSection(version: string = DEFAULT_SYSBOX_VERSION):
         -o "$SYSBOX_DEB"
       apt-get install -f -y "$SYSBOX_DEB" || dpkg -i "$SYSBOX_DEB" && apt-get install -f -y
       rm -f "$SYSBOX_DEB"
+      systemctl reset-failed docker.service 2>/dev/null || true
       systemctl restart docker
       echo "Sysbox installed successfully"
     else
@@ -479,10 +478,14 @@ export function buildKeyVaultFetchSection(kv: AzureKeyVaultConfig, configPath: s
         GATEWAY_TOKEN=$(echo "$CONFIG_JSON" | jq -r '.gateway.auth.token // empty')
         echo "Config written from Key Vault"
       else
-        echo "No config in Key Vault yet, starting with defaults"
+        GATEWAY_TOKEN=$(openssl rand -hex 16)
+        printf '{"gateway":{"mode":"local","auth":{"mode":"token","token":"%s"}}}' "$GATEWAY_TOKEN" > ${configPath}
+        echo "No config in Key Vault yet, generated initial token"
       fi
     else
-      echo "WARNING: Could not fetch KV token, starting with defaults"
+      GATEWAY_TOKEN=$(openssl rand -hex 16)
+      printf '{"gateway":{"mode":"local","auth":{"mode":"token","token":"%s"}}}' "$GATEWAY_TOKEN" > ${configPath}
+      echo "WARNING: Could not fetch KV token, generated initial token"
     fi`;
 }
 
@@ -509,6 +512,11 @@ export function buildOpenClawContainerSection(
       echo "Using Sysbox runtime"
     fi
 
+    TOKEN_FLAG=""
+    if [ -n "\${GATEWAY_TOKEN:-}" ]; then
+      TOKEN_FLAG="-e OPENCLAW_GATEWAY_TOKEN=\$GATEWAY_TOKEN"
+    fi
+
     docker rm -f openclaw-gateway 2>/dev/null || true
 
     docker run -d \\
@@ -519,9 +527,9 @@ export function buildOpenClawContainerSection(
       -v /var/run/docker.sock:/var/run/docker.sock \\
       -v ${mountPath}/.openclaw:/home/node/.openclaw \\
       -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
-      -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envLines ? ` \\\n      ${envLines}` : ""} \\
+      $TOKEN_FLAG${envLines ? ` \\\n      ${envLines}` : ""} \\
       ${imageUri} \\
-      openclaw gateway --port ${gatewayPort} --verbose
+      openclaw gateway --port ${gatewayPort} --bind lan --allow-unconfigured --verbose
     echo "OpenClaw container started on port ${gatewayPort}"`;
 }
 
@@ -707,6 +715,7 @@ if ! docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-run
   # Merge sysbox-runc into daemon.json (preserve DNS config)
   TEMP_JSON=$(cat /etc/docker/daemon.json)
   echo "$TEMP_JSON" | jq '. + {"runtimes": {"sysbox-runc": {"path": "/usr/bin/sysbox-runc"}}}' > /etc/docker/daemon.json
+  systemctl reset-failed docker.service 2>/dev/null || true
   systemctl restart docker
   echo "Sysbox installed successfully"
 else
@@ -759,11 +768,11 @@ if [ -n "$SECRET_RESP" ]; then
     echo "Config written from Secret Manager"
   else
     echo "No config in Secret Manager yet, starting with defaults"
-    echo '{}' > "\${CONFIG_DIR}/openclaw.json"
+    echo '{"gateway":{"mode":"local"}}' > "\${CONFIG_DIR}/openclaw.json"
   fi
 else
   echo "WARNING: Could not fetch secret, starting with defaults"
-  echo '{}' > "\${CONFIG_DIR}/openclaw.json"
+  echo '{"gateway":{"mode":"local"}}' > "\${CONFIG_DIR}/openclaw.json"
 fi
 
 # ── 7. Pull pre-built OpenClaw image from GHCR ────────────────────────
@@ -781,6 +790,11 @@ fi
 
 docker rm -f openclaw-gateway 2>/dev/null || true
 
+TOKEN_FLAG=""
+if [ -n "\${GATEWAY_TOKEN:-}" ]; then
+  TOKEN_FLAG="-e OPENCLAW_GATEWAY_TOKEN=$GATEWAY_TOKEN"
+fi
+
 docker run -d \\
   --name openclaw-gateway \\
   --restart=always \\
@@ -789,9 +803,9 @@ docker run -d \\
   -v /var/run/docker.sock:/var/run/docker.sock \\
   -v /opt/openclaw-data/.openclaw:/home/node/.openclaw \\
   -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
-  -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envFlags ? ` \\\n  ${envFlags}` : ""} \\
+  $TOKEN_FLAG${envFlags ? ` \\\n  ${envFlags}` : ""} \\
   $OPENCLAW_IMAGE \\
-  openclaw gateway --port ${gatewayPort} --verbose
+  openclaw gateway --port ${gatewayPort} --bind lan --allow-unconfigured --verbose
 
 # ── 9. Mark as initialized ────────────────────────────────────────────
 touch "$MARKER"
@@ -947,6 +961,7 @@ if ! docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-run
   # Merge sysbox-runc into daemon.json (preserve DNS config)
   TEMP_JSON=$(cat /etc/docker/daemon.json)
   echo "$TEMP_JSON" | jq '. + {"runtimes": {"sysbox-runc": {"path": "/usr/bin/sysbox-runc"}}}' > /etc/docker/daemon.json
+  systemctl reset-failed docker.service 2>/dev/null || true
   systemctl restart docker
   echo "Sysbox installed successfully"
 else
@@ -1002,7 +1017,7 @@ if [ -n "$SECRET_RESP" ] && [ "$SECRET_RESP" != "{}" ]; then
   echo "Config written from Secrets Manager"
 else
   echo "No config in Secrets Manager yet, starting with defaults"
-  echo '{}' > "\${CONFIG_DIR}/openclaw.json"
+  echo '{"gateway":{"mode":"local"}}' > "\${CONFIG_DIR}/openclaw.json"
 fi
 
 # ── 6. Pull pre-built OpenClaw image from GHCR ────────────────────────
@@ -1020,6 +1035,11 @@ fi
 
 docker rm -f openclaw-gateway 2>/dev/null || true
 
+TOKEN_FLAG=""
+if [ -n "\${GATEWAY_TOKEN:-}" ]; then
+  TOKEN_FLAG="-e OPENCLAW_GATEWAY_TOKEN=$GATEWAY_TOKEN"
+fi
+
 docker run -d \\
   --name openclaw-gateway \\
   --restart=always \\
@@ -1028,9 +1048,9 @@ docker run -d \\
   -v /var/run/docker.sock:/var/run/docker.sock \\
   -v /opt/openclaw-data/.openclaw:/home/node/.openclaw \\
   -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
-  -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envFlags ? ` \\\n  ${envFlags}` : ""} \\
+  $TOKEN_FLAG${envFlags ? ` \\\n  ${envFlags}` : ""} \\
   $OPENCLAW_IMAGE \\
-  openclaw gateway --port ${gatewayPort} --verbose
+  openclaw gateway --port ${gatewayPort} --bind lan --allow-unconfigured --verbose
 
 # ── 8. Mark as initialized ────────────────────────────────────────────
 touch "$MARKER"

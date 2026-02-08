@@ -11,6 +11,7 @@ import {
   PutSecretValueCommand,
   DeleteSecretCommand,
   DescribeSecretCommand,
+  RestoreSecretCommand,
   ResourceNotFoundException,
 } from "@aws-sdk/client-secrets-manager";
 
@@ -60,6 +61,10 @@ export class SecretsManagerServiceAdapter implements ISecretsManagerService {
         ForceDeleteWithoutRecovery: forceDelete,
       }),
     );
+  }
+
+  async restoreSecret(name: string): Promise<void> {
+    await this.client.send(new RestoreSecretCommand({ SecretId: name }));
   }
 
   async secretExists(name: string): Promise<boolean> {

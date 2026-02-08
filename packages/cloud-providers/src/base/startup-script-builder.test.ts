@@ -64,10 +64,10 @@ describe("Azure Caddy Cloud-Init Builders", () => {
   });
 
   describe("buildSysboxDebSection", () => {
-    it("should use default version 0.6.4", () => {
+    it("should use default version 0.6.7", () => {
       const result = buildSysboxDebSection();
-      expect(result).toContain("v0.6.4");
-      expect(result).toContain("sysbox-ce_0.6.4.linux_");
+      expect(result).toContain("v0.6.7");
+      expect(result).toContain("sysbox-ce_0.6.7.linux_");
     });
 
     it("should accept custom version", () => {
@@ -77,10 +77,10 @@ describe("Azure Caddy Cloud-Init Builders", () => {
     });
 
     it("should handle v-prefixed version", () => {
-      const result = buildSysboxDebSection("v0.6.4");
-      expect(result).toContain("v0.6.4");
-      // Should not produce vv0.6.4
-      expect(result).not.toContain("vv0.6.4");
+      const result = buildSysboxDebSection("v0.6.7");
+      expect(result).toContain("v0.6.7");
+      // Should not produce vv0.6.7
+      expect(result).not.toContain("vv0.6.7");
     });
 
     it("should download from nestybox releases", () => {
@@ -204,7 +204,7 @@ describe("Azure Caddy Cloud-Init Builders", () => {
 
     it("should use openclaw command directly (pre-installed in image)", () => {
       const result = buildOpenClawContainerSection(18789, "/mnt/openclaw");
-      expect(result).toContain("openclaw gateway --port 18789 --verbose");
+      expect(result).toContain("openclaw gateway --port 18789 --bind lan --allow-unconfigured --verbose");
       expect(result).not.toContain("npx");
     });
 
@@ -346,7 +346,7 @@ describe("GCE Caddy Startup Script", () => {
 
   it("should use openclaw command directly (not npx)", () => {
     const result = buildGceCaddyStartupScript(defaultOptions);
-    expect(result).toContain("openclaw gateway --port 18789 --verbose");
+    expect(result).toContain("openclaw gateway --port 18789 --bind lan --allow-unconfigured --verbose");
     expect(result).not.toContain("npx");
   });
 
@@ -398,7 +398,7 @@ describe("AWS Caddy User Data Script", () => {
 
   it("should use openclaw command directly (not npx)", () => {
     const result = buildAwsCaddyUserData(defaultOptions);
-    expect(result).toContain("openclaw gateway --port 18789 --verbose");
+    expect(result).toContain("openclaw gateway --port 18789 --bind lan --allow-unconfigured --verbose");
     expect(result).not.toContain("npx");
   });
 

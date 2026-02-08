@@ -40,6 +40,7 @@ function createMockSecretsManager(): jest.Mocked<ISecretsManagerService> {
     createSecret: jest.fn(),
     updateSecret: jest.fn(),
     deleteSecret: jest.fn(),
+    restoreSecret: jest.fn(),
     secretExists: jest.fn(),
   };
 }

@@ -446,12 +446,30 @@ export class AwsEc2Target
   }
 
   private async ensureSecret(name: string, value: string): Promise<void> {
-    const exists = await this.secretsManager.secretExists(name);
-    if (exists) {
-      await this.secretsManager.updateSecret(name, value);
-    } else {
-      await this.secretsManager.createSecret(name, value, { "clawster:managed": "true" });
+    try {
+      const exists = await this.secretsManager.secretExists(name);
+      if (exists) {
+        await this.secretsManager.updateSecret(name, value);
+      } else {
+        await this.secretsManager.createSecret(name, value, { "clawster:managed": "true" });
+      }
+    } catch (error) {
+      if (this.isMarkedForDeletionError(error)) {
+        this.log("Secret is pending deletion — restoring and updating");
+        await this.secretsManager.restoreSecret(name);
+        await this.secretsManager.updateSecret(name, value);
+      } else {
+        throw error;
+      }
     }
+  }
+
+  private isMarkedForDeletionError(error: unknown): boolean {
+    if (error instanceof Error && "name" in error) {
+      return (error as { name: string }).name === "InvalidRequestException"
+        && error.message.includes("marked for deletion");
+    }
+    return false;
   }
 
   private createDefaultManagers(): AwsEc2Managers {

@@ -13,6 +13,7 @@ export interface ISecretsManagerService {
   createSecret(name: string, value: string, tags?: Record<string, string>): Promise<string>;
   updateSecret(name: string, value: string): Promise<void>;
   deleteSecret(name: string, forceDelete?: boolean): Promise<void>;
+  restoreSecret(name: string): Promise<void>;
   secretExists(name: string): Promise<boolean>;
 }
 
