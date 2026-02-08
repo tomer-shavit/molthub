@@ -7,7 +7,6 @@
 
 import { EC2Client } from "@aws-sdk/client-ec2";
 import { IAMClient } from "@aws-sdk/client-iam";
-import { AutoScalingClient } from "@aws-sdk/client-auto-scaling";
 import { AwsNetworkManager } from "./managers/aws-network-manager";
 import { AwsComputeManager } from "./managers/aws-compute-manager";
 import type { IAwsNetworkManager, IAwsComputeManager } from "./managers/interfaces";
@@ -33,11 +32,10 @@ export class AwsManagerFactory {
 
     const ec2Client = new EC2Client(clientConfig);
     const iamClient = new IAMClient(clientConfig);
-    const asgClient = new AutoScalingClient(clientConfig);
 
     return {
       networkManager: new AwsNetworkManager(ec2Client, iamClient, region, log),
-      computeManager: new AwsComputeManager(ec2Client, asgClient, log),
+      computeManager: new AwsComputeManager(ec2Client, log),
     };
   }
 }

@@ -23,13 +23,12 @@ function createMockComputeManager(): jest.Mocked<IAwsComputeManager> {
   return {
     resolveUbuntuAmi: jest.fn(),
     ensureLaunchTemplate: jest.fn(),
-    ensureAsg: jest.fn(),
-    setAsgDesiredCapacity: jest.fn(),
-    getAsgInstancePublicIp: jest.fn(),
-    getAsgInstanceStatus: jest.fn(),
-    deleteAsg: jest.fn(),
     deleteLaunchTemplate: jest.fn(),
-    recycleAsgInstance: jest.fn(),
+    runInstance: jest.fn(),
+    terminateInstance: jest.fn(),
+    findInstanceByTag: jest.fn(),
+    getInstancePublicIp: jest.fn(),
+    getInstanceStatus: jest.fn(),
   };
 }
 
@@ -147,7 +146,6 @@ describe("AwsEc2Target", () => {
       const targetAny = target as unknown as {
         deriveNames: (name: string) => {
           launchTemplate: string;
-          asg: string;
           secretName: string;
           logGroup: string;
         };
@@ -155,7 +153,6 @@ describe("AwsEc2Target", () => {
 
       const names = targetAny.deriveNames("test-bot");
       expect(names.launchTemplate).toBe("clawster-lt-test-bot");
-      expect(names.asg).toBe("clawster-asg-test-bot");
       expect(names.secretName).toBe("clawster/test-bot/config");
       expect(names.logGroup).toBe("/clawster/test-bot");
     });
@@ -165,7 +162,6 @@ describe("AwsEc2Target", () => {
       const targetAny = target as unknown as {
         deriveNames: (name: string) => {
           launchTemplate: string;
-          asg: string;
           secretName: string;
           logGroup: string;
         };
@@ -173,7 +169,6 @@ describe("AwsEc2Target", () => {
 
       const names = targetAny.deriveNames("My Bot 123!");
       expect(names.launchTemplate).toBe("clawster-lt-my-bot-123");
-      expect(names.asg).toBe("clawster-asg-my-bot-123");
       expect(names.secretName).toBe("clawster/my-bot-123/config");
       expect(names.logGroup).toBe("/clawster/my-bot-123");
     });
@@ -189,7 +184,6 @@ describe("AwsEc2Target", () => {
       mockSecretsManager.createSecret.mockResolvedValue("arn:aws:secretsmanager:us-east-1:123456789012:secret:test");
       mockComputeManager.resolveUbuntuAmi.mockResolvedValue("ami-12345678");
       mockComputeManager.ensureLaunchTemplate.mockResolvedValue("lt-abcdef");
-      mockComputeManager.ensureAsg.mockResolvedValue();
       mockCloudWatchLogs.getLogStreams.mockResolvedValue([]);
     });
 
@@ -199,9 +193,19 @@ describe("AwsEc2Target", () => {
       const result = await target.install({ profileName: "test-bot", port: 18789 });
 
       expect(result.success).toBe(true);
-      expect(result.instanceId).toBe("clawster-asg-test-bot");
+      expect(result.instanceId).toBe("clawster-lt-test-bot");
       expect(result.message).toContain("test-bot");
-      expect(result.serviceName).toBe("clawster-asg-test-bot");
+      expect(result.serviceName).toBe("clawster-lt-test-bot");
+    });
+
+    it("should not create an ASG", async () => {
+      const target = createTarget();
+
+      await target.install({ profileName: "test-bot", port: 18789 });
+
+      // No ASG-related methods should exist on the compute manager
+      expect(mockComputeManager.runInstance).not.toHaveBeenCalled();
+      expect(mockComputeManager.terminateInstance).not.toHaveBeenCalled();
     });
 
     it("should call ensureSharedInfra as step 1", async () => {
@@ -274,18 +278,6 @@ describe("AwsEc2Target", () => {
           instanceProfileArn: "arn:aws:iam::123456789012:instance-profile/clawster",
           tags: { "clawster:bot": "test-bot" },
         }),
-      );
-    });
-
-    it("should create ASG with launch template ID and subnet ID", async () => {
-      const target = createTarget();
-
-      await target.install({ profileName: "test-bot", port: 18789 });
-
-      expect(mockComputeManager.ensureAsg).toHaveBeenCalledWith(
-        "clawster-asg-test-bot",
-        "lt-abcdef",
-        "subnet-456",
       );
     });
 
@@ -653,42 +645,78 @@ describe("AwsEc2Target", () => {
   // ── start() ──────────────────────────────────────────────────────────
 
   describe("start", () => {
-    it("should set ASG desired capacity to 1", async () => {
+    beforeEach(() => {
+      mockNetworkManager.getSharedInfra.mockResolvedValue(DEFAULT_SHARED_INFRA);
+    });
+
+    it("should find existing instance and skip if already running", async () => {
       const target = createTarget();
-      mockComputeManager.setAsgDesiredCapacity.mockResolvedValue();
-      mockComputeManager.getAsgInstanceStatus.mockResolvedValue("running");
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-existing");
+      mockComputeManager.getInstanceStatus.mockResolvedValue("running");
 
       await target.start();
 
-      expect(mockComputeManager.setAsgDesiredCapacity).toHaveBeenCalledWith(
-        "clawster-asg-test-bot",
-        1,
+      expect(mockComputeManager.findInstanceByTag).toHaveBeenCalledWith("test-bot");
+      expect(mockComputeManager.runInstance).not.toHaveBeenCalled();
+    });
+
+    it("should terminate stopped instance and launch new one", async () => {
+      const target = createTarget();
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-stopped");
+      mockComputeManager.getInstanceStatus
+        .mockResolvedValueOnce("stopped")    // check existing
+        .mockResolvedValueOnce("running");   // wait for new
+      mockComputeManager.terminateInstance.mockResolvedValue();
+      mockComputeManager.runInstance.mockResolvedValue("i-new");
+
+      await target.start();
+
+      expect(mockComputeManager.terminateInstance).toHaveBeenCalledWith("i-stopped");
+      expect(mockComputeManager.runInstance).toHaveBeenCalledWith(
+        "clawster-lt-test-bot",
+        "subnet-456",
+        "test-bot",
+      );
+    });
+
+    it("should launch new instance when none found", async () => {
+      const target = createTarget();
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
+      mockComputeManager.runInstance.mockResolvedValue("i-new");
+      mockComputeManager.getInstanceStatus.mockResolvedValue("running");
+
+      await target.start();
+
+      expect(mockComputeManager.runInstance).toHaveBeenCalledWith(
+        "clawster-lt-test-bot",
+        "subnet-456",
+        "test-bot",
       );
     });
 
     it("should wait until instance status is running", async () => {
       const target = createTarget();
-      mockComputeManager.setAsgDesiredCapacity.mockResolvedValue();
-      mockComputeManager.getAsgInstanceStatus
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
+      mockComputeManager.runInstance.mockResolvedValue("i-new");
+      mockComputeManager.getInstanceStatus
         .mockResolvedValueOnce("pending")
         .mockResolvedValueOnce("pending")
         .mockResolvedValueOnce("running");
 
-      // Override sleep to speed up tests
       const targetAny = target as unknown as { sleep: (ms: number) => Promise<void> };
       targetAny.sleep = jest.fn().mockResolvedValue(undefined);
 
       await target.start();
 
-      expect(mockComputeManager.getAsgInstanceStatus).toHaveBeenCalledTimes(3);
+      expect(mockComputeManager.getInstanceStatus).toHaveBeenCalledTimes(3);
     });
 
     it("should clear cached public IP", async () => {
       const target = createTarget();
-      mockComputeManager.setAsgDesiredCapacity.mockResolvedValue();
-      mockComputeManager.getAsgInstanceStatus.mockResolvedValue("running");
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
+      mockComputeManager.runInstance.mockResolvedValue("i-new");
+      mockComputeManager.getInstanceStatus.mockResolvedValue("running");
 
-      // Seed the cache
       const targetAny = target as unknown as { cachedPublicIp: string | undefined };
       targetAny.cachedPublicIp = "1.2.3.4";
 
@@ -705,10 +733,10 @@ describe("AwsEc2Target", () => {
 
     it("should timeout when instance never reaches running state", async () => {
       const target = createTarget();
-      mockComputeManager.setAsgDesiredCapacity.mockResolvedValue();
-      mockComputeManager.getAsgInstanceStatus.mockResolvedValue("pending");
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
+      mockComputeManager.runInstance.mockResolvedValue("i-new");
+      mockComputeManager.getInstanceStatus.mockResolvedValue("pending");
 
-      // Override sleep to be instant and override Date.now for timeout
       const targetAny = target as unknown as { sleep: (ms: number) => Promise<void> };
       targetAny.sleep = jest.fn().mockResolvedValue(undefined);
 
@@ -716,7 +744,6 @@ describe("AwsEc2Target", () => {
       const originalDateNow = Date.now;
       jest.spyOn(Date, "now").mockImplementation(() => {
         callCount++;
-        // First call is the start time, subsequent calls simulate time passing
         return originalDateNow() + callCount * 300_000;
       });
 
@@ -729,21 +756,29 @@ describe("AwsEc2Target", () => {
   // ── stop() ───────────────────────────────────────────────────────────
 
   describe("stop", () => {
-    it("should set ASG desired capacity to 0", async () => {
+    it("should find instance by tag and terminate it", async () => {
       const target = createTarget();
-      mockComputeManager.setAsgDesiredCapacity.mockResolvedValue();
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-running");
+      mockComputeManager.terminateInstance.mockResolvedValue();
 
       await target.stop();
 
-      expect(mockComputeManager.setAsgDesiredCapacity).toHaveBeenCalledWith(
-        "clawster-asg-test-bot",
-        0,
-      );
+      expect(mockComputeManager.findInstanceByTag).toHaveBeenCalledWith("test-bot");
+      expect(mockComputeManager.terminateInstance).toHaveBeenCalledWith("i-running");
+    });
+
+    it("should handle case when no instance found", async () => {
+      const target = createTarget();
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
+
+      await target.stop();
+
+      expect(mockComputeManager.terminateInstance).not.toHaveBeenCalled();
     });
 
     it("should clear cached public IP", async () => {
       const target = createTarget();
-      mockComputeManager.setAsgDesiredCapacity.mockResolvedValue();
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
 
       const targetAny = target as unknown as { cachedPublicIp: string | undefined };
       targetAny.cachedPublicIp = "1.2.3.4";
@@ -763,20 +798,44 @@ describe("AwsEc2Target", () => {
   // ── restart() ────────────────────────────────────────────────────────
 
   describe("restart", () => {
-    it("should recycle the ASG instance", async () => {
+    beforeEach(() => {
+      mockNetworkManager.getSharedInfra.mockResolvedValue(DEFAULT_SHARED_INFRA);
+    });
+
+    it("should terminate existing and launch new instance", async () => {
       const target = createTarget();
-      mockComputeManager.recycleAsgInstance.mockResolvedValue();
-      mockComputeManager.getAsgInstanceStatus.mockResolvedValue("running");
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-old");
+      mockComputeManager.terminateInstance.mockResolvedValue();
+      mockComputeManager.runInstance.mockResolvedValue("i-new");
+      mockComputeManager.getInstanceStatus.mockResolvedValue("running");
 
       await target.restart();
 
-      expect(mockComputeManager.recycleAsgInstance).toHaveBeenCalledWith("clawster-asg-test-bot");
+      expect(mockComputeManager.terminateInstance).toHaveBeenCalledWith("i-old");
+      expect(mockComputeManager.runInstance).toHaveBeenCalledWith(
+        "clawster-lt-test-bot",
+        "subnet-456",
+        "test-bot",
+      );
     });
 
-    it("should wait until new instance is running after recycle", async () => {
+    it("should launch new instance even when no existing instance", async () => {
       const target = createTarget();
-      mockComputeManager.recycleAsgInstance.mockResolvedValue();
-      mockComputeManager.getAsgInstanceStatus
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
+      mockComputeManager.runInstance.mockResolvedValue("i-new");
+      mockComputeManager.getInstanceStatus.mockResolvedValue("running");
+
+      await target.restart();
+
+      expect(mockComputeManager.terminateInstance).not.toHaveBeenCalled();
+      expect(mockComputeManager.runInstance).toHaveBeenCalled();
+    });
+
+    it("should wait until new instance is running", async () => {
+      const target = createTarget();
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
+      mockComputeManager.runInstance.mockResolvedValue("i-new");
+      mockComputeManager.getInstanceStatus
         .mockResolvedValueOnce("pending")
         .mockResolvedValueOnce("running");
 
@@ -785,13 +844,14 @@ describe("AwsEc2Target", () => {
 
       await target.restart();
 
-      expect(mockComputeManager.getAsgInstanceStatus).toHaveBeenCalledTimes(2);
+      expect(mockComputeManager.getInstanceStatus).toHaveBeenCalledTimes(2);
     });
 
     it("should clear cached public IP", async () => {
       const target = createTarget();
-      mockComputeManager.recycleAsgInstance.mockResolvedValue();
-      mockComputeManager.getAsgInstanceStatus.mockResolvedValue("running");
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
+      mockComputeManager.runInstance.mockResolvedValue("i-new");
+      mockComputeManager.getInstanceStatus.mockResolvedValue("running");
 
       const targetAny = target as unknown as { cachedPublicIp: string | undefined };
       targetAny.cachedPublicIp = "5.6.7.8";
@@ -813,7 +873,8 @@ describe("AwsEc2Target", () => {
   describe("getStatus", () => {
     it("should return running state with gatewayPort when instance is running", async () => {
       const target = createTarget();
-      mockComputeManager.getAsgInstanceStatus.mockResolvedValue("running");
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-running");
+      mockComputeManager.getInstanceStatus.mockResolvedValue("running");
 
       const status = await target.getStatus();
 
@@ -821,9 +882,9 @@ describe("AwsEc2Target", () => {
       expect(status.gatewayPort).toBe(18789);
     });
 
-    it("should return stopped state when no instance exists", async () => {
+    it("should return stopped state when no instance found", async () => {
       const target = createTarget();
-      mockComputeManager.getAsgInstanceStatus.mockResolvedValue("no-instance");
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
 
       const status = await target.getStatus();
 
@@ -832,7 +893,8 @@ describe("AwsEc2Target", () => {
 
     it("should return stopped state when instance is terminated", async () => {
       const target = createTarget();
-      mockComputeManager.getAsgInstanceStatus.mockResolvedValue("terminated");
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-term");
+      mockComputeManager.getInstanceStatus.mockResolvedValue("terminated");
 
       const status = await target.getStatus();
 
@@ -841,7 +903,8 @@ describe("AwsEc2Target", () => {
 
     it("should return running state for pending instances", async () => {
       const target = createTarget();
-      mockComputeManager.getAsgInstanceStatus.mockResolvedValue("pending");
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-pending");
+      mockComputeManager.getInstanceStatus.mockResolvedValue("pending");
 
       const status = await target.getStatus();
 
@@ -851,7 +914,8 @@ describe("AwsEc2Target", () => {
 
     it("should return stopped state for stopping instances", async () => {
       const target = createTarget();
-      mockComputeManager.getAsgInstanceStatus.mockResolvedValue("stopping");
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-stopping");
+      mockComputeManager.getInstanceStatus.mockResolvedValue("stopping");
 
       const status = await target.getStatus();
 
@@ -866,9 +930,9 @@ describe("AwsEc2Target", () => {
       expect(status.state).toBe("not-installed");
     });
 
-    it("should return not-installed when getAsgInstanceStatus throws", async () => {
+    it("should return not-installed when findInstanceByTag throws", async () => {
       const target = createTarget();
-      mockComputeManager.getAsgInstanceStatus.mockRejectedValue(new Error("ASG not found"));
+      mockComputeManager.findInstanceByTag.mockRejectedValue(new Error("AWS error"));
 
       const status = await target.getStatus();
 
@@ -964,7 +1028,8 @@ describe("AwsEc2Target", () => {
 
     it("should return ws endpoint with public IP on port 80 when no custom domain", async () => {
       const target = createTarget();
-      mockComputeManager.getAsgInstancePublicIp.mockResolvedValue("54.123.45.67");
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-running");
+      mockComputeManager.getInstancePublicIp.mockResolvedValue("54.123.45.67");
 
       const endpoint = await target.getEndpoint();
 
@@ -975,17 +1040,26 @@ describe("AwsEc2Target", () => {
 
     it("should cache the public IP after first lookup", async () => {
       const target = createTarget();
-      mockComputeManager.getAsgInstancePublicIp.mockResolvedValue("54.123.45.67");
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-running");
+      mockComputeManager.getInstancePublicIp.mockResolvedValue("54.123.45.67");
 
       await target.getEndpoint();
       await target.getEndpoint();
 
-      expect(mockComputeManager.getAsgInstancePublicIp).toHaveBeenCalledTimes(1);
+      expect(mockComputeManager.findInstanceByTag).toHaveBeenCalledTimes(1);
     });
 
     it("should throw when no public IP is available", async () => {
       const target = createTarget();
-      mockComputeManager.getAsgInstancePublicIp.mockResolvedValue(null);
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-running");
+      mockComputeManager.getInstancePublicIp.mockResolvedValue(null);
+
+      await expect(target.getEndpoint()).rejects.toThrow("No public IP available");
+    });
+
+    it("should throw when no instance found", async () => {
+      const target = createTarget();
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
 
       await expect(target.getEndpoint()).rejects.toThrow("No public IP available");
     });
@@ -1001,7 +1075,8 @@ describe("AwsEc2Target", () => {
 
       await target.getEndpoint();
 
-      expect(mockComputeManager.getAsgInstancePublicIp).not.toHaveBeenCalled();
+      expect(mockComputeManager.findInstanceByTag).not.toHaveBeenCalled();
+      expect(mockComputeManager.getInstancePublicIp).not.toHaveBeenCalled();
     });
   });
 
@@ -1009,7 +1084,8 @@ describe("AwsEc2Target", () => {
 
   describe("destroy", () => {
     beforeEach(() => {
-      mockComputeManager.deleteAsg.mockResolvedValue();
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-existing");
+      mockComputeManager.terminateInstance.mockResolvedValue();
       mockComputeManager.deleteLaunchTemplate.mockResolvedValue();
       mockSecretsManager.deleteSecret.mockResolvedValue();
       mockCloudWatchLogs.deleteLogGroup.mockResolvedValue();
@@ -1019,8 +1095,12 @@ describe("AwsEc2Target", () => {
       const target = createTarget();
       const callOrder: string[] = [];
 
-      mockComputeManager.deleteAsg.mockImplementation(async () => {
-        callOrder.push("deleteAsg");
+      mockComputeManager.findInstanceByTag.mockImplementation(async () => {
+        callOrder.push("findInstanceByTag");
+        return "i-existing";
+      });
+      mockComputeManager.terminateInstance.mockImplementation(async () => {
+        callOrder.push("terminateInstance");
       });
       mockComputeManager.deleteLaunchTemplate.mockImplementation(async () => {
         callOrder.push("deleteLaunchTemplate");
@@ -1035,19 +1115,30 @@ describe("AwsEc2Target", () => {
       await target.destroy();
 
       expect(callOrder).toEqual([
-        "deleteAsg",
+        "findInstanceByTag",
+        "terminateInstance",
         "deleteLaunchTemplate",
         "deleteSecret",
         "deleteLogGroup",
       ]);
     });
 
-    it("should delete ASG with correct name", async () => {
+    it("should terminate instance found by tag", async () => {
       const target = createTarget();
 
       await target.destroy();
 
-      expect(mockComputeManager.deleteAsg).toHaveBeenCalledWith("clawster-asg-test-bot");
+      expect(mockComputeManager.findInstanceByTag).toHaveBeenCalledWith("test-bot");
+      expect(mockComputeManager.terminateInstance).toHaveBeenCalledWith("i-existing");
+    });
+
+    it("should skip terminate when no instance found", async () => {
+      mockComputeManager.findInstanceByTag.mockResolvedValue(null);
+      const target = createTarget();
+
+      await target.destroy();
+
+      expect(mockComputeManager.terminateInstance).not.toHaveBeenCalled();
     });
 
     it("should delete launch template with correct name", async () => {
@@ -1135,7 +1226,7 @@ describe("AwsEc2Target", () => {
       expect(metadata.status).toBe("ready");
     });
 
-    it("should have provisioning steps", () => {
+    it("should have provisioning steps without ASG", () => {
       const target = createTarget();
       const metadata = target.getMetadata();
 
@@ -1146,27 +1237,30 @@ describe("AwsEc2Target", () => {
       expect(stepIds).toContain("create_secret");
       expect(stepIds).toContain("resolve_ami");
       expect(stepIds).toContain("create_lt");
-      expect(stepIds).toContain("create_asg");
+      expect(stepIds).toContain("launch_instance");
       expect(stepIds).toContain("health_check");
+      expect(stepIds).not.toContain("create_asg");
     });
 
-    it("should have resource update steps", () => {
+    it("should have resource update steps with terminate/launch", () => {
       const target = createTarget();
       const metadata = target.getMetadata();
 
       expect(metadata.resourceUpdateSteps.length).toBeGreaterThan(0);
       const stepIds = metadata.resourceUpdateSteps.map((s) => s.id);
       expect(stepIds).toContain("validate_resources");
-      expect(stepIds).toContain("scale_down");
+      expect(stepIds).toContain("terminate_instance");
       expect(stepIds).toContain("create_lt");
-      expect(stepIds).toContain("scale_up");
+      expect(stepIds).toContain("launch_instance");
+      expect(stepIds).not.toContain("scale_down");
+      expect(stepIds).not.toContain("scale_up");
     });
 
     it("should have correct operation step mappings", () => {
       const target = createTarget();
       const metadata = target.getMetadata();
 
-      expect(metadata.operationSteps.install).toBe("create_asg");
+      expect(metadata.operationSteps.install).toBe("create_lt");
       expect(metadata.operationSteps.start).toBe("health_check");
     });
 
@@ -1242,7 +1336,6 @@ describe("AwsEc2Target", () => {
       mockSecretsManager.createSecret.mockResolvedValue("arn:secret");
       mockComputeManager.resolveUbuntuAmi.mockResolvedValue("ami-12345678");
       mockComputeManager.ensureLaunchTemplate.mockResolvedValue("lt-abcdef");
-      mockComputeManager.ensureAsg.mockResolvedValue();
       mockCloudWatchLogs.getLogStreams.mockResolvedValue([]);
 
       const logMessages: string[] = [];
@@ -1251,16 +1344,16 @@ describe("AwsEc2Target", () => {
 
       await target.install({ profileName: "test-bot", port: 18789 });
 
-      expect(logMessages.some((m) => m.includes("[1/5]"))).toBe(true);
-      expect(logMessages.some((m) => m.includes("[2/5]"))).toBe(true);
-      expect(logMessages.some((m) => m.includes("[3/5]"))).toBe(true);
-      expect(logMessages.some((m) => m.includes("[4/5]"))).toBe(true);
-      expect(logMessages.some((m) => m.includes("[5/5]"))).toBe(true);
+      expect(logMessages.some((m) => m.includes("[1/4]"))).toBe(true);
+      expect(logMessages.some((m) => m.includes("[2/4]"))).toBe(true);
+      expect(logMessages.some((m) => m.includes("[3/4]"))).toBe(true);
+      expect(logMessages.some((m) => m.includes("[4/4]"))).toBe(true);
       expect(logMessages.some((m) => m.includes("Installation complete"))).toBe(true);
     });
 
     it("should emit log messages during destroy", async () => {
-      mockComputeManager.deleteAsg.mockResolvedValue();
+      mockComputeManager.findInstanceByTag.mockResolvedValue("i-existing");
+      mockComputeManager.terminateInstance.mockResolvedValue();
       mockComputeManager.deleteLaunchTemplate.mockResolvedValue();
       mockSecretsManager.deleteSecret.mockResolvedValue();
       mockCloudWatchLogs.deleteLogGroup.mockResolvedValue();

@@ -3,8 +3,7 @@
  *
  * Architecture: Internet -> SG (80/443) -> EC2 (public subnet) -> Caddy -> 127.0.0.1:port -> OpenClaw (Sysbox)
  *
- * Replaces the previous CloudFormation + ECS + ALB architecture with direct
- * EC2 SDK calls, Caddy reverse proxy, and ASG(max=1) for auto-healing.
+ * Uses direct RunInstances/TerminateInstances with tag-based instance discovery.
  */
 export interface AwsEc2Config {
   /** AWS region (e.g. "us-east-1") */

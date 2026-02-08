@@ -1,6 +1,5 @@
 import { AwsComputeManager } from "./aws-compute-manager";
 import type { EC2Client } from "@aws-sdk/client-ec2";
-import type { AutoScalingClient } from "@aws-sdk/client-auto-scaling";
 import {
   DescribeImagesCommand,
   DescribeLaunchTemplatesCommand,
@@ -8,14 +7,9 @@ import {
   CreateLaunchTemplateCommand,
   DeleteLaunchTemplateCommand,
   DescribeInstancesCommand,
+  RunInstancesCommand,
+  TerminateInstancesCommand,
 } from "@aws-sdk/client-ec2";
-import {
-  DescribeAutoScalingGroupsCommand,
-  CreateAutoScalingGroupCommand,
-  UpdateAutoScalingGroupCommand,
-  DeleteAutoScalingGroupCommand,
-  TerminateInstanceInAutoScalingGroupCommand,
-} from "@aws-sdk/client-auto-scaling";
 import type { LaunchTemplateConfig } from "../types";
 
 const makeLtConfig = (overrides?: Partial<LaunchTemplateConfig>): LaunchTemplateConfig => ({
@@ -31,19 +25,15 @@ const makeLtConfig = (overrides?: Partial<LaunchTemplateConfig>): LaunchTemplate
 
 describe("AwsComputeManager", () => {
   let mockEc2Send: jest.Mock;
-  let mockAsgSend: jest.Mock;
   let ec2Client: EC2Client;
-  let asgClient: AutoScalingClient;
   let logCallback: jest.Mock;
   let manager: AwsComputeManager;
 
   beforeEach(() => {
     mockEc2Send = jest.fn();
-    mockAsgSend = jest.fn();
     ec2Client = { send: mockEc2Send } as unknown as EC2Client;
-    asgClient = { send: mockAsgSend } as unknown as AutoScalingClient;
     logCallback = jest.fn();
-    manager = new AwsComputeManager(ec2Client, asgClient, logCallback);
+    manager = new AwsComputeManager(ec2Client, logCallback);
   });
 
   describe("resolveUbuntuAmi", () => {
@@ -114,192 +104,6 @@ describe("AwsComputeManager", () => {
     });
   });
 
-  describe("ensureAsg", () => {
-    it("creates a new ASG when none exists", async () => {
-      mockAsgSend
-        .mockResolvedValueOnce({ AutoScalingGroups: [] })
-        .mockResolvedValueOnce({});
-
-      await manager.ensureAsg("test-asg", "lt-123", "subnet-abc");
-
-      expect(mockAsgSend).toHaveBeenCalledWith(expect.any(DescribeAutoScalingGroupsCommand));
-      expect(mockAsgSend).toHaveBeenCalledWith(expect.any(CreateAutoScalingGroupCommand));
-      expect(logCallback).toHaveBeenCalledWith(expect.stringContaining("created"));
-    });
-
-    it("skips creation when ASG already exists", async () => {
-      mockAsgSend.mockResolvedValueOnce({
-        AutoScalingGroups: [{ AutoScalingGroupName: "test-asg" }],
-      });
-
-      await manager.ensureAsg("test-asg", "lt-123", "subnet-abc");
-
-      expect(mockAsgSend).toHaveBeenCalledTimes(1);
-      expect(mockAsgSend).toHaveBeenCalledWith(expect.any(DescribeAutoScalingGroupsCommand));
-      expect(logCallback).toHaveBeenCalledWith(expect.stringContaining("already exists"));
-    });
-  });
-
-  describe("setAsgDesiredCapacity", () => {
-    it("sends UpdateAutoScalingGroupCommand with correct params", async () => {
-      mockAsgSend.mockResolvedValueOnce({});
-
-      await manager.setAsgDesiredCapacity("my-asg", 1);
-
-      expect(mockAsgSend).toHaveBeenCalledWith(expect.any(UpdateAutoScalingGroupCommand));
-      expect(logCallback).toHaveBeenCalledWith(expect.stringContaining("desired=1"));
-    });
-
-    it("sets MaxSize to at least 1 even for desired=0", async () => {
-      mockAsgSend.mockResolvedValueOnce({});
-
-      await manager.setAsgDesiredCapacity("my-asg", 0);
-
-      expect(mockAsgSend).toHaveBeenCalledWith(expect.any(UpdateAutoScalingGroupCommand));
-      expect(logCallback).toHaveBeenCalledWith(expect.stringContaining("desired=0"));
-    });
-  });
-
-  describe("getAsgInstancePublicIp", () => {
-    it("returns the public IP when an instance exists", async () => {
-      mockAsgSend.mockResolvedValueOnce({
-        AutoScalingGroups: [
-          { Instances: [{ InstanceId: "i-abc", LifecycleState: "InService" }] },
-        ],
-      });
-      mockEc2Send.mockResolvedValueOnce({
-        Reservations: [{ Instances: [{ PublicIpAddress: "1.2.3.4" }] }],
-      });
-
-      const ip = await manager.getAsgInstancePublicIp("my-asg");
-
-      expect(ip).toBe("1.2.3.4");
-    });
-
-    it("returns null when no instances in ASG", async () => {
-      mockAsgSend.mockResolvedValueOnce({
-        AutoScalingGroups: [{ Instances: [] }],
-      });
-
-      const ip = await manager.getAsgInstancePublicIp("my-asg");
-
-      expect(ip).toBeNull();
-    });
-
-    it("returns null when instance has no public IP", async () => {
-      mockAsgSend.mockResolvedValueOnce({
-        AutoScalingGroups: [
-          { Instances: [{ InstanceId: "i-abc", LifecycleState: "InService" }] },
-        ],
-      });
-      mockEc2Send.mockResolvedValueOnce({
-        Reservations: [{ Instances: [{}] }],
-      });
-
-      const ip = await manager.getAsgInstancePublicIp("my-asg");
-
-      expect(ip).toBeNull();
-    });
-  });
-
-  describe("getAsgInstanceStatus", () => {
-    it("returns instance state name when instance exists", async () => {
-      mockAsgSend.mockResolvedValueOnce({
-        AutoScalingGroups: [
-          { Instances: [{ InstanceId: "i-abc", LifecycleState: "InService" }] },
-        ],
-      });
-      mockEc2Send.mockResolvedValueOnce({
-        Reservations: [{ Instances: [{ State: { Name: "running" } }] }],
-      });
-
-      const status = await manager.getAsgInstanceStatus("my-asg");
-
-      expect(status).toBe("running");
-    });
-
-    it("returns 'no-instance' when no instances in ASG", async () => {
-      mockAsgSend.mockResolvedValueOnce({
-        AutoScalingGroups: [{ Instances: [] }],
-      });
-
-      const status = await manager.getAsgInstanceStatus("my-asg");
-
-      expect(status).toBe("no-instance");
-    });
-
-    it("returns 'no-instance' when state is undefined", async () => {
-      mockAsgSend.mockResolvedValueOnce({
-        AutoScalingGroups: [
-          { Instances: [{ InstanceId: "i-abc", LifecycleState: "InService" }] },
-        ],
-      });
-      mockEc2Send.mockResolvedValueOnce({
-        Reservations: [{ Instances: [{ State: {} }] }],
-      });
-
-      const status = await manager.getAsgInstanceStatus("my-asg");
-
-      expect(status).toBe("no-instance");
-    });
-  });
-
-  describe("deleteAsg", () => {
-    it("scales to 0 then force-deletes the ASG", async () => {
-      const calls: string[] = [];
-      mockAsgSend.mockImplementation((cmd: unknown): Promise<Record<string, never>> => {
-        if (cmd instanceof UpdateAutoScalingGroupCommand) {
-          calls.push("update");
-          return Promise.resolve({});
-        }
-        if (cmd instanceof DeleteAutoScalingGroupCommand) {
-          calls.push("delete");
-          return Promise.resolve({});
-        }
-        return Promise.resolve({});
-      });
-
-      await manager.deleteAsg("my-asg");
-
-      expect(calls).toEqual(["update", "delete"]);
-      expect(logCallback).toHaveBeenCalledWith(expect.stringContaining("deleted"));
-    });
-
-    it("handles not-found error gracefully on delete", async () => {
-      const notFoundError = new Error("Not found");
-      (notFoundError as Error & { name: string }).name = "AutoScalingGroupNotFoundFault";
-
-      mockAsgSend
-        .mockResolvedValueOnce({})
-        .mockRejectedValueOnce(notFoundError);
-
-      await expect(manager.deleteAsg("gone-asg")).resolves.toBeUndefined();
-      expect(logCallback).toHaveBeenCalledWith(expect.stringContaining("already deleted"));
-    });
-
-    it("handles not-found error on the scale-down step", async () => {
-      const notFoundError = new Error("Not found");
-      (notFoundError as Error & { name: string }).name = "AutoScalingGroupNotFoundFault";
-
-      mockAsgSend
-        .mockRejectedValueOnce(notFoundError)
-        .mockRejectedValueOnce(notFoundError);
-
-      await expect(manager.deleteAsg("gone-asg")).resolves.toBeUndefined();
-    });
-
-    it("rethrows non-not-found errors on delete", async () => {
-      const serviceError = new Error("Service unavailable");
-      (serviceError as Error & { name: string }).name = "ServiceUnavailable";
-
-      mockAsgSend
-        .mockResolvedValueOnce({})
-        .mockRejectedValueOnce(serviceError);
-
-      await expect(manager.deleteAsg("my-asg")).rejects.toThrow("Service unavailable");
-    });
-  });
-
   describe("deleteLaunchTemplate", () => {
     it("deletes the launch template successfully", async () => {
       mockEc2Send.mockResolvedValueOnce({});
@@ -330,74 +134,264 @@ describe("AwsComputeManager", () => {
     });
   });
 
-  describe("recycleAsgInstance", () => {
-    it("terminates the instance without decrementing desired capacity", async () => {
-      mockAsgSend
-        .mockResolvedValueOnce({
-          AutoScalingGroups: [
-            { Instances: [{ InstanceId: "i-recycle", LifecycleState: "InService" }] },
-          ],
-        })
-        .mockResolvedValueOnce({});
-
-      await manager.recycleAsgInstance("my-asg");
-
-      expect(mockAsgSend).toHaveBeenCalledWith(
-        expect.any(TerminateInstanceInAutoScalingGroupCommand),
-      );
-      expect(logCallback).toHaveBeenCalledWith(expect.stringContaining("recycled"));
-    });
-
-    it("logs and returns when no instance to recycle", async () => {
-      mockAsgSend.mockResolvedValueOnce({
-        AutoScalingGroups: [{ Instances: [] }],
+  describe("runInstance", () => {
+    it("launches an instance and returns the instance ID", async () => {
+      mockEc2Send.mockResolvedValueOnce({
+        Instances: [{ InstanceId: "i-new123" }],
       });
 
-      await manager.recycleAsgInstance("my-asg");
+      const instanceId = await manager.runInstance("my-lt", "subnet-abc", "test-bot");
 
-      expect(logCallback).toHaveBeenCalledWith("No instance to recycle");
-      expect(mockAsgSend).toHaveBeenCalledTimes(1);
+      expect(instanceId).toBe("i-new123");
+      expect(mockEc2Send).toHaveBeenCalledWith(expect.any(RunInstancesCommand));
+      expect(logCallback).toHaveBeenCalledWith(expect.stringContaining("launched"));
     });
 
-    it("picks the first live instance (InService or Pending)", async () => {
-      mockAsgSend
-        .mockResolvedValueOnce({
-          AutoScalingGroups: [
-            {
-              Instances: [
-                { InstanceId: "i-inservice", LifecycleState: "InService" },
-                { InstanceId: "i-pending", LifecycleState: "Pending" },
-              ],
-            },
-          ],
-        })
-        .mockResolvedValueOnce({});
+    it("throws when RunInstances returns no instance", async () => {
+      mockEc2Send.mockResolvedValueOnce({ Instances: [] });
 
-      await manager.recycleAsgInstance("my-asg");
-
-      expect(logCallback).toHaveBeenCalledWith(
-        expect.stringContaining("i-inservice"),
+      await expect(manager.runInstance("my-lt", "subnet-abc", "test-bot")).rejects.toThrow(
+        "RunInstances did not return an instance ID",
       );
     });
 
-    it("falls back to first instance when none are InService or Pending", async () => {
-      mockAsgSend
-        .mockResolvedValueOnce({
-          AutoScalingGroups: [
-            {
-              Instances: [
-                { InstanceId: "i-terminating", LifecycleState: "Terminating" },
-              ],
-            },
-          ],
-        })
-        .mockResolvedValueOnce({});
+    it("tags the instance with clawster:bot and Name", async () => {
+      mockEc2Send.mockResolvedValueOnce({
+        Instances: [{ InstanceId: "i-tagged" }],
+      });
 
-      await manager.recycleAsgInstance("my-asg");
+      await manager.runInstance("my-lt", "subnet-abc", "my-bot");
 
-      expect(logCallback).toHaveBeenCalledWith(
-        expect.stringContaining("i-terminating"),
+      const cmd = mockEc2Send.mock.calls[0][0] as RunInstancesCommand;
+      const input = cmd.input;
+      const tags = input.TagSpecifications?.[0]?.Tags;
+      expect(tags).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ Key: "clawster:bot", Value: "my-bot" }),
+          expect.objectContaining({ Key: "Name", Value: "clawster-my-bot" }),
+          expect.objectContaining({ Key: "clawster:managed", Value: "true" }),
+        ]),
       );
+    });
+
+    it("passes launch template name and subnet", async () => {
+      mockEc2Send.mockResolvedValueOnce({
+        Instances: [{ InstanceId: "i-lt" }],
+      });
+
+      await manager.runInstance("clawster-lt-bot", "subnet-xyz", "bot");
+
+      const cmd = mockEc2Send.mock.calls[0][0] as RunInstancesCommand;
+      const input = cmd.input;
+      expect(input.LaunchTemplate?.LaunchTemplateName).toBe("clawster-lt-bot");
+      expect(input.LaunchTemplate?.Version).toBe("$Latest");
+      expect(input.SubnetId).toBe("subnet-xyz");
+      expect(input.MinCount).toBe(1);
+      expect(input.MaxCount).toBe(1);
+    });
+  });
+
+  describe("terminateInstance", () => {
+    it("terminates the instance successfully", async () => {
+      mockEc2Send.mockResolvedValueOnce({});
+
+      await manager.terminateInstance("i-abc");
+
+      expect(mockEc2Send).toHaveBeenCalledWith(expect.any(TerminateInstancesCommand));
+      expect(logCallback).toHaveBeenCalledWith(expect.stringContaining("terminated"));
+    });
+
+    it("handles not-found error gracefully", async () => {
+      const notFoundError = new Error("Instance not found");
+      (notFoundError as Error & { name: string }).name = "InvalidInstanceIDNotFound";
+
+      mockEc2Send.mockRejectedValueOnce(notFoundError);
+
+      await expect(manager.terminateInstance("i-gone")).resolves.toBeUndefined();
+      expect(logCallback).toHaveBeenCalledWith(expect.stringContaining("already terminated"));
+    });
+
+    it("rethrows non-not-found errors", async () => {
+      const serviceError = new Error("Service unavailable");
+      (serviceError as Error & { name: string }).name = "ServiceUnavailable";
+
+      mockEc2Send.mockRejectedValueOnce(serviceError);
+
+      await expect(manager.terminateInstance("i-abc")).rejects.toThrow("Service unavailable");
+    });
+  });
+
+  describe("findInstanceByTag", () => {
+    it("returns instance ID when a running instance is found", async () => {
+      mockEc2Send.mockResolvedValueOnce({
+        Reservations: [
+          {
+            Instances: [
+              { InstanceId: "i-running", State: { Name: "running" } },
+            ],
+          },
+        ],
+      });
+
+      const id = await manager.findInstanceByTag("test-bot");
+
+      expect(id).toBe("i-running");
+      expect(mockEc2Send).toHaveBeenCalledWith(expect.any(DescribeInstancesCommand));
+    });
+
+    it("returns null when no instances match", async () => {
+      mockEc2Send.mockResolvedValueOnce({ Reservations: [] });
+
+      const id = await manager.findInstanceByTag("no-bot");
+
+      expect(id).toBeNull();
+    });
+
+    it("prefers running over stopped instances", async () => {
+      mockEc2Send.mockResolvedValueOnce({
+        Reservations: [
+          {
+            Instances: [
+              { InstanceId: "i-stopped", State: { Name: "stopped" } },
+              { InstanceId: "i-running", State: { Name: "running" } },
+            ],
+          },
+        ],
+      });
+
+      const id = await manager.findInstanceByTag("test-bot");
+
+      expect(id).toBe("i-running");
+    });
+
+    it("prefers pending over stopped instances", async () => {
+      mockEc2Send.mockResolvedValueOnce({
+        Reservations: [
+          {
+            Instances: [
+              { InstanceId: "i-stopped", State: { Name: "stopped" } },
+              { InstanceId: "i-pending", State: { Name: "pending" } },
+            ],
+          },
+        ],
+      });
+
+      const id = await manager.findInstanceByTag("test-bot");
+
+      expect(id).toBe("i-pending");
+    });
+
+    it("falls back to first instance when none are running/pending", async () => {
+      mockEc2Send.mockResolvedValueOnce({
+        Reservations: [
+          {
+            Instances: [
+              { InstanceId: "i-stopped", State: { Name: "stopped" } },
+            ],
+          },
+        ],
+      });
+
+      const id = await manager.findInstanceByTag("test-bot");
+
+      expect(id).toBe("i-stopped");
+    });
+
+    it("filters by clawster:bot and clawster:managed tags", async () => {
+      mockEc2Send.mockResolvedValueOnce({ Reservations: [] });
+
+      await manager.findInstanceByTag("my-bot");
+
+      const cmd = mockEc2Send.mock.calls[0][0] as DescribeInstancesCommand;
+      const filters = cmd.input.Filters;
+      expect(filters).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ Name: "tag:clawster:bot", Values: ["my-bot"] }),
+          expect.objectContaining({ Name: "tag:clawster:managed", Values: ["true"] }),
+          expect.objectContaining({
+            Name: "instance-state-name",
+            Values: ["pending", "running", "stopping", "stopped"],
+          }),
+        ]),
+      );
+    });
+  });
+
+  describe("getInstancePublicIp", () => {
+    it("returns the public IP when instance has one", async () => {
+      mockEc2Send.mockResolvedValueOnce({
+        Reservations: [{ Instances: [{ PublicIpAddress: "1.2.3.4" }] }],
+      });
+
+      const ip = await manager.getInstancePublicIp("i-abc");
+
+      expect(ip).toBe("1.2.3.4");
+    });
+
+    it("returns null when instance has no public IP", async () => {
+      mockEc2Send.mockResolvedValueOnce({
+        Reservations: [{ Instances: [{}] }],
+      });
+
+      const ip = await manager.getInstancePublicIp("i-abc");
+
+      expect(ip).toBeNull();
+    });
+
+    it("returns null when no reservations returned", async () => {
+      mockEc2Send.mockResolvedValueOnce({ Reservations: [] });
+
+      const ip = await manager.getInstancePublicIp("i-abc");
+
+      expect(ip).toBeNull();
+    });
+  });
+
+  describe("getInstanceStatus", () => {
+    it("returns instance state name", async () => {
+      mockEc2Send.mockResolvedValueOnce({
+        Reservations: [{ Instances: [{ State: { Name: "running" } }] }],
+      });
+
+      const status = await manager.getInstanceStatus("i-abc");
+
+      expect(status).toBe("running");
+    });
+
+    it("returns 'no-instance' when state is undefined", async () => {
+      mockEc2Send.mockResolvedValueOnce({
+        Reservations: [{ Instances: [{ State: {} }] }],
+      });
+
+      const status = await manager.getInstanceStatus("i-abc");
+
+      expect(status).toBe("no-instance");
+    });
+
+    it("returns 'no-instance' when describe throws not-found", async () => {
+      const notFoundError = new Error("Instance not found");
+      (notFoundError as Error & { name: string }).name = "InvalidInstanceID.NotFound";
+      mockEc2Send.mockRejectedValueOnce(notFoundError);
+
+      const status = await manager.getInstanceStatus("i-gone");
+
+      expect(status).toBe("no-instance");
+    });
+
+    it("rethrows non-not-found errors", async () => {
+      const serviceError = new Error("Service unavailable");
+      (serviceError as Error & { name: string }).name = "ServiceUnavailable";
+      mockEc2Send.mockRejectedValueOnce(serviceError);
+
+      await expect(manager.getInstanceStatus("i-abc")).rejects.toThrow("Service unavailable");
+    });
+
+    it("returns 'no-instance' when no reservations returned", async () => {
+      mockEc2Send.mockResolvedValueOnce({ Reservations: [] });
+
+      const status = await manager.getInstanceStatus("i-abc");
+
+      expect(status).toBe("no-instance");
     });
   });
 });

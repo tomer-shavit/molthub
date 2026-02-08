@@ -1,7 +1,7 @@
 /**
- * AWS Compute Manager — manages per-bot Launch Templates, ASGs, and instances.
+ * AWS Compute Manager — manages per-bot Launch Templates and EC2 instances.
  *
- * Uses ASG(max=1) for auto-healing, matching the GCE MIG and Azure VMSS patterns.
+ * Uses direct RunInstances/TerminateInstances with tag-based discovery.
  */
 
 import {
@@ -13,15 +13,9 @@ import {
   DeleteLaunchTemplateCommand,
   CreateLaunchTemplateVersionCommand,
   DescribeInstancesCommand,
+  RunInstancesCommand,
+  TerminateInstancesCommand,
 } from "@aws-sdk/client-ec2";
-import {
-  type AutoScalingClient,
-  CreateAutoScalingGroupCommand,
-  DescribeAutoScalingGroupsCommand,
-  DeleteAutoScalingGroupCommand,
-  UpdateAutoScalingGroupCommand,
-  TerminateInstanceInAutoScalingGroupCommand,
-} from "@aws-sdk/client-auto-scaling";
 import type { IAwsComputeManager } from "./interfaces";
 import type { LaunchTemplateConfig, Ec2InstanceState, AwsLogCallback } from "../types";
 
@@ -32,7 +26,6 @@ const AMI_NAME_FILTER = "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*
 export class AwsComputeManager implements IAwsComputeManager {
   constructor(
     private readonly ec2: EC2Client,
-    private readonly asg: AutoScalingClient,
     private readonly log: AwsLogCallback,
   ) {}
 
@@ -100,92 +93,6 @@ export class AwsComputeManager implements IAwsComputeManager {
     return result.LaunchTemplate!.LaunchTemplateId!;
   }
 
-  async ensureAsg(name: string, launchTemplateId: string, subnetId: string): Promise<void> {
-    const existing = await this.asg.send(
-      new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [name] }),
-    );
-    if ((existing.AutoScalingGroups ?? []).length > 0) {
-      this.log(`ASG already exists: ${name}`);
-      return;
-    }
-
-    await this.asg.send(
-      new CreateAutoScalingGroupCommand({
-        AutoScalingGroupName: name,
-        LaunchTemplate: { LaunchTemplateId: launchTemplateId, Version: "$Latest" },
-        MinSize: 0,
-        MaxSize: 1,
-        DesiredCapacity: 0,
-        VPCZoneIdentifier: subnetId,
-        HealthCheckType: "EC2",
-        HealthCheckGracePeriod: 600,
-        Tags: [
-          { Key: "clawster:managed", Value: "true", PropagateAtLaunch: true },
-          { Key: "Name", Value: name, PropagateAtLaunch: true },
-        ],
-      }),
-    );
-    this.log(`ASG created: ${name} (desired=0)`);
-  }
-
-  async setAsgDesiredCapacity(asgName: string, desired: number): Promise<void> {
-    await this.asg.send(
-      new UpdateAutoScalingGroupCommand({
-        AutoScalingGroupName: asgName,
-        DesiredCapacity: desired,
-        MinSize: 0,
-        MaxSize: Math.max(1, desired),
-      }),
-    );
-    this.log(`ASG ${asgName} → desired=${desired}`);
-  }
-
-  async getAsgInstancePublicIp(asgName: string): Promise<string | null> {
-    const instanceId = await this.getAsgInstanceId(asgName);
-    if (!instanceId) return null;
-
-    const result = await this.ec2.send(
-      new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
-    );
-    return result.Reservations?.[0]?.Instances?.[0]?.PublicIpAddress ?? null;
-  }
-
-  async getAsgInstanceStatus(asgName: string): Promise<Ec2InstanceState | "no-instance"> {
-    const instanceId = await this.getAsgInstanceId(asgName);
-    if (!instanceId) return "no-instance";
-
-    const result = await this.ec2.send(
-      new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
-    );
-    const state = result.Reservations?.[0]?.Instances?.[0]?.State?.Name;
-    return (state as Ec2InstanceState) ?? "no-instance";
-  }
-
-  async deleteAsg(name: string): Promise<void> {
-    try {
-      await this.asg.send(
-        new UpdateAutoScalingGroupCommand({
-          AutoScalingGroupName: name,
-          MinSize: 0,
-          MaxSize: 0,
-          DesiredCapacity: 0,
-        }),
-      );
-    } catch {
-      // ASG might not exist — continue to delete attempt
-    }
-
-    try {
-      await this.asg.send(
-        new DeleteAutoScalingGroupCommand({ AutoScalingGroupName: name, ForceDelete: true }),
-      );
-      this.log(`ASG deleted: ${name}`);
-    } catch (error: unknown) {
-      if (!this.isNotFoundError(error)) throw error;
-      this.log(`ASG already deleted: ${name}`);
-    }
-  }
-
   async deleteLaunchTemplate(name: string): Promise<void> {
     try {
       await this.ec2.send(new DeleteLaunchTemplateCommand({ LaunchTemplateName: name }));
@@ -196,34 +103,98 @@ export class AwsComputeManager implements IAwsComputeManager {
     }
   }
 
-  async recycleAsgInstance(asgName: string): Promise<void> {
-    const instanceId = await this.getAsgInstanceId(asgName);
-    if (!instanceId) {
-      this.log("No instance to recycle");
-      return;
-    }
-
-    await this.asg.send(
-      new TerminateInstanceInAutoScalingGroupCommand({
-        InstanceId: instanceId,
-        ShouldDecrementDesiredCapacity: false,
+  async runInstance(launchTemplateName: string, subnetId: string, botName: string): Promise<string> {
+    const result = await this.ec2.send(
+      new RunInstancesCommand({
+        LaunchTemplate: { LaunchTemplateName: launchTemplateName, Version: "$Latest" },
+        SubnetId: subnetId,
+        MinCount: 1,
+        MaxCount: 1,
+        TagSpecifications: [
+          {
+            ResourceType: "instance",
+            Tags: [
+              { Key: "clawster:bot", Value: botName },
+              { Key: "clawster:managed", Value: "true" },
+              { Key: "Name", Value: `clawster-${botName}` },
+            ],
+          },
+        ],
       }),
     );
-    this.log(`Instance recycled: ${instanceId} (ASG will replace)`);
+
+    const instanceId = result.Instances?.[0]?.InstanceId;
+    if (!instanceId) {
+      throw new Error("RunInstances did not return an instance ID");
+    }
+
+    this.log(`Instance launched: ${instanceId} (bot=${botName})`);
+    return instanceId;
+  }
+
+  async terminateInstance(instanceId: string): Promise<void> {
+    try {
+      await this.ec2.send(
+        new TerminateInstancesCommand({ InstanceIds: [instanceId] }),
+      );
+      this.log(`Instance terminated: ${instanceId}`);
+    } catch (error: unknown) {
+      if (!this.isNotFoundError(error)) throw error;
+      this.log(`Instance already terminated: ${instanceId}`);
+    }
+  }
+
+  async findInstanceByTag(botName: string): Promise<string | null> {
+    const result = await this.ec2.send(
+      new DescribeInstancesCommand({
+        Filters: [
+          { Name: "tag:clawster:bot", Values: [botName] },
+          { Name: "tag:clawster:managed", Values: ["true"] },
+          {
+            Name: "instance-state-name",
+            Values: ["pending", "running", "stopping", "stopped"],
+          },
+        ],
+      }),
+    );
+
+    const instances = (result.Reservations ?? []).flatMap((r) => r.Instances ?? []);
+    if (instances.length === 0) return null;
+
+    // Prefer running/pending over stopped/stopping
+    const running = instances.find(
+      (i) => i.State?.Name === "running" || i.State?.Name === "pending",
+    );
+    const instanceId = (running ?? instances[0])?.InstanceId ?? null;
+
+    if (instanceId) {
+      this.log(`Found instance by tag: ${instanceId} (bot=${botName})`);
+    }
+
+    return instanceId;
+  }
+
+  async getInstancePublicIp(instanceId: string): Promise<string | null> {
+    const result = await this.ec2.send(
+      new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
+    );
+    return result.Reservations?.[0]?.Instances?.[0]?.PublicIpAddress ?? null;
+  }
+
+  async getInstanceStatus(instanceId: string): Promise<Ec2InstanceState | "no-instance"> {
+    try {
+      const result = await this.ec2.send(
+        new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
+      );
+      const state = result.Reservations?.[0]?.Instances?.[0]?.State?.Name;
+      return (state as Ec2InstanceState) ?? "no-instance";
+    } catch (error: unknown) {
+      if (this.isNotFoundError(error)) return "no-instance";
+      throw error;
+    }
   }
 
   // ── Private Helpers ──────────────────────────────────────────────────
-
-  private async getAsgInstanceId(asgName: string): Promise<string | null> {
-    const result = await this.asg.send(
-      new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] }),
-    );
-    const instances = result.AutoScalingGroups?.[0]?.Instances ?? [];
-    const live = instances.find(
-      (i) => i.LifecycleState === "InService" || i.LifecycleState === "Pending",
-    );
-    return (live ?? instances[0])?.InstanceId ?? null;
-  }
 
   private buildLaunchTemplateData(config: LaunchTemplateConfig) {
     return {
@@ -242,12 +213,6 @@ export class AwsComputeManager implements IAwsComputeManager {
         HttpTokens: "required" as const,
         HttpEndpoint: "enabled" as const,
       },
-      TagSpecifications: [
-        {
-          ResourceType: "instance" as const,
-          Tags: Object.entries(config.tags).map(([Key, Value]) => ({ Key, Value })),
-        },
-      ],
     };
   }
 

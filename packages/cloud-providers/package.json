@@ -12,7 +12,6 @@
     "test:integration": "jest --config jest.integration.config.js --no-cache --runInBand"
   },
   "dependencies": {
-    "@aws-sdk/client-auto-scaling": "^3.984.0",
     "@clawster/core": "workspace:*"
   },
   "peerDependencies": {

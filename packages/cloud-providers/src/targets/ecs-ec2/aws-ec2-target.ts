@@ -1,9 +1,9 @@
 /**
  * AWS EC2 Caddy-on-VM Deployment Target
  *
- * Architecture: Internet → SG (80/443) → EC2 → Caddy → 127.0.0.1:port → OpenClaw (Sysbox)
- * Auto-healing: ASG(max=1) replaces failed instances automatically.
+ * Architecture: Internet -> SG (80/443) -> EC2 -> Caddy -> 127.0.0.1:port -> OpenClaw (Sysbox)
  *
+ * Uses direct RunInstances/TerminateInstances with tag-based instance discovery.
  * Replaces the CloudFormation + ECS + ALB architecture with direct SDK calls.
  */
 
@@ -99,8 +99,8 @@ export class AwsEc2Target
     const names = this.deriveNames(name);
 
     try {
-      // [1/5] Shared network infrastructure
-      this.log("[1/5] Ensuring shared network infrastructure...");
+      // [1/4] Shared network infrastructure
+      this.log("[1/4] Ensuring shared network infrastructure...");
       const infra = await this.networkManager.ensureSharedInfra();
 
       if (this.config.allowedCidr?.length) {
@@ -110,15 +110,15 @@ export class AwsEc2Target
         );
       }
 
-      // [2/5] Secrets Manager secret
-      this.log("[2/5] Creating Secrets Manager secret...");
+      // [2/4] Secrets Manager secret
+      this.log("[2/4] Creating Secrets Manager secret...");
       await this.ensureSecret(names.secretName, "{}");
 
-      // [3/5] Resolve AMI + create Launch Template
-      this.log("[3/5] Creating launch template...");
+      // [3/4] Resolve AMI + create Launch Template
+      this.log("[3/4] Creating launch template...");
       const amiId = await this.computeManager.resolveUbuntuAmi();
       const userData = this.buildUserData(names.secretName, options.port, options.containerEnv);
-      const ltId = await this.computeManager.ensureLaunchTemplate(names.launchTemplate, {
+      await this.computeManager.ensureLaunchTemplate(names.launchTemplate, {
         instanceType: this.instanceType,
         bootDiskSizeGb: this.bootDiskSizeGb,
         amiId,
@@ -128,12 +128,8 @@ export class AwsEc2Target
         tags: { "clawster:bot": name },
       });
 
-      // [4/5] Create ASG (starts with desired=0)
-      this.log("[4/5] Creating auto-scaling group...");
-      await this.computeManager.ensureAsg(names.asg, ltId, infra.subnetId);
-
-      // [5/5] Create CloudWatch log group (best effort)
-      this.log("[5/5] Creating log group...");
+      // [4/4] Create CloudWatch log group (best effort)
+      this.log("[4/4] Creating log group...");
       try {
         await this.cloudWatchLogs.getLogStreams(names.logGroup);
       } catch {
@@ -143,9 +139,9 @@ export class AwsEc2Target
       this.log("Installation complete");
       return {
         success: true,
-        instanceId: names.asg,
+        instanceId: names.launchTemplate,
         message: `AWS EC2 target installed for ${name}`,
-        serviceName: names.asg,
+        serviceName: names.launchTemplate,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -183,13 +179,36 @@ export class AwsEc2Target
   }
 
   async start(): Promise<void> {
-    const names = this.deriveNames(this.requireProfileName());
+    const botName = this.requireProfileName();
+    const names = this.deriveNames(botName);
     this.log("Starting instance...");
-    await this.computeManager.setAsgDesiredCapacity(names.asg, 1);
+
+    // Guard: skip if already running/pending
+    const existingId = await this.computeManager.findInstanceByTag(botName);
+    if (existingId) {
+      const status = await this.computeManager.getInstanceStatus(existingId);
+      if (status === "running" || status === "pending") {
+        this.log(`Instance already running: ${existingId}`);
+        return;
+      }
+      // Terminate stopped/stopping instance before launching a new one
+      await this.computeManager.terminateInstance(existingId);
+    }
+
+    const infra = await this.networkManager.getSharedInfra();
+    if (!infra) {
+      throw new Error("Shared infrastructure not found — run install() first");
+    }
+
+    const instanceId = await this.computeManager.runInstance(
+      names.launchTemplate,
+      infra.subnetId,
+      botName,
+    );
 
     await this.waitFor(
       async () => {
-        const status = await this.computeManager.getAsgInstanceStatus(names.asg);
+        const status = await this.computeManager.getInstanceStatus(instanceId);
         return status === "running";
       },
       { timeoutMs: 600_000, intervalMs: 10_000, description: "instance to reach running state" },
@@ -200,22 +219,46 @@ export class AwsEc2Target
   }
 
   async stop(): Promise<void> {
-    const names = this.deriveNames(this.requireProfileName());
+    const botName = this.requireProfileName();
     this.log("Stopping instance...");
-    await this.computeManager.setAsgDesiredCapacity(names.asg, 0);
+
+    const instanceId = await this.computeManager.findInstanceByTag(botName);
+    if (instanceId) {
+      await this.computeManager.terminateInstance(instanceId);
+    }
+
     this.cachedPublicIp = undefined;
     this.log("Instance stopped");
   }
 
   async restart(): Promise<void> {
-    const names = this.deriveNames(this.requireProfileName());
-    this.log("Recycling instance...");
-    await this.computeManager.recycleAsgInstance(names.asg);
+    const botName = this.requireProfileName();
+    const names = this.deriveNames(botName);
+    this.log("Restarting instance...");
+
+    // Terminate existing instance
+    const existingId = await this.computeManager.findInstanceByTag(botName);
+    if (existingId) {
+      await this.computeManager.terminateInstance(existingId);
+    }
+
     this.cachedPublicIp = undefined;
+
+    // Launch new instance
+    const infra = await this.networkManager.getSharedInfra();
+    if (!infra) {
+      throw new Error("Shared infrastructure not found — run install() first");
+    }
+
+    const instanceId = await this.computeManager.runInstance(
+      names.launchTemplate,
+      infra.subnetId,
+      botName,
+    );
 
     await this.waitFor(
       async () => {
-        const status = await this.computeManager.getAsgInstanceStatus(names.asg);
+        const status = await this.computeManager.getInstanceStatus(instanceId);
         return status === "running";
       },
       { timeoutMs: 600_000, intervalMs: 10_000, description: "new instance to reach running state" },
@@ -225,8 +268,12 @@ export class AwsEc2Target
 
   async getStatus(): Promise<TargetStatus> {
     try {
-      const names = this.deriveNames(this.requireProfileName());
-      const status = await this.computeManager.getAsgInstanceStatus(names.asg);
+      const botName = this.requireProfileName();
+      const instanceId = await this.computeManager.findInstanceByTag(botName);
+
+      if (!instanceId) return { state: "stopped" };
+
+      const status = await this.computeManager.getInstanceStatus(instanceId);
 
       if (status === "running" || status === "pending")
         return { state: "running", gatewayPort: DEFAULT_GATEWAY_PORT };
@@ -256,9 +303,12 @@ export class AwsEc2Target
     }
 
     if (!this.cachedPublicIp) {
-      const names = this.deriveNames(this.requireProfileName());
-      this.cachedPublicIp =
-        (await this.computeManager.getAsgInstancePublicIp(names.asg)) ?? undefined;
+      const botName = this.requireProfileName();
+      const instanceId = await this.computeManager.findInstanceByTag(botName);
+      if (instanceId) {
+        this.cachedPublicIp =
+          (await this.computeManager.getInstancePublicIp(instanceId)) ?? undefined;
+      }
     }
 
     if (!this.cachedPublicIp) {
@@ -269,10 +319,14 @@ export class AwsEc2Target
   }
 
   async destroy(): Promise<void> {
-    const names = this.deriveNames(this.requireProfileName());
+    const botName = this.requireProfileName();
+    const names = this.deriveNames(botName);
 
-    this.log("[1/4] Deleting ASG...");
-    await this.computeManager.deleteAsg(names.asg);
+    this.log("[1/4] Terminating instance...");
+    const instanceId = await this.computeManager.findInstanceByTag(botName);
+    if (instanceId) {
+      await this.computeManager.terminateInstance(instanceId);
+    }
 
     this.log("[2/4] Deleting launch template...");
     await this.computeManager.deleteLaunchTemplate(names.launchTemplate);
@@ -302,7 +356,7 @@ export class AwsEc2Target
       type: DeploymentTargetType.ECS_EC2,
       displayName: "AWS EC2",
       icon: "aws",
-      description: "Caddy-on-VM with ASG auto-healing on AWS EC2",
+      description: "Caddy-on-VM with direct EC2 instance management on AWS",
       status: "ready",
       provisioningSteps: [
         { id: "validate_config", name: "Validate configuration" },
@@ -314,7 +368,7 @@ export class AwsEc2Target
         { id: "create_secret", name: "Create secret", estimatedDurationSec: 3 },
         { id: "resolve_ami", name: "Resolve Ubuntu AMI", estimatedDurationSec: 3 },
         { id: "create_lt", name: "Create launch template", estimatedDurationSec: 3 },
-        { id: "create_asg", name: "Create auto-scaling group", estimatedDurationSec: 5 },
+        { id: "launch_instance", name: "Launch EC2 instance", estimatedDurationSec: 5 },
         { id: "install_docker", name: "Install Docker + Sysbox", estimatedDurationSec: 60 },
         { id: "install_caddy", name: "Install Caddy", estimatedDurationSec: 30 },
         { id: "start_openclaw", name: "Start OpenClaw container", estimatedDurationSec: 60 },
@@ -322,12 +376,12 @@ export class AwsEc2Target
       ],
       resourceUpdateSteps: [
         { id: "validate_resources", name: "Validate resource spec" },
-        { id: "scale_down", name: "Scale down ASG" },
+        { id: "terminate_instance", name: "Terminate instance" },
         { id: "create_lt", name: "Create new launch template", estimatedDurationSec: 5 },
-        { id: "scale_up", name: "Scale up ASG", estimatedDurationSec: 180 },
+        { id: "launch_instance", name: "Launch new instance", estimatedDurationSec: 180 },
         { id: "verify_completion", name: "Verify instance running" },
       ],
-      operationSteps: { install: "create_asg", start: "health_check" },
+      operationSteps: { install: "create_lt", start: "health_check" },
       capabilities: {
         scaling: false,
         sandbox: true,
@@ -368,7 +422,6 @@ export class AwsEc2Target
     const sanitized = this.sanitizeName(profileName);
     return {
       launchTemplate: `clawster-lt-${sanitized}`,
-      asg: `clawster-asg-${sanitized}`,
       secretName: `clawster/${sanitized}/config`,
       logGroup: `/clawster/${sanitized}`,
     };
