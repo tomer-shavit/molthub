@@ -260,7 +260,7 @@ describe("GceTarget", () => {
       );
     });
 
-    it("should use pre-built Docker image in startup script", async () => {
+    it("should pull GHCR image instead of building in startup script", async () => {
       const managers = createMockManagers();
       const { target } = createTarget(baseConfig, managers);
 
@@ -269,10 +269,11 @@ describe("GceTarget", () => {
       const templateCall = (managers.computeManager.createInstanceTemplate as jest.Mock).mock.calls[0][0];
       const script: string = templateCall.startupScript;
 
-      // Must use pre-built image, not raw node:22 + npx
-      expect(script).toContain("docker build");
-      expect(script).toContain("clawster-openclaw");
-      expect(script).toContain("npm install -g openclaw@");
+      // Must pull pre-built GHCR image, not build on VM
+      expect(script).toContain("docker pull");
+      expect(script).toContain("ghcr.io/tomer-shavit/clawster/openclaw");
+      expect(script).not.toContain("docker build");
+      expect(script).not.toContain("npm install -g openclaw@");
       expect(script).not.toContain("npx -y openclaw@");
     });
 
