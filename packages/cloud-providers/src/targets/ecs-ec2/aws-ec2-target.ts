@@ -125,7 +125,7 @@ export class AwsEc2Target
         securityGroupId: infra.securityGroupId,
         instanceProfileArn: infra.instanceProfileArn,
         userData: Buffer.from(userData).toString("base64"),
-        tags: { "clawster:bot": name, "clawster:managed": "true" },
+        tags: { "clawster:bot": name },
       });
 
       // [4/5] Create ASG (starts with desired=0)
@@ -160,15 +160,15 @@ export class AwsEc2Target
 
     const transformed = this.transformConfig(config.config ?? {});
 
-    // AWS-specific: set gateway.bind=lan, trustedProxies for Docker bridge
-    if (transformed.gateway && typeof transformed.gateway === "object") {
-      const gw = { ...(transformed.gateway as Record<string, unknown>) };
-      gw.bind = "lan";
-      gw.trustedProxies = ["172.17.0.0/16"];
-      delete gw.host;
-      delete gw.port;
-      transformed.gateway = gw;
-    }
+    // AWS-specific: set gateway.bind=lan, mode=local, trustedProxies for Docker bridge
+    // Keep gateway.port (OpenClaw needs it to know which port to listen on)
+    // Valid gateway.mode: "local" (self-managed) or "remote" (cloud-managed)
+    const gw = { ...((transformed.gateway as Record<string, unknown>) ?? {}) };
+    gw.bind = "lan";
+    gw.mode = gw.mode ?? "local";
+    gw.trustedProxies = ["172.17.0.0/16"];
+    delete gw.host;
+    transformed.gateway = gw;
 
     const configJson = JSON.stringify(transformed, null, 2);
 

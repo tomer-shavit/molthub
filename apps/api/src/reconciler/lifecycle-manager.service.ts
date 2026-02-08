@@ -85,7 +85,7 @@ export class LifecycleManagerService {
   ): Promise<ProvisionResult> {
     this.logger.log(`Provisioning instance ${instance.id} (${instance.name})`);
 
-    const deploymentType = this.deploymentTargetResolver.resolveDeploymentType(instance);
+    const deploymentType = await this.deploymentTargetResolver.resolveDeploymentType(instance);
     this.provisioningEvents.startProvisioning(instance.id, deploymentType);
 
     // Track the current step for log attribution
@@ -486,7 +486,7 @@ export class LifecycleManagerService {
   ): Promise<{ success: boolean; message: string; requiresRestart: boolean }> {
     this.logger.log(`Updating resources for instance ${instance.id}: cpu=${spec.cpu}, memory=${spec.memory}, disk=${spec.dataDiskSizeGb ?? "unchanged"}`);
 
-    const deploymentType = this.deploymentTargetResolver.resolveDeploymentType(instance);
+    const deploymentType = await this.deploymentTargetResolver.resolveDeploymentType(instance);
 
     // Start resource update tracking with step progress
     this.provisioningEvents.startResourceUpdate(instance.id, deploymentType);

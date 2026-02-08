@@ -23,9 +23,10 @@ export class PolicyEngine {
   validate(manifest: unknown): PolicyResult {
     const violations: LegacyPolicyViolation[] = [];
 
-    // First validate schema
+    // First validate schema (use parsed result which has Zod defaults applied)
+    let validated: InstanceManifest;
     try {
-      validateManifest(manifest);
+      validated = validateManifest(manifest);
     } catch (error) {
       if (error instanceof Error) {
         violations.push({
@@ -36,8 +37,6 @@ export class PolicyEngine {
       }
       return { valid: false, violations };
     }
-
-    const validated = manifest as InstanceManifest;
 
     // Check 1: Forbid public admin panels
     if (validated.spec.policies?.forbidPublicAdmin !== false) {

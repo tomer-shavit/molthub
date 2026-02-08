@@ -272,7 +272,7 @@ describe("AwsEc2Target", () => {
           amiId: "ami-12345678",
           securityGroupId: "sg-def",
           instanceProfileArn: "arn:aws:iam::123456789012:instance-profile/clawster",
-          tags: { "clawster:bot": "test-bot", "clawster:managed": "true" },
+          tags: { "clawster:bot": "test-bot" },
         }),
       );
     });
@@ -451,7 +451,7 @@ describe("AwsEc2Target", () => {
       expect(parsed.gateway.trustedProxies).toEqual(["172.17.0.0/16"]);
     });
 
-    it("should delete gateway.host and gateway.port", async () => {
+    it("should delete gateway.host but keep gateway.port", async () => {
       const target = createTarget();
 
       await target.configure({
@@ -470,7 +470,7 @@ describe("AwsEc2Target", () => {
       const storedJson = mockSecretsManager.updateSecret.mock.calls[0][1];
       const parsed = JSON.parse(storedJson);
       expect(parsed.gateway.host).toBeUndefined();
-      expect(parsed.gateway.port).toBeUndefined();
+      expect(parsed.gateway.port).toBe(12345);
       expect(parsed.gateway.mode).toBe("server");
       expect(parsed.gateway.auth).toEqual({ token: "abc" });
     });
@@ -546,7 +546,7 @@ describe("AwsEc2Target", () => {
       expect(parsed.agents.defaults.model).toBe("gpt-4");
     });
 
-    it("should handle empty config", async () => {
+    it("should handle empty config with gateway defaults", async () => {
       const target = createTarget();
 
       const result = await target.configure({
@@ -557,7 +557,10 @@ describe("AwsEc2Target", () => {
 
       expect(result.success).toBe(true);
       const storedJson = mockSecretsManager.updateSecret.mock.calls[0][1];
-      expect(JSON.parse(storedJson)).toEqual({});
+      const parsed = JSON.parse(storedJson);
+      expect(parsed.gateway.bind).toBe("lan");
+      expect(parsed.gateway.mode).toBe("local");
+      expect(parsed.gateway.trustedProxies).toEqual(["172.17.0.0/16"]);
     });
 
     it("should handle undefined config", async () => {
@@ -626,11 +629,10 @@ describe("AwsEc2Target", () => {
       const storedJson = mockSecretsManager.updateSecret.mock.calls[0][1];
       const parsed = JSON.parse(storedJson);
 
-      // Gateway: bind=lan, trustedProxies set, host/port deleted
+      // Gateway: bind=lan, trustedProxies set, host deleted, port preserved
       expect(parsed.gateway.bind).toBe("lan");
       expect(parsed.gateway.trustedProxies).toEqual(["172.17.0.0/16"]);
       expect(parsed.gateway.host).toBeUndefined();
-      expect(parsed.gateway.port).toBeUndefined();
       expect(parsed.gateway.mode).toBe("server");
       expect(parsed.gateway.auth).toEqual({ token: "my-token" });
 

@@ -36,7 +36,10 @@ export class ConfigGeneratorService {
     let config: OpenClawFullConfig = {
       ...baseWithoutSandbox,
       // Ensure gateway section exists with sensible defaults for deployment
+      // gateway.mode is REQUIRED by OpenClaw — without it the gateway refuses to start.
+      // Valid modes: "local" (self-managed) or "remote" (cloud-managed).
       gateway: {
+        mode: "local",
         port: base.gateway?.port ?? 18789,
         ...base.gateway,
       },
@@ -73,6 +76,18 @@ export class ConfigGeneratorService {
           `AI Gateway enabled for ${manifest.metadata.name} but no model primary is set — gateway provider added but not routing traffic`,
         );
       }
+    }
+
+    // Ensure agents.defaults.workspace is set so the security audit passes
+    // the workspace-isolation check.  Use a path based on the instance name.
+    if (!config.agents?.defaults?.workspace) {
+      config.agents = {
+        ...config.agents,
+        defaults: {
+          ...config.agents?.defaults,
+          workspace: `/var/openclaw/workspaces/${manifest.metadata.name}`,
+        },
+      };
     }
 
     // Strip fields that OpenClaw's strict Zod schema does not recognize.

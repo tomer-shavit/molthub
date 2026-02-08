@@ -72,6 +72,9 @@ export class BotInstancesService {
     const instance = await this.botInstanceRepo.create({
       workspace: { connect: { id: dto.workspaceId } },
       fleet: { connect: { id: dto.fleetId } },
+      ...(dto.deploymentTargetId && {
+        deploymentTarget: { connect: { id: dto.deploymentTargetId } },
+      }),
       name: dto.name,
       templateId: dto.templateId,
       profileId: dto.profileId,

@@ -19,7 +19,7 @@ export interface IDeploymentTargetResolver {
    * Map a BotInstance's deploymentType enum to the string format used by
    * the adapter registry (e.g., "LOCAL" → "local", "ECS_EC2" → "ecs-ec2").
    */
-  resolveDeploymentType(instance: BotInstance): string;
+  resolveDeploymentType(instance: BotInstance): Promise<string>;
 
   /**
    * Convert a deployment type string (e.g., "docker", "ecs-ec2") to the

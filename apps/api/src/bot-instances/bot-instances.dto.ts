@@ -53,6 +53,10 @@ export class CreateBotInstanceDto {
 
   @IsString()
   @IsOptional()
+  deploymentTargetId?: string;
+
+  @IsString()
+  @IsOptional()
   createdBy?: string;
 }
 

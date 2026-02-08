@@ -36,9 +36,10 @@ export class DeploymentTargetResolverService implements IDeploymentTargetResolve
   /**
    * Map a BotInstance's deploymentType enum to the string format used by
    * the adapter registry (e.g., "LOCAL" → "local", "ECS_EC2" → "ecs-ec2").
+   * Falls back to the DeploymentTarget DB record's type when the instance's
+   * deploymentType is not set but deploymentTargetId is.
    */
-  resolveDeploymentType(instance: BotInstance): string {
-    const typeStr = instance.deploymentType ?? "LOCAL";
+  async resolveDeploymentType(instance: BotInstance): Promise<string> {
     const typeMap: Record<string, string> = {
       LOCAL: "local",
       DOCKER: "docker",
@@ -46,7 +47,23 @@ export class DeploymentTargetResolverService implements IDeploymentTargetResolve
       GCE: "gce",
       AZURE_VM: "azure-vm",
     };
-    return typeMap[typeStr] ?? "docker";
+
+    if (instance.deploymentType) {
+      return typeMap[instance.deploymentType] ?? "docker";
+    }
+
+    // Fall back to DB target type when deploymentType is not set on instance
+    if (instance.deploymentTargetId) {
+      const dbTarget = await this.prisma.deploymentTarget.findUnique({
+        where: { id: instance.deploymentTargetId },
+        select: { type: true },
+      });
+      if (dbTarget) {
+        return typeMap[dbTarget.type] ?? "docker";
+      }
+    }
+
+    return "local";
   }
 
   /**
@@ -191,7 +208,6 @@ export class DeploymentTargetResolverService implements IDeploymentTargetResolve
             zone: (cfg.zone as string) ?? "us-central1-a",
             keyFilePath: cfg.keyFilePath as string | undefined,
             machineType: cfg.machineType as string | undefined,
-            image: cfg.image as string | undefined,
             profileName: instance?.profileName ?? instance?.name,
           },
         };
@@ -262,7 +278,6 @@ export class DeploymentTargetResolverService implements IDeploymentTargetResolve
           zone: (instanceMeta?.zone as string) ?? (instanceMeta?.gcpZone as string) ?? "us-central1-a",
           keyFilePath: instanceMeta?.keyFilePath as string | undefined,
           machineType: instanceMeta?.machineType as string | undefined,
-          image: instanceMeta?.image as string | undefined,
           profileName: instance.profileName ?? instance.name,
         },
       },

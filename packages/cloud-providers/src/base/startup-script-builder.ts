@@ -411,7 +411,7 @@ export function buildSysboxDebSection(version: string = DEFAULT_SYSBOX_VERSION):
       echo "Installing Sysbox ${tag} via .deb package..."
       ARCH=$(dpkg --print-architecture)
       SYSBOX_DEB="/tmp/sysbox-ce.deb"
-      curl -fsSL "https://downloads.nestybox.com/sysbox/releases/${tag}/sysbox-ce_${bare}-0.linux_$ARCH.deb" \\
+      curl -fsSL "https://github.com/nestybox/sysbox/releases/download/${tag}/sysbox-ce_${bare}.linux_$ARCH.deb" \\
         -o "$SYSBOX_DEB"
       apt-get install -f -y "$SYSBOX_DEB" || dpkg -i "$SYSBOX_DEB" && apt-get install -f -y
       rm -f "$SYSBOX_DEB"
@@ -686,7 +686,7 @@ if ! docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-run
   echo "Installing Sysbox ${sysboxTag} via .deb package..."
   ARCH=$(dpkg --print-architecture)
   SYSBOX_DEB="/tmp/sysbox-ce.deb"
-  curl -fsSL "https://downloads.nestybox.com/sysbox/releases/${sysboxTag}/sysbox-ce_${sysboxBare}.linux_\${ARCH}.deb" \\
+  curl -fsSL "https://github.com/nestybox/sysbox/releases/download/${sysboxTag}/sysbox-ce_${sysboxBare}.linux_\${ARCH}.deb" \\
     -o "$SYSBOX_DEB"
   dpkg -i "$SYSBOX_DEB" || apt-get install -f -y
   rm -f "$SYSBOX_DEB"
@@ -851,32 +851,35 @@ set -euo pipefail
 # ── SigV4 helper function ─────────────────────────────────────────────
 # Fetches a secret value from AWS Secrets Manager using SigV4 signed requests.
 # Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN in env.
+# Compatible with Python 3.10+ (no dict access in f-strings).
 fetch_secret_value() {
   python3 -c "
 import json, urllib.request, datetime, hashlib, hmac, os
 region='${region}'
 secret_id='${secretName}'
-host=f'secretsmanager.{region}.amazonaws.com'
+host='secretsmanager.' + region + '.amazonaws.com'
+access_key=os.environ.get('AWS_ACCESS_KEY_ID','')
+secret_key=os.environ.get('AWS_SECRET_ACCESS_KEY','')
+session_token=os.environ.get('AWS_SESSION_TOKEN','')
 now=datetime.datetime.utcnow()
 datestamp=now.strftime('%Y%m%d')
 amzdate=now.strftime('%Y%m%dT%H%M%SZ')
 body=json.dumps({'SecretId': secret_id})
 content_type='application/x-amz-json-1.1'
 target='secretsmanager.GetSecretValue'
-canonical_uri='/'
-canonical_querystring=''
 payload_hash=hashlib.sha256(body.encode()).hexdigest()
-canonical_headers=f'content-type:{content_type}\nhost:{host}\nx-amz-date:{amzdate}\nx-amz-security-token:{os.environ[\"AWS_SESSION_TOKEN\"]}\nx-amz-target:{target}\n'
+canonical_headers='content-type:' + content_type + '\\nhost:' + host + '\\nx-amz-date:' + amzdate + '\\nx-amz-security-token:' + session_token + '\\nx-amz-target:' + target + '\\n'
 signed_headers='content-type;host;x-amz-date;x-amz-security-token;x-amz-target'
-canonical_request=f'POST\n{canonical_uri}\n{canonical_querystring}\n{canonical_headers}\n{signed_headers}\n{payload_hash}'
+canonical_request='POST\\n/\\n\\n' + canonical_headers + '\\n' + signed_headers + '\\n' + payload_hash
 algorithm='AWS4-HMAC-SHA256'
-scope=f'{datestamp}/{region}/secretsmanager/aws4_request'
-string_to_sign=f'{algorithm}\n{amzdate}\n{scope}\n'+hashlib.sha256(canonical_request.encode()).hexdigest()
+scope=datestamp + '/' + region + '/secretsmanager/aws4_request'
+string_to_sign=algorithm + '\\n' + amzdate + '\\n' + scope + '\\n' + hashlib.sha256(canonical_request.encode()).hexdigest()
 def sign(key,msg): return hmac.new(key,msg.encode(),'sha256').digest()
-k=sign(sign(sign(sign(('AWS4'+os.environ['AWS_SECRET_ACCESS_KEY']).encode(),datestamp),region),'secretsmanager'),'aws4_request')
+k=sign(sign(sign(sign(('AWS4' + secret_key).encode(),datestamp),region),'secretsmanager'),'aws4_request')
 sig=hmac.new(k,string_to_sign.encode(),'sha256').hexdigest()
-auth=f'{algorithm} Credential={os.environ[\"AWS_ACCESS_KEY_ID\"]}/{scope}, SignedHeaders={signed_headers}, Signature={sig}'
-req=urllib.request.Request(f'https://{host}/',data=body.encode(),headers={'Content-Type':content_type,'X-Amz-Date':amzdate,'X-Amz-Target':target,'X-Amz-Security-Token':os.environ['AWS_SESSION_TOKEN'],'Authorization':auth})
+auth=algorithm + ' Credential=' + access_key + '/' + scope + ', SignedHeaders=' + signed_headers + ', Signature=' + sig
+headers={'Content-Type':content_type,'X-Amz-Date':amzdate,'X-Amz-Target':target,'X-Amz-Security-Token':session_token,'Authorization':auth}
+req=urllib.request.Request('https://' + host + '/',data=body.encode(),headers=headers)
 resp=urllib.request.urlopen(req)
 data=json.loads(resp.read())
 print(data.get('SecretString','{}'))
@@ -921,7 +924,7 @@ if ! docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-run
   echo "Installing Sysbox ${sysboxTag} via .deb package..."
   ARCH=$(dpkg --print-architecture)
   SYSBOX_DEB="/tmp/sysbox-ce.deb"
-  curl -fsSL "https://downloads.nestybox.com/sysbox/releases/${sysboxTag}/sysbox-ce_${sysboxBare}.linux_\${ARCH}.deb" \\
+  curl -fsSL "https://github.com/nestybox/sysbox/releases/download/${sysboxTag}/sysbox-ce_${sysboxBare}.linux_\${ARCH}.deb" \\
     -o "$SYSBOX_DEB"
   dpkg -i "$SYSBOX_DEB" || apt-get install -f -y
   rm -f "$SYSBOX_DEB"

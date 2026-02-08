@@ -361,6 +361,9 @@ export const GatewayConfigSchema = z.object({
   port: z.number().int().min(1).max(65535).default(18789),
   auth: GatewayAuthSchema.optional(),
   host: z.string().default("127.0.0.1"),
+  mode: z.enum(["local", "remote"]).optional(),
+  bind: z.enum(["auto", "lan", "loopback", "custom", "tailnet"]).optional(),
+  trustedProxies: z.array(z.string()).optional(),
   controlUi: GatewayControlUiSchema.optional(),
 });
 export type GatewayConfig = z.infer<typeof GatewayConfigSchema>;
