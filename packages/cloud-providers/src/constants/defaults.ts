@@ -4,6 +4,7 @@
 
 // Container/Image defaults
 export const DEFAULT_OPENCLAW_IMAGE = "openclaw:local";
+export const DEFAULT_OPENCLAW_CLOUD_IMAGE = "ghcr.io/tomer-shavit/clawster/openclaw:latest";
 export const DEFAULT_CONTAINER_MEMORY = "512";
 export const DEFAULT_CONTAINER_CPU = "256";
 

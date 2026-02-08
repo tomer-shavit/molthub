@@ -5,8 +5,11 @@ import {
   buildKeyVaultFetchSection,
   buildOpenClawContainerSection,
   buildAzureCaddyCloudInit,
+  buildGceCaddyStartupScript,
+  buildAwsCaddyUserData,
 } from "./startup-script-builder";
 import type { AzureFilesConfig, AzureKeyVaultConfig, AzureCloudInitOptions } from "./startup-script-builder";
+import { DEFAULT_OPENCLAW_CLOUD_IMAGE } from "../constants/defaults";
 
 describe("Azure Caddy Cloud-Init Builders", () => {
   describe("buildAzureFilesMountSection", () => {
@@ -187,9 +190,22 @@ describe("Azure Caddy Cloud-Init Builders", () => {
       expect(result).toContain("-v /mnt/openclaw/.openclaw:/root/.openclaw");
     });
 
-    it("should use node:22 image", () => {
+    it("should use GHCR image by default", () => {
       const result = buildOpenClawContainerSection(18789, "/mnt/openclaw");
-      expect(result).toContain("node:22");
+      expect(result).toContain(DEFAULT_OPENCLAW_CLOUD_IMAGE);
+      expect(result).not.toContain("npx");
+    });
+
+    it("should accept custom imageUri", () => {
+      const result = buildOpenClawContainerSection(18789, "/mnt/openclaw", undefined, "custom-registry.io/openclaw:v2");
+      expect(result).toContain("custom-registry.io/openclaw:v2");
+      expect(result).not.toContain(DEFAULT_OPENCLAW_CLOUD_IMAGE);
+    });
+
+    it("should use openclaw command directly (pre-installed in image)", () => {
+      const result = buildOpenClawContainerSection(18789, "/mnt/openclaw");
+      expect(result).toContain("openclaw gateway --port 18789 --verbose");
+      expect(result).not.toContain("npx");
     });
 
     it("should use --restart=always", () => {
@@ -296,5 +312,123 @@ describe("Azure Caddy Cloud-Init Builders", () => {
       const result = buildAzureCaddyCloudInit(defaultOptions);
       expect(result).toContain("final_message:");
     });
+
+    it("should use GHCR image by default in container section", () => {
+      const result = buildAzureCaddyCloudInit(defaultOptions);
+      expect(result).toContain(DEFAULT_OPENCLAW_CLOUD_IMAGE);
+      expect(result).not.toContain("npx -y openclaw");
+    });
+
+    it("should accept custom imageUri", () => {
+      const result = buildAzureCaddyCloudInit({
+        ...defaultOptions,
+        imageUri: "my-registry.io/openclaw:v3",
+      });
+      expect(result).toContain("my-registry.io/openclaw:v3");
+      expect(result).not.toContain(DEFAULT_OPENCLAW_CLOUD_IMAGE);
+    });
+  });
+});
+
+describe("GCE Caddy Startup Script", () => {
+  const defaultOptions = {
+    gatewayPort: 18789,
+    secretName: "clawster-test-secret",
+  };
+
+  it("should pull GHCR image instead of building", () => {
+    const result = buildGceCaddyStartupScript(defaultOptions);
+    expect(result).toContain("docker pull");
+    expect(result).toContain(DEFAULT_OPENCLAW_CLOUD_IMAGE);
+    expect(result).not.toContain("docker build");
+    expect(result).not.toContain("npm install -g openclaw");
+  });
+
+  it("should use openclaw command directly (not npx)", () => {
+    const result = buildGceCaddyStartupScript(defaultOptions);
+    expect(result).toContain("openclaw gateway --port 18789 --verbose");
+    expect(result).not.toContain("npx");
+  });
+
+  it("should accept custom imageUri", () => {
+    const result = buildGceCaddyStartupScript({
+      ...defaultOptions,
+      imageUri: "custom-registry.io/openclaw:v2",
+    });
+    expect(result).toContain("custom-registry.io/openclaw:v2");
+    expect(result).not.toContain(DEFAULT_OPENCLAW_CLOUD_IMAGE);
+  });
+
+  it("should include idempotency guard", () => {
+    const result = buildGceCaddyStartupScript(defaultOptions);
+    expect(result).toContain("MARKER=");
+    expect(result).toContain("Already initialized");
+  });
+
+  it("should install sysbox, caddy, and fetch config", () => {
+    const result = buildGceCaddyStartupScript(defaultOptions);
+    expect(result).toContain("Install Sysbox");
+    expect(result).toContain("Install Caddy");
+    expect(result).toContain("secretmanager.googleapis.com");
+  });
+
+  it("should pass additional env vars", () => {
+    const result = buildGceCaddyStartupScript({
+      ...defaultOptions,
+      additionalEnv: { MY_VAR: "hello" },
+    });
+    expect(result).toContain('MY_VAR="hello"');
+  });
+});
+
+describe("AWS Caddy User Data Script", () => {
+  const defaultOptions = {
+    gatewayPort: 18789,
+    secretName: "clawster-test-secret",
+    region: "us-east-1",
+  };
+
+  it("should pull GHCR image instead of building", () => {
+    const result = buildAwsCaddyUserData(defaultOptions);
+    expect(result).toContain("docker pull");
+    expect(result).toContain(DEFAULT_OPENCLAW_CLOUD_IMAGE);
+    expect(result).not.toContain("docker build");
+    expect(result).not.toContain("npm install -g openclaw");
+  });
+
+  it("should use openclaw command directly (not npx)", () => {
+    const result = buildAwsCaddyUserData(defaultOptions);
+    expect(result).toContain("openclaw gateway --port 18789 --verbose");
+    expect(result).not.toContain("npx");
+  });
+
+  it("should accept custom imageUri", () => {
+    const result = buildAwsCaddyUserData({
+      ...defaultOptions,
+      imageUri: "custom-registry.io/openclaw:v2",
+    });
+    expect(result).toContain("custom-registry.io/openclaw:v2");
+    expect(result).not.toContain(DEFAULT_OPENCLAW_CLOUD_IMAGE);
+  });
+
+  it("should include SigV4 helper and idempotency guard", () => {
+    const result = buildAwsCaddyUserData(defaultOptions);
+    expect(result).toContain("fetch_secret_value");
+    expect(result).toContain("MARKER=");
+  });
+
+  it("should install sysbox, caddy, and fetch config", () => {
+    const result = buildAwsCaddyUserData(defaultOptions);
+    expect(result).toContain("Install Sysbox");
+    expect(result).toContain("Install Caddy");
+    expect(result).toContain("secretsmanager");
+  });
+
+  it("should pass additional env vars", () => {
+    const result = buildAwsCaddyUserData({
+      ...defaultOptions,
+      additionalEnv: { MY_VAR: "hello" },
+    });
+    expect(result).toContain('MY_VAR="hello"');
   });
 });

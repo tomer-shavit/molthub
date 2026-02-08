@@ -9,6 +9,7 @@
 const DEFAULT_SYSBOX_VERSION = "0.6.4";
 
 import type { MiddlewareAssignment } from "../interface/deployment-target";
+import { DEFAULT_OPENCLAW_CLOUD_IMAGE } from "../constants/defaults";
 
 /** Configuration options for startup scripts */
 export interface StartupScriptOptions {
@@ -100,7 +101,7 @@ docker run -d \\
   -e OPENCLAW_GATEWAY_PORT=${options.gatewayPort} \\
   -e OPENCLAW_GATEWAY_TOKEN="${options.gatewayToken ?? ""}"${envVars ? ` \\\n  ${envVars}` : ""} \\
   ${options.imageUri} \\
-  sh -c "npx -y openclaw@latest gateway --port ${options.gatewayPort} --verbose"`;
+  openclaw gateway --port ${options.gatewayPort} --verbose`;
 }
 
 /**
@@ -152,7 +153,7 @@ docker run -d \\
   -e OPENCLAW_GATEWAY_PORT=18789 \\
   -e OPENCLAW_GATEWAY_TOKEN="${options.gatewayToken ?? ""}"${envVars ? ` \\\n  ${envVars}` : ""} \\
   ${options.imageUri} \\
-  sh -c "npx -y openclaw@latest gateway --port 18789 --verbose"
+  openclaw gateway --port 18789 --verbose
 
 # Run middleware proxy on the same network, exposed to host
 MW_CONFIG='${proxyConfig.replace(/'/g, "'\\''")}'
@@ -258,7 +259,7 @@ ${sysboxBlock}
       -e OPENCLAW_GATEWAY_PORT=18789 \\
       -e OPENCLAW_GATEWAY_TOKEN="${options.gatewayToken ?? ""}"${envLines ? ` \\\n      ${envLines}` : ""} \\
       ${options.imageUri} \\
-      sh -c "npx -y openclaw@latest gateway --port 18789 --verbose"
+      openclaw gateway --port 18789 --verbose
   - |
     MW_CONFIG='${proxyConfig.replace(/'/g, "'\\''")}'
     docker run -d \\
@@ -304,7 +305,7 @@ ${sysboxBlock}
       -e OPENCLAW_GATEWAY_PORT=${options.gatewayPort} \\
       -e OPENCLAW_GATEWAY_TOKEN="${options.gatewayToken ?? ""}"${envLines ? ` \\\n      ${envLines}` : ""} \\
       ${options.imageUri} \\
-      sh -c "npx -y openclaw@latest gateway --port ${options.gatewayPort} --verbose"
+      openclaw gateway --port ${options.gatewayPort} --verbose
 
 final_message: "OpenClaw gateway started on port ${options.gatewayPort}"
 `;
@@ -334,6 +335,7 @@ export interface AzureCloudInitOptions {
   readonly azureFiles: AzureFilesConfig;
   readonly keyVault?: AzureKeyVaultConfig;
   readonly caddyDomain?: string;
+  readonly imageUri?: string;
   readonly additionalEnv?: Record<string, string>;
   readonly middlewareConfig?: {
     middlewares: MiddlewareAssignment[];
@@ -492,7 +494,8 @@ export function buildKeyVaultFetchSection(kv: AzureKeyVaultConfig, configPath: s
 export function buildOpenClawContainerSection(
   gatewayPort: number,
   mountPath: string,
-  additionalEnv?: Record<string, string>
+  additionalEnv?: Record<string, string>,
+  imageUri: string = DEFAULT_OPENCLAW_CLOUD_IMAGE,
 ): string {
   const envLines = Object.entries(additionalEnv ?? {})
     .map(([k, v]) => `-e ${k}="${v.replace(/["\\$`]/g, "\\$&")}"`)
@@ -517,8 +520,8 @@ export function buildOpenClawContainerSection(
       -v ${mountPath}/.openclaw:/root/.openclaw \\
       -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
       -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envLines ? ` \\\n      ${envLines}` : ""} \\
-      node:22 \\
-      sh -c "npx -y openclaw@latest gateway --port ${gatewayPort} --verbose"
+      ${imageUri} \\
+      openclaw gateway --port ${gatewayPort} --verbose
     echo "OpenClaw container started on port ${gatewayPort}"`;
 }
 
@@ -531,7 +534,7 @@ export function buildOpenClawContainerSection(
  * Sandbox: Sysbox .deb install
  */
 export function buildAzureCaddyCloudInit(options: AzureCloudInitOptions): string {
-  const { azureFiles, keyVault, gatewayPort, caddyDomain, additionalEnv, sysboxVersion } = options;
+  const { azureFiles, keyVault, gatewayPort, caddyDomain, imageUri, additionalEnv, sysboxVersion } = options;
   const configPath = `${azureFiles.mountPath}/.openclaw/openclaw.json`;
 
   const sections = [
@@ -556,7 +559,7 @@ export function buildAzureCaddyCloudInit(options: AzureCloudInitOptions): string
     buildCaddySection(gatewayPort, caddyDomain),
     "",
     ...(keyVault ? [buildKeyVaultFetchSection(keyVault, configPath), ""] : []),
-    buildOpenClawContainerSection(gatewayPort, azureFiles.mountPath, additionalEnv),
+    buildOpenClawContainerSection(gatewayPort, azureFiles.mountPath, additionalEnv, imageUri),
   ];
 
   return `#cloud-config
@@ -612,8 +615,8 @@ export interface GceCaddyStartupOptions {
   readonly sysboxVersion?: string;
   /** Custom domain for Caddy auto-HTTPS */
   readonly caddyDomain?: string;
-  /** OpenClaw version to pre-install (default: "latest") */
-  readonly openclawVersion?: string;
+  /** Pre-built OpenClaw container image URI (default: GHCR) */
+  readonly imageUri?: string;
   /** Additional environment variables for the container */
   readonly additionalEnv?: Record<string, string>;
 }
@@ -633,7 +636,7 @@ export function buildGceCaddyStartupScript(options: GceCaddyStartupOptions): str
     secretName,
     sysboxVersion = "0.6.7",
     caddyDomain,
-    openclawVersion = "latest",
+    imageUri = DEFAULT_OPENCLAW_CLOUD_IMAGE,
     additionalEnv,
   } = options;
 
@@ -763,19 +766,11 @@ else
   echo '{}' > "\${CONFIG_DIR}/openclaw.json"
 fi
 
-# ── 7. Build pre-built OpenClaw image (cached after first boot) ───────
-OPENCLAW_IMAGE="clawster-openclaw"
-if ! docker image inspect "$OPENCLAW_IMAGE" >/dev/null 2>&1; then
-  echo "Building OpenClaw image (first boot only, ~2 min)..."
-  docker build -t "$OPENCLAW_IMAGE" - <<'DOCKERFILE'
-FROM node:22
-RUN apt-get update && apt-get install -y git docker.io && rm -rf /var/lib/apt/lists/*
-RUN npm install -g openclaw@${openclawVersion}
-DOCKERFILE
-  echo "OpenClaw image built successfully"
-else
-  echo "OpenClaw image already cached"
-fi
+# ── 7. Pull pre-built OpenClaw image from GHCR ────────────────────────
+OPENCLAW_IMAGE="${imageUri}"
+echo "Pulling OpenClaw image: $OPENCLAW_IMAGE"
+docker pull "$OPENCLAW_IMAGE"
+echo "OpenClaw image pulled successfully"
 
 # ── 8. Run OpenClaw container ─────────────────────────────────────────
 DOCKER_RUNTIME=""
@@ -818,8 +813,8 @@ export interface AwsCaddyUserDataOptions {
   readonly sysboxVersion?: string;
   /** Custom domain for Caddy auto-HTTPS */
   readonly customDomain?: string;
-  /** OpenClaw version to pre-install (default: "latest") */
-  readonly openclawVersion?: string;
+  /** Pre-built OpenClaw container image URI (default: GHCR) */
+  readonly imageUri?: string;
   /** Additional environment variables for the container */
   readonly additionalEnv?: Record<string, string>;
 }
@@ -841,7 +836,7 @@ export function buildAwsCaddyUserData(options: AwsCaddyUserDataOptions): string 
     region,
     sysboxVersion = "0.6.7",
     customDomain,
-    openclawVersion = "latest",
+    imageUri = DEFAULT_OPENCLAW_CLOUD_IMAGE,
     additionalEnv,
   } = options;
 
@@ -1010,14 +1005,11 @@ else
   echo '{}' > "\${CONFIG_DIR}/openclaw.json"
 fi
 
-# ── 6. Pre-build OpenClaw Docker image ────────────────────────────────
-echo "Pre-building OpenClaw Docker image..."
-docker build -t openclaw-prebuilt:latest - <<'DOCKERFILE'
-FROM node:22
-RUN apt-get update && apt-get install -y git docker.io && rm -rf /var/lib/apt/lists/*
-RUN npm install -g openclaw@${openclawVersion}
-DOCKERFILE
-echo "OpenClaw image pre-built"
+# ── 6. Pull pre-built OpenClaw image from GHCR ────────────────────────
+OPENCLAW_IMAGE="${imageUri}"
+echo "Pulling OpenClaw image: $OPENCLAW_IMAGE"
+docker pull "$OPENCLAW_IMAGE"
+echo "OpenClaw image pulled successfully"
 
 # ── 7. Run OpenClaw container ─────────────────────────────────────────
 DOCKER_RUNTIME=""
@@ -1037,8 +1029,8 @@ docker run -d \\
   -v /opt/openclaw-data/.openclaw:/root/.openclaw \\
   -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
   -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envFlags ? ` \\\n  ${envFlags}` : ""} \\
-  openclaw-prebuilt:latest \\
-  sh -c "openclaw gateway --port ${gatewayPort} --verbose"
+  $OPENCLAW_IMAGE \\
+  openclaw gateway --port ${gatewayPort} --verbose
 
 # ── 8. Mark as initialized ────────────────────────────────────────────
 touch "$MARKER"
