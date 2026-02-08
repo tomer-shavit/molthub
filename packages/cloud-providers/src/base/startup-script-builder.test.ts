@@ -64,13 +64,13 @@ describe("Azure Caddy Cloud-Init Builders", () => {
     it("should use default version 0.6.4", () => {
       const result = buildSysboxDebSection();
       expect(result).toContain("v0.6.4");
-      expect(result).toContain("sysbox-ce_0.6.4-0");
+      expect(result).toContain("sysbox-ce_0.6.4.linux_");
     });
 
     it("should accept custom version", () => {
       const result = buildSysboxDebSection("0.7.0");
       expect(result).toContain("v0.7.0");
-      expect(result).toContain("sysbox-ce_0.7.0-0");
+      expect(result).toContain("sysbox-ce_0.7.0.linux_");
     });
 
     it("should handle v-prefixed version", () => {
@@ -82,7 +82,7 @@ describe("Azure Caddy Cloud-Init Builders", () => {
 
     it("should download from nestybox releases", () => {
       const result = buildSysboxDebSection();
-      expect(result).toContain("downloads.nestybox.com/sysbox/releases");
+      expect(result).toContain("github.com/nestybox/sysbox/releases");
     });
 
     it("should detect architecture dynamically", () => {
