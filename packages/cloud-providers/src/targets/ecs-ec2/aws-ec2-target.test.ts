@@ -1112,6 +1112,9 @@ describe("AwsEc2Target", () => {
       mockCloudWatchLogs.deleteLogGroup.mockImplementation(async () => {
         callOrder.push("deleteLogGroup");
       });
+      mockNetworkManager.deleteSharedInfraIfOrphaned.mockImplementation(async () => {
+        callOrder.push("deleteSharedInfraIfOrphaned");
+      });
 
       await target.destroy();
 
@@ -1121,6 +1124,7 @@ describe("AwsEc2Target", () => {
         "deleteLaunchTemplate",
         "deleteSecret",
         "deleteLogGroup",
+        "deleteSharedInfraIfOrphaned",
       ]);
     });
 
@@ -1193,6 +1197,23 @@ describe("AwsEc2Target", () => {
       await target.destroy();
 
       expect(targetAny.cachedPublicIp).toBeUndefined();
+    });
+
+    it("should call deleteSharedInfraIfOrphaned after per-bot cleanup", async () => {
+      const target = createTarget();
+
+      await target.destroy();
+
+      expect(mockNetworkManager.deleteSharedInfraIfOrphaned).toHaveBeenCalledTimes(1);
+    });
+
+    it("should continue if shared infra cleanup fails", async () => {
+      const target = createTarget();
+      mockNetworkManager.deleteSharedInfraIfOrphaned.mockRejectedValue(
+        new Error("VPC still has dependencies")
+      );
+
+      await expect(target.destroy()).resolves.not.toThrow();
     });
 
     it("should throw when profileName is not set", async () => {
@@ -1365,10 +1386,11 @@ describe("AwsEc2Target", () => {
 
       await target.destroy();
 
-      expect(logMessages.some((m) => m.includes("[1/4]"))).toBe(true);
-      expect(logMessages.some((m) => m.includes("[2/4]"))).toBe(true);
-      expect(logMessages.some((m) => m.includes("[3/4]"))).toBe(true);
-      expect(logMessages.some((m) => m.includes("[4/4]"))).toBe(true);
+      expect(logMessages.some((m) => m.includes("[1/5]"))).toBe(true);
+      expect(logMessages.some((m) => m.includes("[2/5]"))).toBe(true);
+      expect(logMessages.some((m) => m.includes("[3/5]"))).toBe(true);
+      expect(logMessages.some((m) => m.includes("[4/5]"))).toBe(true);
+      expect(logMessages.some((m) => m.includes("[5/5]"))).toBe(true);
       expect(logMessages.some((m) => m.includes("Destroy complete"))).toBe(true);
     });
   });

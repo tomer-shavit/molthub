@@ -64,4 +64,10 @@ export interface IAzureSharedInfraManager {
    * Idempotent — silently handles existing assignments.
    */
   assignRoles(principalId: string, storageAccountId: string, keyVaultId: string): Promise<void>;
+
+  /**
+   * Delete shared infrastructure (Storage Account, Managed Identity, Key Vault)
+   * if no Clawster VMs remain in the resource group.
+   */
+  deleteSharedInfraIfOrphaned(): Promise<void>;
 }

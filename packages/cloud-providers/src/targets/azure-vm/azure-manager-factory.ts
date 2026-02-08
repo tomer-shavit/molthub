@@ -94,6 +94,7 @@ export class AzureManagerFactory {
       kvMgmtClient,
       msiClient,
       authClient,
+      computeClient,
       subscriptionId,
       resourceGroup,
       location,

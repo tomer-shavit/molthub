@@ -103,18 +103,7 @@ export class GceManagerFactory {
       log
     );
 
-    // Network manager
-    const networkManager = new GceNetworkManager(
-      networksClient,
-      subnetworksClient,
-      firewallsClient,
-      operationManager,
-      projectId,
-      region,
-      log
-    );
-
-    // Compute manager (MIG-based)
+    // Compute manager (MIG-based) — created before network manager (for orphan check)
     const computeManager = new GceComputeManager(
       instancesClient,
       templatesClient,
@@ -123,6 +112,18 @@ export class GceManagerFactory {
       operationManager,
       projectId,
       zone,
+      region,
+      log
+    );
+
+    // Network manager — needs computeManager for orphan check
+    const networkManager = new GceNetworkManager(
+      networksClient,
+      subnetworksClient,
+      firewallsClient,
+      operationManager,
+      computeManager,
+      projectId,
       region,
       log
     );

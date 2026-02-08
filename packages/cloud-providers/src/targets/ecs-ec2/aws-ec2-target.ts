@@ -322,31 +322,39 @@ export class AwsEc2Target
     const botName = this.requireProfileName();
     const names = this.deriveNames(botName);
 
-    this.log("[1/4] Terminating instance...");
+    this.log("[1/5] Terminating instance...");
     const instanceId = await this.computeManager.findInstanceByTag(botName);
     if (instanceId) {
       await this.computeManager.terminateInstance(instanceId);
     }
 
-    this.log("[2/4] Deleting launch template...");
+    this.log("[2/5] Deleting launch template...");
     await this.computeManager.deleteLaunchTemplate(names.launchTemplate);
 
-    this.log("[3/4] Deleting secret...");
+    this.log("[3/5] Deleting secret...");
     try {
       await this.secretsManager.deleteSecret(names.secretName, true);
     } catch {
       this.log("  Secret already deleted");
     }
 
-    this.log("[4/4] Deleting log group...");
+    this.log("[4/5] Deleting log group...");
     try {
       await this.cloudWatchLogs.deleteLogGroup(names.logGroup);
     } catch {
       this.log("  Log group already deleted");
     }
 
+    this.log("[5/5] Checking shared infrastructure...");
+    try {
+      await this.networkManager.deleteSharedInfraIfOrphaned();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.log(`  Shared infra cleanup failed (non-fatal): ${msg}`);
+    }
+
     this.cachedPublicIp = undefined;
-    this.log("Destroy complete — shared infra preserved for reuse");
+    this.log("Destroy complete");
   }
 
   // ── SelfDescribingDeploymentTarget ───────────────────────────────────

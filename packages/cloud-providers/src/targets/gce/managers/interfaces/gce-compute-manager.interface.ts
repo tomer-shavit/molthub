@@ -76,4 +76,9 @@ export interface IGceComputeManager {
 
   /** Get VM instance status (used for detailed status checks). */
   getInstanceStatus(instanceName: string): Promise<VmStatus>;
+
+  // -- MIG listing --
+
+  /** List all MIG names in the zone. */
+  listMigs(): Promise<string[]>;
 }

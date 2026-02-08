@@ -361,6 +361,22 @@ export class GceComputeManager implements IGceComputeManager {
     return (instance.status as VmStatus) ?? "UNKNOWN";
   }
 
+  // -- MIG listing --
+
+  async listMigs(): Promise<string[]> {
+    const names: string[] = [];
+    const migs = this.migClient.listAsync({
+      project: this.project,
+      zone: this.zone,
+    });
+    for await (const mig of migs) {
+      if (mig.name) {
+        names.push(mig.name);
+      }
+    }
+    return names;
+  }
+
   private isNotFoundError(error: unknown): boolean {
     return (
       error instanceof Error &&

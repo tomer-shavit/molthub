@@ -588,24 +588,24 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
     this.log(`Destroying Azure resources for: ${this.vmName}`);
 
     // 1. Delete VM
-    this.log(`[1/5] Deleting VM: ${this.vmName}`);
+    this.log(`[1/7] Deleting VM: ${this.vmName}`);
     await this.computeManager.deleteVm(this.vmName);
 
     // 2. Delete NIC (must happen after VM)
-    this.log(`[2/5] Deleting NIC: ${this.nicName}`);
+    this.log(`[2/7] Deleting NIC: ${this.nicName}`);
     await this.computeManager.deleteNic(this.nicName);
 
     // 3. Delete OS disk
-    this.log(`[3/5] Deleting OS disk: ${this.vmName}-osdisk`);
+    this.log(`[3/7] Deleting OS disk: ${this.vmName}-osdisk`);
     await this.computeManager.deleteDisk(`${this.vmName}-osdisk`);
 
     // 4. Delete public IP (must happen after NIC)
-    this.log(`[4/5] Deleting public IP: ${this.publicIpName}`);
+    this.log(`[4/7] Deleting public IP: ${this.publicIpName}`);
     await this.networkManager.deletePublicIp(this.publicIpName);
 
     // 5. Delete Key Vault secret
     if (this.keyVaultClient) {
-      this.log(`[5/5] Deleting Key Vault secret: ${this.secretName}`);
+      this.log(`[5/7] Deleting Key Vault secret: ${this.secretName}`);
       try {
         await this.keyVaultClient.beginDeleteSecret(this.secretName);
         this.log(`Key Vault secret deleted`);
@@ -613,10 +613,42 @@ export class AzureVmTarget extends BaseDeploymentTarget implements SelfDescribin
         this.log(`Key Vault secret not found (skipped)`);
       }
     } else {
-      this.log(`[5/5] Key Vault not configured (skipped)`);
+      this.log(`[5/7] Key Vault not configured (skipped)`);
     }
 
-    this.log(`Azure resources destroyed (VNet/NSG/Storage preserved for reuse)`);
+    // 6. Delete network infrastructure if orphaned
+    this.log(`[6/7] Checking network infrastructure...`);
+    try {
+      // Check if any other Clawster VMs exist
+      const vms = this.computeClient.virtualMachines.list(this.config.resourceGroup);
+      let hasOtherVms = false;
+      for await (const vm of vms) {
+        if (vm.name?.startsWith("clawster-")) {
+          hasOtherVms = true;
+          break;
+        }
+      }
+      if (!hasOtherVms) {
+        await this.networkManager.deleteVNet(this.vnetName);
+        await this.networkManager.deleteNSG(this.nsgName);
+      } else {
+        this.log(`Other Clawster VMs exist — network infra preserved`);
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.log(`Network infra cleanup failed (non-fatal): ${errorMsg}`);
+    }
+
+    // 7. Delete shared infrastructure if orphaned (Storage, MI, Key Vault)
+    this.log(`[7/7] Checking shared infrastructure...`);
+    try {
+      await this.sharedInfraManager.deleteSharedInfraIfOrphaned();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.log(`Shared infra cleanup failed (non-fatal): ${errorMsg}`);
+    }
+
+    this.log(`Azure resources destroyed`);
   }
 
   // ── Private helpers ─────────────────────────────────────────────────

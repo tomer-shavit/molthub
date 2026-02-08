@@ -446,31 +446,31 @@ export class GceTarget extends BaseDeploymentTarget implements SelfDescribingDep
     this.log(`Destroying GCE resources for: ${this.instanceName}`);
 
     // 1. Delete MIG (deletes managed instances)
-    this.log(`[1/6] Deleting MIG: ${this.migName}`);
+    this.log(`[1/7] Deleting MIG: ${this.migName}`);
     await this.computeManager.deleteMig(this.migName);
     this.log(`MIG deleted`);
 
     // 2. Delete health check
-    this.log(`[2/6] Deleting health check: ${this.healthCheckName}`);
+    this.log(`[2/7] Deleting health check: ${this.healthCheckName}`);
     await this.computeManager.deleteHealthCheck(this.healthCheckName);
     this.log(`Health check deleted`);
 
     // 3. Delete instance template
-    this.log(`[3/6] Deleting instance template: ${this.templateName}`);
+    this.log(`[3/7] Deleting instance template: ${this.templateName}`);
     await this.computeManager.deleteInstanceTemplate(this.templateName);
     this.log(`Instance template deleted`);
 
     // 4. Delete firewalls
-    this.log(`[4/6] Deleting HTTP firewall: ${this.firewallHttpName}`);
+    this.log(`[4/7] Deleting HTTP firewall: ${this.firewallHttpName}`);
     await this.networkManager.deleteFirewall(this.firewallHttpName);
     this.log(`HTTP firewall deleted`);
 
-    this.log(`[5/6] Deleting SSH firewall: ${this.firewallSshName}`);
+    this.log(`[5/7] Deleting SSH firewall: ${this.firewallSshName}`);
     await this.networkManager.deleteFirewall(this.firewallSshName);
     this.log(`SSH firewall deleted`);
 
     // 6. Delete secret
-    this.log(`[6/6] Deleting secret: ${this.secretName}`);
+    this.log(`[6/7] Deleting secret: ${this.secretName}`);
     try {
       await this.secretManager.deleteSecret(this.secretName);
       this.log(`Secret deleted`);
@@ -478,7 +478,16 @@ export class GceTarget extends BaseDeploymentTarget implements SelfDescribingDep
       this.log(`Secret not found (skipped)`);
     }
 
-    this.log(`GCE resources destroyed (VPC/Subnet preserved for reuse)`);
+    // 7. Clean up shared infrastructure if orphaned
+    this.log(`[7/7] Checking shared infrastructure...`);
+    try {
+      await this.networkManager.deleteSharedInfraIfOrphaned(this.vpcNetworkName, this.subnetName);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.log(`Shared infra cleanup failed (non-fatal): ${errorMsg}`);
+    }
+
+    this.log(`GCE resources destroyed`);
   }
 
   // ── updateResources ─────────────────────────────────────────────────

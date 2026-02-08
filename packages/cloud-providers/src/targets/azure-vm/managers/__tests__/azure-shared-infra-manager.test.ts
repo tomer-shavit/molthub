@@ -54,18 +54,27 @@ function createManager(overrides?: {
   const authClient = overrides?.authClient ?? createMockAuthClient();
   const log: AzureLogCallback = jest.fn();
 
+  const computeClient = {
+    virtualMachines: {
+      list: jest.fn().mockReturnValue({
+        [Symbol.asyncIterator]: async function* () {},
+      }),
+    },
+  };
+
   const manager = new AzureSharedInfraManager(
     storageClient as never,
     kvMgmtClient as never,
     msiClient as never,
     authClient as never,
+    computeClient as never,
     "sub-123",
     "test-rg",
     "eastus",
     log
   );
 
-  return { manager, storageClient, kvMgmtClient, msiClient, authClient, log };
+  return { manager, storageClient, kvMgmtClient, msiClient, authClient, computeClient, log };
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────

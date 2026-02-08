@@ -21,6 +21,9 @@ jest.mock("@azure/arm-compute", () => ({
       beginRunCommandAndWait: jest.fn().mockResolvedValue({
         value: [{ message: "Success" }],
       }),
+      list: jest.fn().mockReturnValue({
+        [Symbol.asyncIterator]: async function* () {},
+      }),
     },
     disks: {
       beginDeleteAndWait: jest.fn().mockResolvedValue({}),
@@ -109,6 +112,7 @@ function createMockSharedInfraManager(): jest.Mocked<IAzureSharedInfraManager> {
       uri: "https://test-vault.vault.azure.net",
     }),
     assignRoles: jest.fn().mockResolvedValue(undefined),
+    deleteSharedInfraIfOrphaned: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -600,14 +604,49 @@ describe("AzureVmTarget", () => {
       expect(networkManager.deletePublicIp).toHaveBeenCalledWith("clawster-pip-test-bot");
     });
 
-    it("should not delete shared resources (VNet, NSG)", async () => {
-      const { target, networkManager } = createTarget();
+    it("should delete shared resources when no other Clawster VMs exist", async () => {
+      const { target, networkManager, sharedInfraManager } = createTarget();
       await target.install({ profileName: "test-bot", port: 18789 });
 
       await target.destroy();
 
+      // Network infra should be cleaned up since no other Clawster VMs remain
+      expect(networkManager.deleteVNet).toHaveBeenCalledWith("clawster-vnet");
+      expect(networkManager.deleteNSG).toHaveBeenCalledWith("clawster-nsg");
+      // Shared infra manager should also check for orphans
+      expect(sharedInfraManager.deleteSharedInfraIfOrphaned).toHaveBeenCalledTimes(1);
+    });
+
+    it("should preserve shared resources when other Clawster VMs exist", async () => {
+      const { target, networkManager, sharedInfraManager } = createTarget();
+      await target.install({ profileName: "test-bot", port: 18789 });
+
+      // Mock the compute client to return another Clawster VM
+      // Need to access the computeClient used by the target
+      const targetAny = target as unknown as { computeClient: { virtualMachines: { list: jest.Mock } } };
+      targetAny.computeClient.virtualMachines.list.mockReturnValue({
+        [Symbol.asyncIterator]: async function* () {
+          yield { name: "clawster-other-bot" };
+        },
+      });
+
+      await target.destroy();
+
+      // Network infra should NOT be deleted since another VM exists
       expect(networkManager.deleteVNet).not.toHaveBeenCalled();
       expect(networkManager.deleteNSG).not.toHaveBeenCalled();
+      // But shared infra manager orphan check should still be called
+      expect(sharedInfraManager.deleteSharedInfraIfOrphaned).toHaveBeenCalledTimes(1);
+    });
+
+    it("should not throw when shared infra cleanup fails", async () => {
+      const { target, sharedInfraManager } = createTarget();
+      await target.install({ profileName: "test-bot", port: 18789 });
+      (sharedInfraManager.deleteSharedInfraIfOrphaned as jest.Mock).mockRejectedValue(
+        new Error("Storage account locked")
+      );
+
+      await expect(target.destroy()).resolves.not.toThrow();
     });
   });
 

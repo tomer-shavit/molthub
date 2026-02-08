@@ -158,9 +158,9 @@ This pattern is zero-dependency (only `curl` + `jq`, both installed in step 1) a
 |----------|---------|------|
 | MIG + Instance Template | e2-medium (2 vCPU, 4GB RAM) with auto-healing | **$24.46/mo** |
 | Boot disk (30 GB pd-balanced) | OS + Docker + Sysbox + Caddy + OpenClaw image | **$2.04/mo** |
-| Ephemeral public IP | Inbound + outbound internet | **Free** |
+| Ephemeral public IP | Inbound + outbound internet | **$3.65/mo** ($0.005/hour) |
 | Secret Manager secret | OpenClaw config JSON | **~$0.06/mo** |
-| **Total** | | **~$26.56/mo** |
+| **Total** | | **~$30.21/mo** |
 
 ---
 
@@ -181,29 +181,29 @@ There is **no light tier**. The minimum viable VM is e2-medium (4GB).
 | Tier | VM Size | vCPU | RAM | Cost/mo | Notes |
 |------|---------|------|-----|---------|-------|
 | ~~Light~~ | ~~e2-small~~ | ~~2~~ | ~~2 GB~~ | - | **Eliminated** — OOMs during npm install |
-| **Standard** | **e2-medium** | **2** | **4 GB** | **$26/mo** | Minimum viable. Handles 1-3 concurrent sandboxes. |
-| Performance | e2-standard-2 | 2 | 8 GB | ~$49/mo | Heavy sandbox usage, 5+ concurrent sandboxes |
+| **Standard** | **e2-medium** | **2** | **4 GB** | **~$30/mo** | Minimum viable. Handles 1-3 concurrent sandboxes. |
+| Performance | e2-standard-2 | 2 | 8 GB | ~$53/mo | Heavy sandbox usage, 5+ concurrent sandboxes |
 
-### Multi-Cloud Comparison
+### Multi-Cloud Comparison (Caddy-on-VM)
 
-| Bots | GCE (Caddy) | AWS (ECS EC2) | Azure (VMSS) | GCE Savings vs AWS |
-|------|-------------|---------------|--------------|-------------------|
-| 1 | **$27** | $49 | $37 | **45%** |
-| 5 | **$133** | $217 | $183 | **39%** |
-| 10 | **$266** | $427 | $367 | **38%** |
+| Bots | AWS EC2 | GCE | Azure VMSS | AWS Advantage |
+|------|---------|-----|------------|---------------|
+| 1 | **$22** | $30 | $37 | **Cheapest** |
+| 5 | **$108** | $150 | $183 | **28% cheaper** |
+| 10 | **$216** | $300 | $367 | **28% cheaper** |
 
-### Why GCE is Cheapest
+### Cost Breakdown Comparison
 
-| Cost Component | GCE | AWS | Azure |
-|----------------|-----|-----|-------|
-| Load Balancer | **$0** (Caddy) | $24/bot (ALB + IPv4) | $0 (Caddy) |
-| NAT/outbound | **$0** (ephemeral IP) | $7/mo (NAT Instance) | $0 (public IP) |
-| Public IP | **Free** (ephemeral) | N/A (behind ALB) | $3.65/mo (static) |
-| VM | $24.46/mo (e2-medium) | $15/mo (t3.small) | $30.37/mo (B2s) |
-| Disk | $2.04/mo (30GB) | $2.40/mo (30GB) | $2.40/mo (30GB) |
-| Secrets | $0.06/mo | $0.40/mo | ~$0.03/mo |
+| Cost Component | AWS EC2 | GCE | Azure VMSS |
+|----------------|---------|-----|------------|
+| Load Balancer | **$0** (Caddy) | **$0** (Caddy) | **$0** (Caddy) |
+| VM | $15.18/mo (t3.small, 2GB) | $24.46/mo (e2-medium, 4GB) | $30.37/mo (B2s, 4GB) |
+| Public IP | $3.65/mo (ephemeral) | $3.65/mo (ephemeral) | $3.65/mo (static) |
+| Disk | $2.40/mo (30GB gp3) | $2.04/mo (30GB pd-balanced) | $2.40/mo (30GB) |
+| Secrets | $0.40/mo | $0.06/mo | ~$0.03/mo |
+| **Total/bot** | **$21.63** | **$30.21** | **$36.45** |
 
-GCE's VM is more expensive than AWS, but the **zero LB + zero NAT** savings more than compensate.
+**AWS is cheapest** despite having less RAM (2GB vs 4GB) due to lower VM pricing. GCE requires 4GB minimum (2GB OOMs).
 
 ---
 

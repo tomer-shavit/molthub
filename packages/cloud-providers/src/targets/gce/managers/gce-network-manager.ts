@@ -11,7 +11,7 @@ import {
   FirewallsClient,
 } from "@google-cloud/compute";
 import type { VpcOptions, FirewallRule, GceLogCallback } from "../types";
-import type { IGceNetworkManager, IGceOperationManager } from "./interfaces";
+import type { IGceComputeManager, IGceNetworkManager, IGceOperationManager } from "./interfaces";
 
 /**
  * Manages GCE networking resources.
@@ -22,6 +22,7 @@ export class GceNetworkManager implements IGceNetworkManager {
     private readonly subnetworksClient: SubnetworksClient,
     private readonly firewallsClient: FirewallsClient,
     private readonly operationManager: IGceOperationManager,
+    private readonly computeManager: IGceComputeManager,
     private readonly project: string,
     private readonly region: string,
     private readonly log: GceLogCallback
@@ -187,6 +188,36 @@ export class GceNetworkManager implements IGceNetworkManager {
     } catch (error: unknown) {
       if (!this.isNotFoundError(error)) throw error;
     }
+  }
+
+  async deleteSharedInfraIfOrphaned(vpcName: string, subnetName: string): Promise<void> {
+    const migs = await this.computeManager.listMigs();
+    const clawsterMigs = migs.filter(name => name.startsWith("clawster-mig-"));
+    if (clawsterMigs.length > 0) {
+      this.log("Shared infrastructure still in use — skipping deletion", "stdout");
+      return;
+    }
+
+    this.log("Deleting orphaned shared infrastructure...", "stdout");
+
+    // Delete any remaining clawster firewalls
+    try {
+      const [firewalls] = await this.firewallsClient.list({
+        project: this.project,
+        filter: `network="https://www.googleapis.com/compute/v1/projects/${this.project}/global/networks/${vpcName}"`,
+      });
+      for (const fw of firewalls ?? []) {
+        if (fw.name?.startsWith("clawster-fw-")) {
+          await this.deleteFirewall(fw.name);
+        }
+      }
+    } catch (error: unknown) {
+      if (!this.isNotFoundError(error)) throw error;
+    }
+
+    await this.deleteSubnet(subnetName);
+    await this.deleteNetwork(vpcName);
+    this.log("Shared infrastructure deleted", "stdout");
   }
 
   private isNotFoundError(error: unknown): boolean {

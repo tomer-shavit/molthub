@@ -50,6 +50,7 @@ function createMockManagers(): GceManagers & {
     deleteNetwork: jest.fn().mockResolvedValue(undefined),
     deleteSubnet: jest.fn().mockResolvedValue(undefined),
     deleteFirewall: jest.fn().mockResolvedValue(undefined),
+    deleteSharedInfraIfOrphaned: jest.fn().mockResolvedValue(undefined),
   };
 
   const computeManager: IGceComputeManager = {
@@ -66,6 +67,7 @@ function createMockManagers(): GceManagers & {
     setMigInstanceTemplate: jest.fn().mockResolvedValue(undefined),
     getMigInstanceTemplate: jest.fn().mockResolvedValue("https://compute/templates/clawster-tmpl-test-bot"),
     getInstanceStatus: jest.fn().mockResolvedValue("RUNNING"),
+    listMigs: jest.fn().mockResolvedValue([]),
   };
 
   const secretManager: IGceSecretManager = {
@@ -645,12 +647,29 @@ describe("GceTarget", () => {
       await expect(target.destroy()).resolves.not.toThrow();
     });
 
-    it("should preserve VPC and subnet (not deleted)", async () => {
+    it("should call deleteSharedInfraIfOrphaned but not delete VPC/subnet directly", async () => {
       const { target, managers } = createTarget();
       await target.destroy();
 
+      // Direct VPC/subnet deletion should NOT be called
       expect(managers.networkManager.deleteNetwork).not.toHaveBeenCalled();
       expect(managers.networkManager.deleteSubnet).not.toHaveBeenCalled();
+
+      // But shared infra orphan check SHOULD be called
+      expect(managers.networkManager.deleteSharedInfraIfOrphaned).toHaveBeenCalledWith(
+        "clawster-vpc",
+        "clawster-subnet"
+      );
+    });
+
+    it("should not throw when shared infra cleanup fails", async () => {
+      const managers = createMockManagers();
+      (managers.networkManager.deleteSharedInfraIfOrphaned as jest.Mock).mockRejectedValue(
+        new Error("VPC still has dependencies")
+      );
+      const { target } = createTarget(baseConfig, managers);
+
+      await expect(target.destroy()).resolves.not.toThrow();
     });
   });
 

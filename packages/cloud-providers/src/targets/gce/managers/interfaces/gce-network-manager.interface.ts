@@ -28,4 +28,7 @@ export interface IGceNetworkManager {
 
   /** Delete a firewall rule. */
   deleteFirewall(name: string): Promise<void>;
+
+  /** Delete VPC and subnet if no Clawster MIGs remain in the zone. */
+  deleteSharedInfraIfOrphaned(vpcName: string, subnetName: string): Promise<void>;
 }

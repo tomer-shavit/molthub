@@ -1,5 +1,5 @@
 import { GceNetworkManager } from "./gce-network-manager";
-import type { IGceOperationManager } from "./interfaces";
+import type { IGceOperationManager, IGceComputeManager } from "./interfaces";
 
 // ── Mock SDK imports ───────────────────────────────────────────────────
 
@@ -17,9 +17,25 @@ jest.mock("@google-cloud/compute", () => ({
 function createManager() {
   const networksClient = { get: jest.fn(), insert: jest.fn(), delete: jest.fn() };
   const subnetworksClient = { get: jest.fn(), insert: jest.fn(), delete: jest.fn() };
-  const firewallsClient = { get: jest.fn(), insert: jest.fn(), delete: jest.fn() };
+  const firewallsClient = { get: jest.fn(), insert: jest.fn(), delete: jest.fn(), list: jest.fn() };
   const operationManager: IGceOperationManager = {
     waitForOperation: jest.fn().mockResolvedValue(undefined),
+  };
+  const computeManager: IGceComputeManager = {
+    createInstanceTemplate: jest.fn(),
+    deleteInstanceTemplate: jest.fn(),
+    createHealthCheck: jest.fn(),
+    deleteHealthCheck: jest.fn(),
+    createMig: jest.fn(),
+    scaleMig: jest.fn(),
+    deleteMig: jest.fn(),
+    getMigInstanceIp: jest.fn(),
+    getMigStatus: jest.fn(),
+    recreateMigInstances: jest.fn(),
+    setMigInstanceTemplate: jest.fn(),
+    getMigInstanceTemplate: jest.fn(),
+    getInstanceStatus: jest.fn(),
+    listMigs: jest.fn().mockResolvedValue([]),
   };
   const log = jest.fn();
 
@@ -28,12 +44,13 @@ function createManager() {
     subnetworksClient as never,
     firewallsClient as never,
     operationManager,
+    computeManager,
     "test-project",
     "us-central1",
     log
   );
 
-  return { manager, firewallsClient, operationManager };
+  return { manager, firewallsClient, operationManager, computeManager, log };
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────

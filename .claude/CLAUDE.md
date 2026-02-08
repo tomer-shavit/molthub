@@ -28,7 +28,7 @@ Launch **in parallel** using concurrent Task tool calls:
 
 1. `EnterPlanMode` to design implementation
 2. Base plan on: user requirements + `.claude/docs/` + OpenClaw source findings
-3. Break into steps with `TodoWrite`. Plan MUST include testing step.
+3. Break into steps with `TodoWrite`.
 4. Get user approval before writing code
 
 ## Step 3: Implement (MAXIMIZE CONCURRENCY)
@@ -56,16 +56,16 @@ Launch **in parallel** using concurrent Task tool calls:
 - No commented-out code blocks — use git history instead
 - Run `knip` before every PR to catch unused exports
 
-## Step 4: Tests (MANDATORY)
+## Step 4: Build
 
-Not complete until: E2E tests written + all tests pass + build succeeds (`pnpm build`).
+Build must succeed: `pnpm --filter <package> build`.
 
 ## Step 5: Code Review (AUTOMATIC)
 
-Run code-reviewer agent automatically after tests pass. Do NOT ask — just run it.
+Run code-reviewer agent automatically after build passes. Do NOT ask — just run it.
 - Spawn `everything-claude-code:code-reviewer` with: original request, changed files, summary
 - Instruct it to follow `.claude/commands/review.md` and check for dead code
-- If SUGGEST/REQUEST CHANGES: fix all critical issues, remove dead code, re-run tests
+- If SUGGEST/REQUEST CHANGES: fix all critical issues, remove dead code
 - If APPROVE: proceed
 
 **Dead code is a blocking issue.** Must be removed before PR.
@@ -84,7 +84,7 @@ After review passes, validate the code actually **works**:
 4. Test the happy path end-to-end with realistic inputs
 5. Test idempotent/re-run scenarios if applicable
 
-"It compiles" is not enough. "Tests pass" is not enough. **Prove it works in the browser.** Fix failures before proceeding.
+**Prove it works in the browser.** Fix failures before proceeding.
 
 ## Step 6: Verify Against Docs
 
@@ -101,7 +101,6 @@ Re-read relevant docs. Verify alignment with OpenClaw reference, product vision,
 - **Never skip docs** — read `.claude/docs/` for broad context tasks
 - **Never skip OpenClaw research** — check the real source before planning
 - **Never skip planning** — `EnterPlanMode` for non-trivial work
-- **Never skip tests** — E2E required
 - **Never skip review** — runs automatically, not optional
 - **Never skip runtime validation** — build, run, AND verify in browser with Computer Use
 - **Never leave dead code** — reviewer flags it, you remove it

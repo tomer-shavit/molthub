@@ -8,6 +8,7 @@
 
 import { createHash } from "node:crypto";
 
+import type { ComputeManagementClient } from "@azure/arm-compute";
 import type { StorageManagementClient } from "@azure/arm-storage";
 import type { KeyVaultManagementClient } from "@azure/arm-keyvault";
 import type { ManagedServiceIdentityClient } from "@azure/arm-msi";
@@ -31,6 +32,7 @@ export class AzureSharedInfraManager implements IAzureSharedInfraManager {
     private readonly kvMgmtClient: KeyVaultManagementClient,
     private readonly msiClient: ManagedServiceIdentityClient,
     private readonly authClient: AuthorizationManagementClient,
+    private readonly computeClient: ComputeManagementClient,
     private readonly subscriptionId: string,
     private readonly resourceGroup: string,
     private readonly location: string,
@@ -172,6 +174,44 @@ export class AzureSharedInfraManager implements IAzureSharedInfraManager {
     ]);
 
     this.log(`  RBAC roles assigned`);
+  }
+
+  // ── Orphaned Infrastructure Cleanup ─────────────────────────────────
+
+  async deleteSharedInfraIfOrphaned(): Promise<void> {
+    // Check if any Clawster VMs still exist in the resource group
+    const vms = this.computeClient.virtualMachines.list(this.resourceGroup);
+    for await (const vm of vms) {
+      if (vm.name?.startsWith("clawster-")) {
+        this.log("Shared infrastructure still in use — skipping deletion");
+        return;
+      }
+    }
+
+    this.log("Deleting orphaned shared infrastructure...");
+    const names = deriveSharedInfraNames(this.subscriptionId, this.resourceGroup);
+
+    await this.safeDelete("storage account", () =>
+      this.storageClient.storageAccounts.delete(this.resourceGroup, names.storageAccountName)
+    );
+    await this.safeDelete("managed identity", () =>
+      this.msiClient.userAssignedIdentities.delete(this.resourceGroup, names.managedIdentityName)
+    );
+    await this.safeDelete("key vault", () =>
+      this.kvMgmtClient.vaults.delete(this.resourceGroup, names.keyVaultName)
+    );
+
+    this.log("Shared infrastructure deleted");
+  }
+
+  private async safeDelete(description: string, fn: () => Promise<unknown>): Promise<void> {
+    try {
+      await fn();
+      this.log(`  Deleted: ${description}`);
+    } catch (error: unknown) {
+      if ((error as { statusCode?: number }).statusCode === 404) return;
+      throw error;
+    }
   }
 
   // ── Private Helpers ──────────────────────────────────────────────────

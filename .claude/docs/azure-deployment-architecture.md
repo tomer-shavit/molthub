@@ -103,17 +103,19 @@ This is **more secure** than the App Gateway approach where OpenClaw binds to 0.
 
 | Tier | VM Size | RAM | Total/mo | vs AWS |
 |------|---------|-----|----------|--------|
-| Light | B1ms (1 vCPU) | 2 GB | **~$22/mo** | $42/mo AWS light tier |
-| Standard | B2s (2 vCPU) | 4 GB | **~$37/mo** | $49/mo AWS standard |
-| Performance | D2s_v3 (2 vCPU) | 8 GB | **~$77/mo** | ~$80/mo AWS performance |
+| Light | B1ms (1 vCPU) | 2 GB | **~$22/mo** | Same as AWS t3.small ($22/mo) |
+| Standard | B2s (2 vCPU) | 4 GB | **~$37/mo** | AWS t3.small 2GB: $22/mo, AWS t3.medium 4GB: ~$34/mo |
+| Performance | D2s_v3 (2 vCPU) | 8 GB | **~$77/mo** | AWS t3.large 8GB: ~$61/mo |
 
 Shared infra: ~$0.10/mo total (amortized across bots).
 
-| Bots | Azure | AWS (ECS EC2) | Savings |
-|------|-------|---------------|---------|
-| 1 | $37 | $49 | 24% |
-| 5 | $183 | $217 | 16% |
-| 10 | $367 | $427 | 14% |
+| Bots | AWS EC2 (Caddy) | Azure VMSS (Caddy) | GCE (Caddy) |
+|------|-----------------|---------------------|-------------|
+| 1 | **$22** | $37 | $30 |
+| 5 | **$108** | $183 | $150 |
+| 10 | **$216** | $367 | $300 |
+
+**AWS is cheapest** due to lower VM pricing, despite having less RAM (t3.small 2GB vs B2s 4GB).
 
 **Why cheaper than AWS**: No NAT ($7 saved), no ALB ($17 saved), no ALB IPv4 ($7.30 saved). VM itself is slightly more expensive ($30 vs $15) but the infrastructure savings more than compensate.
 
