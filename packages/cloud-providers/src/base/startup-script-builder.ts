@@ -489,7 +489,7 @@ export function buildKeyVaultFetchSection(kv: AzureKeyVaultConfig, configPath: s
 /**
  * Builds the OpenClaw container run section.
  * Docker port bound to 127.0.0.1 only — Caddy fronts it.
- * Config mount at /root/.openclaw (spike-proven, not /home/node/).
+ * Config mount at /home/node/.openclaw (GHCR image runs as node user).
  */
 export function buildOpenClawContainerSection(
   gatewayPort: number,
@@ -517,7 +517,7 @@ export function buildOpenClawContainerSection(
       $DOCKER_RUNTIME \\
       -p 127.0.0.1:${gatewayPort}:${gatewayPort} \\
       -v /var/run/docker.sock:/var/run/docker.sock \\
-      -v ${mountPath}/.openclaw:/root/.openclaw \\
+      -v ${mountPath}/.openclaw:/home/node/.openclaw \\
       -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
       -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envLines ? ` \\\n      ${envLines}` : ""} \\
       ${imageUri} \\
@@ -787,7 +787,7 @@ docker run -d \\
   $DOCKER_RUNTIME \\
   -p 127.0.0.1:${gatewayPort}:${gatewayPort} \\
   -v /var/run/docker.sock:/var/run/docker.sock \\
-  -v /opt/openclaw-data/.openclaw:/root/.openclaw \\
+  -v /opt/openclaw-data/.openclaw:/home/node/.openclaw \\
   -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
   -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envFlags ? ` \\\n  ${envFlags}` : ""} \\
   $OPENCLAW_IMAGE \\
@@ -1026,7 +1026,7 @@ docker run -d \\
   $DOCKER_RUNTIME \\
   -p 127.0.0.1:${gatewayPort}:${gatewayPort} \\
   -v /var/run/docker.sock:/var/run/docker.sock \\
-  -v /opt/openclaw-data/.openclaw:/root/.openclaw \\
+  -v /opt/openclaw-data/.openclaw:/home/node/.openclaw \\
   -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
   -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envFlags ? ` \\\n  ${envFlags}` : ""} \\
   $OPENCLAW_IMAGE \\

@@ -185,9 +185,9 @@ describe("Azure Caddy Cloud-Init Builders", () => {
       expect(result).toContain("-v /var/run/docker.sock:/var/run/docker.sock");
     });
 
-    it("should mount config at /root/.openclaw (spike-proven)", () => {
+    it("should mount config at /home/node/.openclaw (GHCR image runs as node)", () => {
       const result = buildOpenClawContainerSection(18789, "/mnt/openclaw");
-      expect(result).toContain("-v /mnt/openclaw/.openclaw:/root/.openclaw");
+      expect(result).toContain("-v /mnt/openclaw/.openclaw:/home/node/.openclaw");
     });
 
     it("should use GHCR image by default", () => {
