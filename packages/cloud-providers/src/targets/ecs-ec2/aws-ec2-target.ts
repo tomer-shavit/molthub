@@ -117,7 +117,7 @@ export class AwsEc2Target
       // [3/5] Resolve AMI + create Launch Template
       this.log("[3/5] Creating launch template...");
       const amiId = await this.computeManager.resolveUbuntuAmi();
-      const userData = this.buildUserData(names.secretName, options.port);
+      const userData = this.buildUserData(names.secretName, options.port, options.containerEnv);
       const ltId = await this.computeManager.ensureLaunchTemplate(names.launchTemplate, {
         instanceType: this.instanceType,
         bootDiskSizeGb: this.bootDiskSizeGb,
@@ -381,13 +381,14 @@ export class AwsEc2Target
     return this.profileName;
   }
 
-  private buildUserData(secretName: string, port: number): string {
+  private buildUserData(secretName: string, port: number, additionalEnv?: Record<string, string>): string {
     return buildAwsCaddyUserData({
       gatewayPort: port,
       secretName,
       region: this.config.region,
       sysboxVersion: this.config.sysboxVersion,
       customDomain: this.config.customDomain,
+      additionalEnv,
     });
   }
 

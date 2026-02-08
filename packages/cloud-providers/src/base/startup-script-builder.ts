@@ -194,8 +194,8 @@ export function buildCloudInitScript(options: StartupScriptOptions): string {
     : `v${options.sysboxVersion ?? DEFAULT_SYSBOX_VERSION}`;
 
   const envLines = Object.entries(options.additionalEnv ?? {})
-    .map(([k, v]) => `      -e ${k}="${v}" \\`)
-    .join("\n");
+    .map(([k, v]) => `-e ${k}="${v.replace(/["\\$`]/g, "\\$&")}"`)
+    .join(" \\\n      ");
 
   const enabledMiddlewares = (options.middlewareConfig?.middlewares ?? []).filter((m) => m.enabled);
   const hasMiddleware = enabledMiddlewares.length > 0;
@@ -256,7 +256,7 @@ ${sysboxBlock}
       $DOCKER_RUNTIME \\
       -v ${options.dataMount}/.openclaw:/home/node/.openclaw \\
       -e OPENCLAW_GATEWAY_PORT=18789 \\
-      -e OPENCLAW_GATEWAY_TOKEN="${options.gatewayToken ?? ""}"${envLines ? ` \\\n${envLines}` : ""} \\
+      -e OPENCLAW_GATEWAY_TOKEN="${options.gatewayToken ?? ""}"${envLines ? ` \\\n      ${envLines}` : ""} \\
       ${options.imageUri} \\
       sh -c "npx -y openclaw@latest gateway --port 18789 --verbose"
   - |
@@ -302,7 +302,7 @@ ${sysboxBlock}
       -p ${options.gatewayPort}:${options.gatewayPort} \\
       -v ${options.dataMount}/.openclaw:/home/node/.openclaw \\
       -e OPENCLAW_GATEWAY_PORT=${options.gatewayPort} \\
-      -e OPENCLAW_GATEWAY_TOKEN="${options.gatewayToken ?? ""}"${envLines ? ` \\\n${envLines}` : ""} \\
+      -e OPENCLAW_GATEWAY_TOKEN="${options.gatewayToken ?? ""}"${envLines ? ` \\\n      ${envLines}` : ""} \\
       ${options.imageUri} \\
       sh -c "npx -y openclaw@latest gateway --port ${options.gatewayPort} --verbose"
 
@@ -495,8 +495,8 @@ export function buildOpenClawContainerSection(
   additionalEnv?: Record<string, string>
 ): string {
   const envLines = Object.entries(additionalEnv ?? {})
-    .map(([k, v]) => `      -e ${k}="${v}" \\`)
-    .join("\n");
+    .map(([k, v]) => `-e ${k}="${v.replace(/["\\$`]/g, "\\$&")}"`)
+    .join(" \\\n      ");
 
   return `  # Start OpenClaw container (port bound to localhost — Caddy fronts it)
   - |
@@ -516,7 +516,7 @@ export function buildOpenClawContainerSection(
       -v /var/run/docker.sock:/var/run/docker.sock \\
       -v ${mountPath}/.openclaw:/root/.openclaw \\
       -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
-      -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envLines ? ` \\\n${envLines}` : ""} \\
+      -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envLines ? ` \\\n      ${envLines}` : ""} \\
       node:22 \\
       sh -c "npx -y openclaw@latest gateway --port ${gatewayPort} --verbose"
     echo "OpenClaw container started on port ${gatewayPort}"`;
@@ -635,8 +635,8 @@ export function buildGceCaddyStartupScript(options: GceCaddyStartupOptions): str
     : `:80 {\n  reverse_proxy 127.0.0.1:${gatewayPort}\n}`;
 
   const envFlags = Object.entries(additionalEnv ?? {})
-    .map(([k, v]) => `  -e ${k}="${v}" \\`)
-    .join("\n");
+    .map(([k, v]) => `-e ${k}="${v.replace(/["\\$`]/g, "\\$&")}"`)
+    .join(" \\\n  ");
 
   return `#!/bin/bash
 set -euo pipefail
@@ -783,7 +783,7 @@ docker run -d \\
   -v /var/run/docker.sock:/var/run/docker.sock \\
   -v /opt/openclaw-data/.openclaw:/root/.openclaw \\
   -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
-  -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envFlags ? ` \\\n${envFlags}` : ""} \\
+  -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envFlags ? ` \\\n  ${envFlags}` : ""} \\
   $OPENCLAW_IMAGE \\
   openclaw gateway --port ${gatewayPort} --verbose
 
@@ -842,8 +842,8 @@ export function buildAwsCaddyUserData(options: AwsCaddyUserDataOptions): string 
     : `:80 {\n  reverse_proxy 127.0.0.1:${gatewayPort}\n}`;
 
   const envFlags = Object.entries(additionalEnv ?? {})
-    .map(([k, v]) => `  -e ${k}="${v.replace(/["\\$`]/g, "\\$&")}" \\`)
-    .join("\n");
+    .map(([k, v]) => `-e ${k}="${v.replace(/["\\$`]/g, "\\$&")}"`)
+    .join(" \\\n  ");
 
   return `#!/bin/bash
 set -euo pipefail
@@ -1025,7 +1025,7 @@ docker run -d \\
   $DOCKER_SOCKET_MOUNT \\
   -v /opt/openclaw-data/.openclaw:/root/.openclaw \\
   -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
-  -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envFlags ? ` \\\n${envFlags}` : ""} \\
+  -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envFlags ? ` \\\n  ${envFlags}` : ""} \\
   openclaw-prebuilt:latest \\
   sh -c "openclaw gateway --port ${gatewayPort} --verbose"
 
