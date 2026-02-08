@@ -539,6 +539,16 @@ export function buildAzureCaddyCloudInit(options: AzureCloudInitOptions): string
     "  - systemctl enable docker",
     "  - systemctl start docker",
     "",
+    "  # Docker DNS fix (Sysbox containers need explicit DNS)",
+    `  - mkdir -p /etc/docker`,
+    `  - |`,
+    `    cat > /etc/docker/daemon.json <<'DAEMONJSON'`,
+    `    {`,
+    `      "dns": ["8.8.8.8", "8.8.4.4"]`,
+    `    }`,
+    `    DAEMONJSON`,
+    `  - systemctl restart docker`,
+    "",
     buildAzureFilesMountSection(azureFiles),
     "",
     buildSysboxDebSection(sysboxVersion),
@@ -759,6 +769,7 @@ if ! docker image inspect "$OPENCLAW_IMAGE" >/dev/null 2>&1; then
   echo "Building OpenClaw image (first boot only, ~2 min)..."
   docker build -t "$OPENCLAW_IMAGE" - <<'DOCKERFILE'
 FROM node:22
+RUN apt-get update && apt-get install -y git docker.io && rm -rf /var/lib/apt/lists/*
 RUN npm install -g openclaw@${openclawVersion}
 DOCKERFILE
   echo "OpenClaw image built successfully"
@@ -919,7 +930,16 @@ apt-get install -y docker.io jq curl python3
 systemctl enable docker
 systemctl start docker
 
-# ── 2. Install Sysbox via .deb package ────────────────────────────────
+# ── 2a. Docker DNS fix (Sysbox containers need explicit DNS) ──────────
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<'DAEMONJSON'
+{
+  "dns": ["8.8.8.8", "8.8.4.4"]
+}
+DAEMONJSON
+systemctl restart docker
+
+# ── 2b. Install Sysbox via .deb package ───────────────────────────────
 if ! docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-runc'; then
   echo "Installing Sysbox ${sysboxTag} via .deb package..."
   ARCH=$(dpkg --print-architecture)
@@ -929,14 +949,9 @@ if ! docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-run
   dpkg -i "$SYSBOX_DEB" || apt-get install -f -y
   rm -f "$SYSBOX_DEB"
 
-  # Add sysbox-runc runtime to Docker daemon config
-  mkdir -p /etc/docker
-  if [ -f /etc/docker/daemon.json ]; then
-    TEMP_JSON=$(cat /etc/docker/daemon.json)
-    echo "$TEMP_JSON" | jq '. + {"runtimes": {"sysbox-runc": {"path": "/usr/bin/sysbox-runc"}}}' > /etc/docker/daemon.json
-  else
-    echo '{"runtimes": {"sysbox-runc": {"path": "/usr/bin/sysbox-runc"}}}' > /etc/docker/daemon.json
-  fi
+  # Merge sysbox-runc into daemon.json (preserve DNS config)
+  TEMP_JSON=$(cat /etc/docker/daemon.json)
+  echo "$TEMP_JSON" | jq '. + {"runtimes": {"sysbox-runc": {"path": "/usr/bin/sysbox-runc"}}}' > /etc/docker/daemon.json
   systemctl restart docker
   echo "Sysbox installed successfully"
 else
@@ -999,20 +1014,16 @@ fi
 echo "Pre-building OpenClaw Docker image..."
 docker build -t openclaw-prebuilt:latest - <<'DOCKERFILE'
 FROM node:22
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git docker.io && rm -rf /var/lib/apt/lists/*
 RUN npm install -g openclaw@${openclawVersion}
 DOCKERFILE
 echo "OpenClaw image pre-built"
 
 # ── 7. Run OpenClaw container ─────────────────────────────────────────
 DOCKER_RUNTIME=""
-DOCKER_SOCKET_MOUNT=""
 if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q 'sysbox-runc'; then
   DOCKER_RUNTIME="--runtime=sysbox-runc"
   echo "Using Sysbox runtime"
-else
-  DOCKER_SOCKET_MOUNT="-v /var/run/docker.sock:/var/run/docker.sock"
-  echo "Warning: Sysbox not available, mounting Docker socket for sandbox mode"
 fi
 
 docker rm -f openclaw-gateway 2>/dev/null || true
@@ -1022,7 +1033,7 @@ docker run -d \\
   --restart=always \\
   $DOCKER_RUNTIME \\
   -p 127.0.0.1:${gatewayPort}:${gatewayPort} \\
-  $DOCKER_SOCKET_MOUNT \\
+  -v /var/run/docker.sock:/var/run/docker.sock \\
   -v /opt/openclaw-data/.openclaw:/root/.openclaw \\
   -e OPENCLAW_GATEWAY_PORT=${gatewayPort} \\
   -e OPENCLAW_GATEWAY_TOKEN="\${GATEWAY_TOKEN:-}"${envFlags ? ` \\\n  ${envFlags}` : ""} \\

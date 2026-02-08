@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException, BadRequestException, HttpException, HttpStatus } from "@nestjs/common";
+import { Injectable, Inject, Logger, NotFoundException, BadRequestException, HttpException, HttpStatus } from "@nestjs/common";
 import {
   BotInstance,
   BOT_INSTANCE_REPOSITORY,
@@ -31,6 +31,7 @@ import { ReconcilerService } from "../reconciler/reconciler.service";
 
 @Injectable()
 export class BotInstancesService {
+  private readonly logger = new Logger(BotInstancesService.name);
   private readonly policyEngine = new PolicyEngine();
 
   constructor(
@@ -359,10 +360,12 @@ export class BotInstancesService {
       reconnect: { enabled: false, maxAttempts: 0, baseDelayMs: 0, maxDelayMs: 0 },
     };
 
+    this.logger.debug(`Chat connecting to gateway at ${gwConn.host}:${gwConn.port}`);
     const client = new GatewayClient(options);
 
     try {
       await client.connect();
+      this.logger.debug(`Chat connected to gateway for ${instanceId}`);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       throw new HttpException(
@@ -378,10 +381,13 @@ export class BotInstancesService {
         sessionId: resolvedSessionId,
       });
 
+      this.logger.debug(`Chat result for ${instanceId}: status=${result.completion.status}, error=${result.completion.error ?? 'none'}`);
+
       return {
         response: result.completion.output,
         sessionId: resolvedSessionId,
         status: result.completion.status,
+        ...(result.completion.error ? { error: result.completion.error } : {}),
       };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
